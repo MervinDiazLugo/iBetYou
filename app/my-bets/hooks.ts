@@ -24,6 +24,12 @@ interface BetWithDetails {
     start_time: string
     league: string
     sport: string
+    metadata?: {
+      venue?: {
+        name?: string | null
+        city?: string | null
+      }
+    }
   }
   creator: {
     nickname: string

@@ -388,6 +388,23 @@ flowchart LR
 - Las mutaciones críticas de estado, arbitraje, aprobación, disputa, auto-resolución, wallets y transacciones se ejecutan en backend/API.
 - El frontend conserva cálculos de presentación y validaciones UX, pero no actúa como fuente de verdad para persistencia.
 
+### Estandar de ejecución SQL (single-block)
+
+Para evitar repetir secuencias largas de parches manuales de esquema/RLS, se consolidó un script único:
+
+- Archivo recomendado: `supabase/one-shot-bootstrap.sql`
+- Ejecución: pegar y ejecutar **todo el archivo** en Supabase SQL Editor en una sola corrida.
+
+Este script ya contempla de forma idempotente:
+- creación de tablas base (`profiles`, `wallets`, `transactions`, `events`, `bets`, `daily_rewards`)
+- `ALTER TABLE ... IF NOT EXISTS` para columnas agregadas después (`role`, `is_banned`, `betting_blocked_until`, `false_claim_count`)
+- índices principales
+- función/trigger `handle_new_user` para crear perfil + wallet al registrarse
+- activación de RLS
+- limpieza y recreación de políticas finales
+
+Resultado esperado: la próxima vez no se ejecutan múltiples scripts dispersos; se ejecuta un solo bloque consistente y repetible.
+
 ### 1️⃣ Autenticación y Bonificación
 
 #### `POST /api/auth/login-bonus`

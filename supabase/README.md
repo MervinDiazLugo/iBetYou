@@ -35,11 +35,19 @@ Las políticas RLS aseguran que:
 ## 🚀 Setup Inicial
 
 1. Conecta a tu proyecto Supabase
-2. Ejecuta los scripts en este orden:
-   - `migrations/schema.sql` - Crea las tablas
-   - `policies/*.sql` - Configura RLS
+2. Ejecuta en SQL Editor un solo bloque:
+   - `one-shot-bootstrap.sql`
+
+Este script ya incluye:
+- creación/alter de tablas
+- índices
+- trigger de alta de usuario
+- RLS + políticas finales
+- seed inicial de wallet por usuario nuevo
 
 ## 📝 Scripts Disponibles
+
+- `one-shot-bootstrap.sql` - Script consolidado recomendado (ejecución única, idempotente)
 
 - `schema.sql` - DDL completo del esquema
 - `schema-simple.sql` - Esquema simplificado
@@ -47,4 +55,4 @@ Las políticas RLS aseguran que:
 - `fix-rls.sql` - Correcciones de RLS
 - `clean-rls.sql` - Limpiar y recrear políticas
 
-**Nota:** Usa `proper-rls.sql` o `fix-rls.sql` según sea necesario.
+**Nota:** Para nuevos entornos usa `one-shot-bootstrap.sql`; los demás scripts quedan como referencia histórica o troubleshooting.
