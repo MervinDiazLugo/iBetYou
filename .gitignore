@@ -33,6 +33,10 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# local maintenance/debug scripts (do not publish)
+check.ts
+cleanup.ts
+
 # vercel
 .vercel
 

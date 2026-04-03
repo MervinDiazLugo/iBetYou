@@ -1,36 +1,143 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# P2P Bets - Plataforma de Apuestas Peer-to-Peer
 
-## Getting Started
+Una plataforma moderna de apuestas deportivas P2P donde los usuarios pueden crear y aceptar apuestas directamente con otros usuarios.
 
-First, run the development server:
+## 🚀 Stack Tecnológico
 
+- **Frontend:** Next.js 16, React 19, TypeScript, Tailwind CSS
+- **Backend:** Next.js API Routes
+- **Base de Datos:** Supabase (PostgreSQL)
+- **Autenticación:** Supabase Auth
+- **UI Components:** Radix UI
+- **Iconos:** Lucide React
+
+## 📋 Requisitos Previos
+
+- Node.js 18+
+- npm o yarn
+- Cuenta en Supabase
+- API Key de API-Sports
+- API Key de Resend (para emails)
+
+## 🔧 Configuración Local
+
+### 1. Clonar el repositorio
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/yourusername/p2pbets.git
+cd p2pbets/app
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 2. Instalar dependencias
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 3. Configurar variables de entorno
+```bash
+cp .env.example .env.local
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Luego completa `.env.local` con tus credenciales:
+- Supabase credentials
+- API Keys (Football, Basketball, Baseball)
+- Resend API Key
+- API Security Key
 
-## Learn More
+### 4. Correr en desarrollo
+```bash
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Abre [http://localhost:3000](http://localhost:3000) en tu navegador.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📁 Estructura del Proyecto
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```
+app/
+├── api/                 # Rutas API
+│   ├── admin/          # Endpoints de administración
+│   ├── auth/           # Autenticación
+│   ├── bets/           # Gestión de apuestas
+│   ├── events/         # Gestión de eventos deportivos
+│   └── wallet/         # Billetera de usuarios
+├── app/                # Páginas Next.js
+│   ├── backoffice/     # Panel administrativo
+│   ├── bet/[id]/       # Detalle de apuesta
+│   ├── create/         # Crear nueva apuesta
+│   ├── login/          # Inicio de sesión
+│   ├── my-bets/        # Mis apuestas
+│   ├── profile/        # Perfil de usuario
+│   └── register/       # Registro
+├── components/         # Componentes React reutilizables
+├── lib/               # Utilidades y funciones helper
+├── types/             # Definiciones TypeScript
+├── scripts/           # Scripts de mantenimiento
+└── supabase/          # Scripts SQL y RLS
+```
 
-## Deploy on Vercel
+## 🎮 Scripts Disponibles
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev      # Ejecutar servidor de desarrollo
+npm run build    # Construir para producción
+npm start        # Ejecutar servidor de producción
+npm run lint     # Ejecutar linter
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📝 Documentación
+
+- [Reglas del Sistema de Apuestas](./docs/REGLAS_APUESTAS.md) - Lógica de negocio completa
+- [Configuración de Base de Datos](./supabase/README.md) - Esquema y políticas RLS
+
+## 🚀 Deploy en Vercel
+
+### 1. Push a GitHub
+```bash
+git add .
+git commit -m "Prepare for Vercel deployment"
+git push origin main
+```
+
+### 2. Conectar a Vercel
+- Ve a [vercel.com](https://vercel.com)
+- Importa el repositorio de GitHub
+- Configura las variables de entorno (igual que `.env.local`)
+- Deploy
+
+### Variables de Entorno en Vercel
+Añade estas en los settings de Vercel:
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `NEXT_PUBLIC_APP_API_KEY`
+- `API_FOOTBALL_KEY`
+- `API_FOOTBALL_URL`
+- `API_BASKETBALL_URL`
+- `API_BASEBALL_URL`
+- `RESEND_API_KEY`
+- `RESEND_FROM`
+
+## 🔐 Seguridad
+
+- Las claves privadas en `.env.local` nunca se commitan (incluidas en `.gitignore`)
+- Las claves públicas (`NEXT_PUBLIC_*`) se pueden exponer (son restrictas por API Key)
+- No subas `.env.local` bajo ninguna circunstancia
+
+## 🌐 API Endpoints
+
+Ver documentación detallada en `/docs/REGLAS_APUESTAS.md` para:
+- Crear apuestas
+- Listar apuestas
+- Aceptar apuestas
+- Resolver apuestas
+
+## 🤝 Contribuir
+
+1. Crea una rama para tu feature: `git checkout -b feature/mi-feature`
+2. Commit tus cambios: `git commit -am 'Add feature'`
+3. Push a la rama: `git push origin feature/mi-feature`
+4. Abre un Pull Request
+
+## 📄 Licencia
+
+Este proyecto es privado.
