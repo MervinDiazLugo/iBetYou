@@ -20,13 +20,10 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('status', status)
     } else {
-      // Default: show scheduled events within a rolling window starting at UTC day start.
-      // This avoids empty lists for leagues whose "scheduled" games are earlier in the same UTC day.
-      const startOfUtcDay = new Date()
-      startOfUtcDay.setUTCHours(0, 0, 0, 0)
-
-      query = query.eq('status', 'scheduled')
-      query = query.gte('start_time', startOfUtcDay.toISOString())
+      // Default: include upcoming and just-started events to avoid timezone/status gaps.
+      const acceptanceWindowStart = new Date(Date.now() - 10 * 60 * 1000)
+      query = query.in('status', ['scheduled', 'live'])
+      query = query.gte('start_time', acceptanceWindowStart.toISOString())
     }
 
     // Limit to next 30 days

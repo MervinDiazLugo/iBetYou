@@ -14,6 +14,8 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   open: { label: "Abierta", variant: "secondary" },
   taken: { label: "Tomada", variant: "default" },
   pending_resolution: { label: "Esperando", variant: "outline" },
+  pending_resolution_creator: { label: "Esperando", variant: "outline" },
+  pending_resolution_acceptor: { label: "Esperando", variant: "outline" },
   resolved: { label: "Resuelta", variant: "default" },
   cancelled: { label: "Cancelada", variant: "destructive" },
   disputed: { label: "En disputa", variant: "destructive" },
@@ -68,7 +70,7 @@ export default function MyBetsPage() {
   }
 
   const isInProgressStatus = (status: string) => {
-    return status === "taken" || status === "pending_resolution_creator" || status === "pending_resolution_acceptor"
+    return status === "taken" || status === "pending_resolution" || status === "pending_resolution_creator" || status === "pending_resolution_acceptor"
   }
 
   if (!user) {

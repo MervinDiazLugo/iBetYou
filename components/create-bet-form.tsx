@@ -37,8 +37,9 @@ const sports = [
 ]
 
 function getAvailableBetTypes(sport: string) {
-  if (sport === "baseball") {
-    return betTypes.filter((type) => type.id !== "half_time")
+  // Tipos complejos habilitados solo para futbol.
+  if (sport !== "football") {
+    return betTypes.filter((type) => type.id !== "half_time" && type.id !== "first_scorer")
   }
 
   return betTypes
@@ -251,14 +252,11 @@ export function CreateBetForm({ onClose, cloneBetId }: CreateBetFormProps) {
           { id: "away_team", label: selectedEvent.away_team, value: selectedEvent.away_team },
         ]
       case "half_time":
-        const htOptions = [
+        return [
           { id: "home_win", label: `Gana ${selectedEvent.home_team}`, value: `${selectedEvent.home_team} HT` },
+          { id: "draw", label: "Empate", value: "Empate HT" },
           { id: "away_win", label: `Gana ${selectedEvent.away_team}`, value: `${selectedEvent.away_team} HT` },
         ]
-        if (selectedSport !== "baseball") {
-          htOptions.splice(1, 0, { id: "draw", label: "Empate", value: "Empate HT" })
-        }
-        return htOptions
       default:
         return []
     }

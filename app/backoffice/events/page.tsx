@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -61,7 +61,9 @@ interface SavedEvent {
 
 export default function BackofficeEvents() {
   const supabase = createBrowserSupabaseClient()
-  const [view, setView] = useState<'external' | 'saved'>('external')
+  const dateFromRef = useRef<HTMLInputElement | null>(null)
+  const dateToRef = useRef<HTMLInputElement | null>(null)
+  const [view, setView] = useState<'external' | 'saved'>('saved')
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([])
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([])
   const [loading, setLoading] = useState(false)
@@ -157,8 +159,7 @@ export default function BackofficeEvents() {
 
   async function fetchSavedEvents() {
     try {
-      const sportParam = sport === 'all' ? 'all' : sport
-      const res = await authFetch(`/api/admin/events?sport=${sportParam}&limit=500`)
+      const res = await authFetch(`/api/admin/events?sport=all&limit=500`)
       const data = await res.json()
       const events = data.events || []
       setSavedEvents(events)
@@ -173,6 +174,12 @@ export default function BackofficeEvents() {
       console.error('Error fetching saved events:', err)
     }
   }
+
+  useEffect(() => {
+    if (view === 'saved') {
+      fetchSavedEvents()
+    }
+  }, [view])
 
   function toggleEvent(id: number, externalId: string) {
     const newSelected = new Set(selectedEvents)
@@ -336,6 +343,35 @@ export default function BackofficeEvents() {
     )
   })
 
+  const now = new Date()
+  const startOfToday = new Date(now)
+  startOfToday.setHours(0, 0, 0, 0)
+  const startOfPastWindow = new Date(startOfToday)
+  startOfPastWindow.setDate(startOfPastWindow.getDate() - 7)
+  const endOfToday = new Date(startOfToday)
+  endOfToday.setHours(23, 59, 59, 999)
+
+  const orderedSavedEvents = [...filteredSavedEvents].sort((a, b) => {
+    return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+  })
+
+  const todaysSavedEvents = orderedSavedEvents.filter((event) => {
+    const eventDate = new Date(event.start_time)
+    return eventDate >= startOfToday && eventDate <= endOfToday
+  })
+
+  const upcomingSavedEvents = orderedSavedEvents.filter((event) => {
+    const eventDate = new Date(event.start_time)
+    return eventDate > endOfToday
+  })
+
+  const pastSavedEvents = [...orderedSavedEvents]
+    .filter((event) => {
+      const eventDate = new Date(event.start_time)
+      return eventDate < startOfToday && eventDate >= startOfPastWindow
+    })
+    .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+
   const getSportIcon = (sport: string) => {
     switch (sport) {
       case 'football': return '⚽'
@@ -344,6 +380,59 @@ export default function BackofficeEvents() {
       default: return '🏆'
     }
   }
+
+  const renderSavedEventCard = (event: SavedEvent) => (
+    <Card key={event.id} className="hover:shadow-md">
+      <CardHeader className="pb-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-lg">{getSportIcon(event.sport)}</span>
+            <Badge variant="outline">
+              {event.league}
+            </Badge>
+          </div>
+          <span className="text-xs font-medium text-primary">
+            {new Date(event.start_time).toLocaleDateString('es-ES', {
+              day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+            })}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="py-2">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-center flex-1">
+            {event.home_logo && (
+              <img src={event.home_logo} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" />
+            )}
+            <div className="font-bold text-sm">{event.home_team}</div>
+          </div>
+          <div className="px-2 text-muted-foreground">vs</div>
+          <div className="text-center flex-1">
+            {event.away_logo && (
+              <img src={event.away_logo} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" />
+            )}
+            <div className="font-bold text-sm">{event.away_team}</div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground truncate max-w-[200px]">
+            {event.metadata?.venue?.name ? `📍 ${event.metadata.venue.name}${event.metadata.venue.city ? `, ${event.metadata.venue.city}` : ''}` : ''}
+          </div>
+          <Badge variant="secondary" className="text-xs flex-shrink-0">
+            {event.status}
+          </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-red-500 flex-shrink-0"
+            onClick={() => handleDeleteEvent(event.id)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
@@ -398,20 +487,54 @@ export default function BackofficeEvents() {
                 <div className="flex items-center gap-2">
                   <span className="text-sm">Desde:</span>
                   <Input
+                    ref={dateFromRef}
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-auto"
+                    className="w-auto min-w-[170px]"
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    onClick={() => {
+                      if (dateFromRef.current?.showPicker) {
+                        dateFromRef.current.showPicker()
+                      } else {
+                        dateFromRef.current?.focus()
+                      }
+                    }}
+                    aria-label="Abrir calendario desde"
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </Button>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm">Hasta:</span>
                   <Input
+                    ref={dateToRef}
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="w-auto"
+                    className="w-auto min-w-[170px]"
                   />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10"
+                    onClick={() => {
+                      if (dateToRef.current?.showPicker) {
+                        dateToRef.current.showPicker()
+                      } else {
+                        dateToRef.current?.focus()
+                      }
+                    }}
+                    aria-label="Abrir calendario hasta"
+                  >
+                    <Calendar className="h-4 w-4" />
+                  </Button>
                 </div>
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -584,63 +707,55 @@ export default function BackofficeEvents() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredSavedEvents.map((event) => (
-                <Card key={event.id} className="hover:shadow-md">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">
-                          {event.sport === 'football' && '⚽'}
-                          {event.sport === 'basketball' && '🏀'}
-                          {event.sport === 'baseball' && '⚾'}
-                        </span>
-                        <Badge variant="outline">
-                          {event.league}
-                        </Badge>
+            <div className="space-y-6">
+              <section>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Juegos de hoy</h3>
+                  <Badge variant="outline">{todaysSavedEvents.length}</Badge>
+                </div>
+                {todaysSavedEvents.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-6 text-sm text-muted-foreground">
+                      No hay juegos para hoy con este filtro.
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {todaysSavedEvents.map(renderSavedEventCard)}
+                  </div>
+                )}
+              </section>
+
+              {upcomingSavedEvents.length > 0 && (
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Próximos juegos</h3>
+                    <Badge variant="outline">{upcomingSavedEvents.length}</Badge>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {upcomingSavedEvents.map(renderSavedEventCard)}
+                  </div>
+                </section>
+              )}
+
+              <section>
+                <details className="rounded-lg border bg-card px-4 py-3">
+                  <summary className="cursor-pointer list-none flex items-center justify-between">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</span>
+                    <Badge variant="secondary">{pastSavedEvents.length}</Badge>
+                  </summary>
+
+                  <div className="mt-4">
+                    {pastSavedEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No hay eventos pasados con este filtro.</p>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {pastSavedEvents.map(renderSavedEventCard)}
                       </div>
-                      <span className="text-xs font-medium text-primary">
-                        {new Date(event.start_time).toLocaleDateString('es-ES', { 
-                          day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
-                        })}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-center flex-1">
-                        {event.home_logo && (
-                          <img src={event.home_logo} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" />
-                        )}
-                        <div className="font-bold text-sm">{event.home_team}</div>
-                      </div>
-                      <div className="px-2 text-muted-foreground">vs</div>
-                      <div className="text-center flex-1">
-                        {event.away_logo && (
-                          <img src={event.away_logo} alt="" className="w-8 h-8 mx-auto mb-1 object-contain" />
-                        )}
-                        <div className="font-bold text-sm">{event.away_team}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-                        {event.metadata?.venue?.name ? `📍 ${event.metadata.venue.name}${event.metadata.venue.city ? `, ${event.metadata.venue.city}` : ''}` : ''}
-                      </div>
-                      <Badge variant="secondary" className="text-xs flex-shrink-0">
-                        {event.status}
-                      </Badge>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="h-8 w-8 p-0 text-red-500 flex-shrink-0"
-                        onClick={() => handleDeleteEvent(event.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    )}
+                  </div>
+                </details>
+              </section>
             </div>
           )}
         </>

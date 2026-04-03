@@ -4,6 +4,12 @@ import { supportsPeerResolution } from "@/lib/bet-resolution"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 
 type ResolveAction = "claim_win" | "claim_lose" | "confirm" | "reject"
+const LEGACY_PENDING_CREATOR = "pending_resolution_creator"
+const LEGACY_PENDING_ACCEPTOR = "pending_resolution_acceptor"
+
+function isPendingResolutionStatus(status: string) {
+  return status === "pending_resolution" || status === LEGACY_PENDING_CREATOR || status === LEGACY_PENDING_ACCEPTOR
+}
 
 async function logDecision(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -42,11 +48,6 @@ function getClaimantId(bet: { creator_claimed?: boolean | null; acceptor_claimed
 }
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-  const authenticatedUserId = await getAuthenticatedUserId(request)
-  if (!authenticatedUserId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-  }
-
   const supabase = createAdminSupabaseClient()
   const paramsResolved = await context.params
   const betId = paramsResolved.id
@@ -55,15 +56,25 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const body = await request.json()
     const { user_id, action, reason } = body as { user_id?: string; action?: ResolveAction; reason?: string }
 
+    const authenticatedUserId = await getAuthenticatedUserId(request)
+    const host = request.headers.get("host") || ""
+    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1")
+    const isDevLocalFallback = process.env.NODE_ENV !== "production" && isLocalhost
+
+    const effectiveUserId = authenticatedUserId
+      || (isDevLocalFallback && typeof user_id === "string" ? user_id : null)
+
+    if (!effectiveUserId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
     if (!action) {
       return NextResponse.json({ error: "action is required" }, { status: 400 })
     }
 
-    if (user_id && user_id !== authenticatedUserId) {
+    if (authenticatedUserId && user_id && user_id !== authenticatedUserId) {
       return NextResponse.json({ error: "Unauthorized user scope" }, { status: 403 })
     }
-
-    const effectiveUserId = authenticatedUserId
 
     const allowedActions: ResolveAction[] = ["claim_win", "claim_lose", "confirm", "reject"]
     if (!allowedActions.includes(action)) {
@@ -120,9 +131,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         ? effectiveUserId
         : (isCreator ? bet.acceptor_id : bet.creator_id)
 
-      const pendingStatus = winnerId === bet.creator_id
-        ? "pending_resolution_creator"
-        : "pending_resolution_acceptor"
+      const pendingStatus = "pending_resolution"
 
       const updateData = {
         status: pendingStatus,
@@ -156,7 +165,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ success: true, bet: updatedBet })
     }
 
-    if (bet.status !== "pending_resolution_creator" && bet.status !== "pending_resolution_acceptor") {
+    if (!isPendingResolutionStatus(bet.status)) {
       return NextResponse.json({ error: "Esta apuesta no esta pendiente de confirmacion" }, { status: 400 })
     }
 
@@ -195,7 +204,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ success: true, bet: disputedBet })
     }
 
-    const winnerUserId = bet.winner_id || (bet.status === "pending_resolution_creator" ? bet.creator_id : bet.acceptor_id)
+    const inferredWinnerId = getClaimantId(bet)
+      || (bet.status === LEGACY_PENDING_CREATOR ? bet.creator_id : null)
+      || (bet.status === LEGACY_PENDING_ACCEPTOR ? bet.acceptor_id : null)
+
+    const winnerUserId = bet.winner_id || inferredWinnerId
+
+    if (!winnerUserId) {
+      return NextResponse.json({ error: "No se pudo determinar el ganador para confirmar" }, { status: 400 })
+    }
 
     const totalPrize = Number(bet.amount) * Number(bet.multiplier) + Number(bet.amount)
 

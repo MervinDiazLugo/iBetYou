@@ -108,9 +108,24 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     const { user_id, event_id, bet_type, creator_selection, amount, multiplier } = body
+    const footballOnlyBetTypes = new Set(['half_time', 'first_scorer'])
 
     if (!user_id || user_id !== authenticatedUserId) {
       return NextResponse.json({ error: 'Unauthorized user scope' }, { status: 403 })
+    }
+
+    const { data: eventRow, error: eventError } = await supabase
+      .from('events')
+      .select('id, sport')
+      .eq('id', event_id)
+      .single()
+
+    if (eventError || !eventRow) {
+      return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    }
+
+    if (footballOnlyBetTypes.has(bet_type) && eventRow.sport !== 'football') {
+      return NextResponse.json({ error: 'Este tipo de apuesta solo esta disponible para futbol' }, { status: 400 })
     }
 
     const isAsymmetric = bet_type === 'exact_score'

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
@@ -36,6 +36,9 @@ interface BetDetail {
     sport: string
     home_team: string
     away_team: string
+    status?: string
+    home_score?: number | null
+    away_score?: number | null
     start_time: string
     league: string
     country?: string
@@ -66,7 +69,7 @@ const betTypeLabels: Record<string, string> = {
 export default function BetDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const supabase = createBrowserSupabaseClient()
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
   const { showToast } = useToast()
   
   const [bet, setBet] = useState<BetDetail | null>(null)
@@ -112,7 +115,7 @@ export default function BetDetailPage() {
           }
         }
 
-        await loadBet(authUser.id)
+        await loadBet()
       } else {
         await loadBet()
       }
@@ -122,6 +125,66 @@ export default function BetDetailPage() {
   }, [betId])
 
   useEffect(() => {
+    if (!betId) return
+
+    const refresh = () => {
+      loadBet()
+    }
+
+    const interval = setInterval(refresh, 7000)
+    const onFocus = () => refresh()
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refresh()
+      }
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [betId, user?.id])
+
+  useEffect(() => {
+    if (!betId) return
+
+    const betChannel = supabase
+      .channel(`bet-${betId}-live`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "bets", filter: `id=eq.${betId}` },
+        () => {
+          loadBet()
+        }
+      )
+      .subscribe()
+
+    const eventChannel = bet?.event_id
+      ? supabase
+          .channel(`event-${bet.event_id}-live`)
+          .on(
+            "postgres_changes",
+            { event: "UPDATE", schema: "public", table: "events", filter: `id=eq.${bet.event_id}` },
+            () => {
+              loadBet()
+            }
+          )
+          .subscribe()
+      : null
+
+    return () => {
+      supabase.removeChannel(betChannel)
+      if (eventChannel) {
+        supabase.removeChannel(eventChannel)
+      }
+    }
+  }, [betId, bet?.event_id, supabase])
+
+  useEffect(() => {
     const interval = setInterval(() => {
       setNowMs(Date.now())
     }, 1000)
@@ -129,8 +192,7 @@ export default function BetDetailPage() {
     return () => clearInterval(interval)
   }, [])
 
-  async function loadBet(userId?: string) {
-    const userParam = userId ? `?user_id=${userId}` : ""
+  async function loadBet() {
     const {
       data: { session },
     } = await supabase.auth.getSession()
@@ -140,8 +202,9 @@ export default function BetDetailPage() {
       headers.Authorization = `Bearer ${session.access_token}`
     }
 
-    const res = await fetch(`/api/bets/${betId}${userParam}`, {
-      headers
+    const res = await fetch(`/api/bets/${betId}`, {
+      headers,
+      cache: "no-store",
     })
 
     if (res.ok) {
@@ -242,6 +305,10 @@ export default function BetDetailPage() {
         throw new Error(data.error || "No se pudo actualizar la resolución")
       }
 
+      if (data?.bet) {
+        setBet(data.bet)
+      }
+
       if (action === "reject") {
         showToast("Resultado rechazado. Pasó a arbitraje manual.", "success")
       } else if (action === "confirm") {
@@ -250,7 +317,7 @@ export default function BetDetailPage() {
         showToast("Resultado reportado. Esperando confirmación del rival.", "success")
       }
 
-      await loadBet(user.id)
+      await loadBet()
     } catch (err: any) {
       setError(err.message || "Error al actualizar la resolución")
     } finally {
@@ -285,7 +352,7 @@ export default function BetDetailPage() {
     )
   }
   
-  if (!bet) {
+  if (!bet || !bet.event) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
@@ -308,8 +375,8 @@ export default function BetDetailPage() {
   const isAsymmetric = bet.bet_type === 'exact_score'
   const supportsPeerResolution = supportsPeerResolutionForType(bet.bet_type)
   const isParticipant = !!user && (user.id === bet.creator_id || user.id === bet.acceptor_id)
-  const isPendingPeerResolution = bet.status === "pending_resolution_creator" || bet.status === "pending_resolution_acceptor"
-  const claimUnlockAtMs = new Date(bet.event.start_time).getTime() + (2 * 60 * 60 * 1000)
+  const isPendingPeerResolution = bet.status === "pending_resolution" || bet.status === "pending_resolution_creator" || bet.status === "pending_resolution_acceptor"
+  const claimUnlockAtMs = bet.event?.start_time ? new Date(bet.event.start_time).getTime() + (2 * 60 * 60 * 1000) : Infinity
   const canReportByTime = nowMs >= claimUnlockAtMs
   const countdownMs = Math.max(0, claimUnlockAtMs - nowMs)
   const countdownHours = Math.floor(countdownMs / (1000 * 60 * 60))
@@ -320,10 +387,12 @@ export default function BetDetailPage() {
     : bet.acceptor_claimed && !bet.creator_claimed
       ? bet.acceptor_id
       : null
+  const hasPeerClaim = !!claimantId || !!bet.winner_id
+  const isEffectivelyPendingPeerResolution = isPendingPeerResolution || (bet.status === "taken" && hasPeerClaim)
   const isClaimant = !!user && claimantId === user.id
-  const canClaimNow = supportsPeerResolution && isParticipant && bet.status === "taken" && canReportByTime
-  const canConfirmNow = supportsPeerResolution && isParticipant && isPendingPeerResolution && !isClaimant
-  const waitingCounterparty = supportsPeerResolution && isParticipant && isPendingPeerResolution && isClaimant
+  const canClaimNow = supportsPeerResolution && isParticipant && bet.status === "taken" && !hasPeerClaim && canReportByTime
+  const canConfirmNow = supportsPeerResolution && isParticipant && isEffectivelyPendingPeerResolution && !isClaimant
+  const waitingCounterparty = supportsPeerResolution && isParticipant && isEffectivelyPendingPeerResolution && isClaimant
   const winnerNickname = bet.winner_id === bet.creator_id
     ? (bet.creator?.nickname || "Creador")
     : bet.winner_id === bet.acceptor_id
@@ -341,6 +410,7 @@ export default function BetDetailPage() {
   // Acceptor net gain discounts the 3% fee paid on acceptance.
   const acceptorNetGain = bet.amount - acceptorFee
   const isBackofficeAdmin = user?.role === "backoffice_admin"
+  const hasEventScore = bet.event?.home_score !== undefined && bet.event?.home_score !== null && bet.event?.away_score !== undefined && bet.event?.away_score !== null
 
   async function handleAdminAction(action: string, winnerId?: string, reason?: string) {
     if (!bet) return
@@ -370,7 +440,7 @@ export default function BetDetailPage() {
       }
 
       showToast('Acción de arbitraje aplicada', 'success')
-      await loadBet(user?.id)
+      await loadBet()
     } catch (err: any) {
       showToast(err.message || 'Error en arbitraje', 'error')
     } finally {
@@ -407,7 +477,7 @@ export default function BetDetailPage() {
         ? `Marcador: ${data.homeScore}-${data.awayScore}`
         : 'Marcador no disponible'
       showToast(`${scoreInfo}. Auto-resolución ejecutada.`, 'success')
-      await loadBet(user?.id)
+      await loadBet()
     } catch (err: any) {
       showToast(err.message || 'Error al auto-resolver', 'error')
     } finally {
@@ -450,6 +520,12 @@ export default function BetDetailPage() {
                 minute: "2-digit",
               })}
             </CardDescription>
+            {(hasEventScore || bet.event.status) && (
+              <CardDescription>
+                Marcador: {bet.event.home_team} {bet.event.home_score ?? "-"} - {bet.event.away_score ?? "-"} {bet.event.away_team}
+                {bet.event.status ? ` · Estado: ${bet.event.status}` : ""}
+              </CardDescription>
+            )}
             <CardDescription>
               {bet.event.metadata?.venue?.name
                 ? `📍 ${bet.event.metadata.venue.name}${bet.event.metadata.venue.city ? `, ${bet.event.metadata.venue.city}` : ""}`
@@ -473,16 +549,30 @@ export default function BetDetailPage() {
             
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
               {(() => {
+                const exactScoreFavoredTeam = (() => {
+                  if (bet.bet_type !== "exact_score") return null
+                  const scoreMatch = bet.creator_selection.match(/^(\d+)\s*-\s*(\d+)$/)
+                  if (!scoreMatch) return null
+
+                  const homeGoals = Number(scoreMatch[1])
+                  const awayGoals = Number(scoreMatch[2])
+
+                  if (homeGoals > awayGoals) return bet.event.home_team
+                  if (awayGoals > homeGoals) return bet.event.away_team
+                  return "empate"
+                })()
+
                 let selectionText = bet.creator_selection
                 if (bet.bet_type === "exact_score") {
-                  selectionText = `El score será ${bet.creator_selection}`
+                  selectionText = `El score será ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}`
                 } else if (bet.bet_type === "direct" || bet.bet_type === "half_time") {
                   selectionText = `Gana ${bet.creator_selection}`
                 }
 
                 const isTaker = !!user && user.id === bet.acceptor_id
+
                 const takerWinCondition = bet.bet_type === "exact_score"
-                  ? `Tu condición para ganar: que el marcador final NO sea ${bet.creator_selection}.`
+                  ? `Tu condición para ganar: que el marcador final NO sea ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}.`
                   : `Tu condición para ganar: que NO gane ${bet.creator_selection}.`
 
                 return (
@@ -560,7 +650,7 @@ export default function BetDetailPage() {
                     </Button>
                   )}
 
-                  {(bet.status === 'pending_resolution_creator' || bet.status === 'pending_resolution_acceptor') && (
+                  {(bet.status === 'pending_resolution' || bet.status === 'pending_resolution_creator' || bet.status === 'pending_resolution_acceptor') && (
                     <Button
                       onClick={async () => {
                         setAdminActionLoading(true)
@@ -585,7 +675,7 @@ export default function BetDetailPage() {
                           const data = await res.json()
                           if (!res.ok) throw new Error(data.error || 'No se pudo aprobar')
                           showToast('Resolución pendiente aprobada', 'success')
-                          await loadBet(user?.id)
+                          await loadBet()
                         } catch (err: any) {
                           showToast(err.message || 'Error al aprobar', 'error')
                         } finally {
@@ -735,6 +825,38 @@ export default function BetDetailPage() {
           </Card>
         )}
         
+        {user && !isBackofficeAdmin && user.id === bet.acceptor_id && ["resolved", "cancelled", "disputed"].includes(bet.status) && (
+          <Card className="mb-6">
+            <CardContent className="py-6 text-center">
+              {bet.status === "resolved" ? (
+                <>
+                  <Trophy className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Apuesta finalizada</h3>
+                  <p className="text-muted-foreground">
+                    {bet.winner_id === user.id ? "¡Ganaste esta apuesta!" : "Perdiste esta apuesta."}
+                    {winnerNickname ? ` Ganador: ${winnerNickname}.` : ""}
+                  </p>
+                </>
+              ) : bet.status === "cancelled" ? (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
+                  <p className="text-muted-foreground">Esta apuesta fue cancelada.</p>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-yellow-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">En revisión</h3>
+                  <p className="text-muted-foreground">Esta apuesta está siendo revisada por el equipo de la plataforma.</p>
+                </>
+              )}
+              <Button className="mt-4" asChild>
+                <Link href="/my-bets">Ver mis apuestas</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         {user && !isBackofficeAdmin && user.id !== bet.creator_id && (bet.status === "taken" || isPendingPeerResolution) && (
           <Card className="mb-6">
             <CardContent className="pt-6 space-y-3">
@@ -751,7 +873,7 @@ export default function BetDetailPage() {
                 )}
               </div>
 
-              {bet.status === "taken" && (
+              {canClaimNow && (
                 <>
                   <p className="text-sm text-muted-foreground">
                     Marca tu resultado. El otro participante debe aceptar o rechazar.
@@ -824,77 +946,97 @@ export default function BetDetailPage() {
         {user && user.id === bet.creator_id && bet.status !== "open" && (
           <Card>
             <CardContent className="py-6 text-center">
-              <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Esta es tu apuesta</h3>
-              {bet.status !== "taken" && (
-                <p className="text-muted-foreground">
-                  El estado actual es <span className="font-medium">{bet.status}</span>.
-                </p>
-              )}
-
-              {supportsPeerResolution && bet.status !== "cancelled" && (
-                <div className="mt-5 space-y-3 text-left">
-                  <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3">
-                    <p className="text-sm text-red-700 dark:text-red-300 font-medium">
-                      Reporta el resultado real. Marcarte como ganador sin haber ganado puede generar amonestaciones y bloqueo temporal para apostar.
-                    </p>
-                    {bet.status === "taken" && !canReportByTime && (
-                      <p className="text-sm mt-1 font-medium text-amber-800 dark:text-amber-200">
-                        Se habilita en: {countdownHours}h {String(countdownMinutes).padStart(2, "0")}m {String(countdownSeconds).padStart(2, "0")}s
-                      </p>
-                    )}
-                  </div>
-
-                  {bet.status === "taken" && (
-                    <div className={`grid grid-cols-2 gap-2 ${!canReportByTime ? "opacity-60" : ""}`}>
-                      <Button
-                        onClick={() => handleParticipantResolution("claim_win")}
-                        disabled={!canReportByTime || !!resolvingAction}
-                      >
-                        {resolvingAction === "claim_win" ? "Enviando..." : "Marcar: Gané"}
-                      </Button>
-                      <Button
-                        variant="outline"
-                        onClick={() => handleParticipantResolution("claim_lose")}
-                        disabled={!canReportByTime || !!resolvingAction}
-                      >
-                        {resolvingAction === "claim_lose" ? "Enviando..." : "Marcar: Perdí"}
-                      </Button>
-                    </div>
-                  )}
-
-                  {waitingCounterparty && (
-                    <p className="text-sm text-muted-foreground">
-                      Ya reportaste resultado{winnerNickname ? ` (${winnerNickname} como ganador)` : ""}. Esperando validación del rival.
-                    </p>
-                  )}
-
-                  {canConfirmNow && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <Button
-                        onClick={() => handleParticipantResolution("confirm")}
-                        disabled={!!resolvingAction}
-                      >
-                        {resolvingAction === "confirm" ? "Confirmando..." : "Aceptar resultado"}
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        onClick={() => handleParticipantResolution("reject")}
-                        disabled={!!resolvingAction}
-                      >
-                        {resolvingAction === "reject" ? "Enviando..." : "No aceptar (Arbitraje)"}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {!supportsPeerResolution && bet.status === "taken" && (
-                <div className="mt-4 rounded-lg border border-muted bg-muted/40 p-3 text-left">
-                  <p className="text-sm text-muted-foreground">
-                    Para este tipo de apuesta, el resultado se confirmará automáticamente o será revisado por el equipo de la plataforma.
+              {bet.status === "resolved" ? (
+                <>
+                  <Trophy className="h-12 w-12 mx-auto text-green-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Apuesta finalizada</h3>
+                  <p className="text-muted-foreground">
+                    {bet.winner_id === user.id ? "¡Ganaste esta apuesta!" : "Perdiste esta apuesta."}
+                    {winnerNickname ? ` Ganador: ${winnerNickname}.` : ""}
                   </p>
-                </div>
+                </>
+              ) : bet.status === "cancelled" ? (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
+                  <p className="text-muted-foreground">Esta apuesta fue cancelada.</p>
+                </>
+              ) : bet.status === "disputed" ? (
+                <>
+                  <AlertCircle className="h-12 w-12 mx-auto text-yellow-500 mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">En revisión</h3>
+                  <p className="text-muted-foreground">Esta apuesta está siendo revisada por el equipo de la plataforma.</p>
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">Esta es tu apuesta</h3>
+
+                  {supportsPeerResolution && (
+                    <div className="mt-5 space-y-3 text-left">
+                      <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-3">
+                        <p className="text-sm text-red-700 dark:text-red-300 font-medium">
+                          Reporta el resultado real. Marcarte como ganador sin haber ganado puede generar amonestaciones y bloqueo temporal para apostar.
+                        </p>
+                        {bet.status === "taken" && !canReportByTime && (
+                          <p className="text-sm mt-1 font-medium text-amber-800 dark:text-amber-200">
+                            Se habilita en: {countdownHours}h {String(countdownMinutes).padStart(2, "0")}m {String(countdownSeconds).padStart(2, "0")}s
+                          </p>
+                        )}
+                      </div>
+
+                      {canClaimNow && (
+                        <div className={`grid grid-cols-2 gap-2 ${!canReportByTime ? "opacity-60" : ""}`}>
+                          <Button
+                            onClick={() => handleParticipantResolution("claim_win")}
+                            disabled={!canReportByTime || !!resolvingAction}
+                          >
+                            {resolvingAction === "claim_win" ? "Enviando..." : "Marcar: Gané"}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            onClick={() => handleParticipantResolution("claim_lose")}
+                            disabled={!canReportByTime || !!resolvingAction}
+                          >
+                            {resolvingAction === "claim_lose" ? "Enviando..." : "Marcar: Perdí"}
+                          </Button>
+                        </div>
+                      )}
+
+                      {waitingCounterparty && (
+                        <p className="text-sm text-muted-foreground">
+                          Ya reportaste resultado{winnerNickname ? ` (${winnerNickname} como ganador)` : ""}. Esperando validación del rival.
+                        </p>
+                      )}
+
+                      {canConfirmNow && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <Button
+                            onClick={() => handleParticipantResolution("confirm")}
+                            disabled={!!resolvingAction}
+                          >
+                            {resolvingAction === "confirm" ? "Confirmando..." : "Aceptar resultado"}
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            onClick={() => handleParticipantResolution("reject")}
+                            disabled={!!resolvingAction}
+                          >
+                            {resolvingAction === "reject" ? "Enviando..." : "No aceptar (Arbitraje)"}
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {!supportsPeerResolution && bet.status === "taken" && (
+                    <div className="mt-4 rounded-lg border border-muted bg-muted/40 p-3 text-left">
+                      <p className="text-sm text-muted-foreground">
+                        Para este tipo de apuesta, el resultado se confirmará automáticamente o será revisado por el equipo de la plataforma.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
 
               <Button className="mt-4" asChild>

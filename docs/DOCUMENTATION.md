@@ -1,7 +1,7 @@
 # iBetYou - Documentación Completa
 
-**Última actualización**: 2 de Abril de 2026 (rev. 4)  
-**Estado**: ✅ Core APIs implementadas - ✅ Backoffice separado - ✅ Módulo de usuarios - ✅ Auditoría lógica de negocio - ✅ Rebranding iBetYou
+**Última actualización**: 3 de Abril de 2026 (rev. 5)  
+**Estado**: ✅ Core APIs implementadas - ✅ Backoffice separado - ✅ Módulo de usuarios - ✅ Auditoría lógica de negocio - ✅ Rebranding iBetYou - ✅ Hardening de arbitraje y moderación
 
 ---
 
@@ -18,6 +18,7 @@
 9. [Estructura de Código](#estructura-de-código)
 10. [Ejemplos de Uso](#ejemplos-de-uso)
 11. [Checklist de Estado](#checklist-de-estado)
+12. [Cambios Recientes (2026-04-03)](#cambios-recientes-2026-04-03)
 
 ---
 
@@ -104,6 +105,36 @@ Se ha completado una **migración completa de seguridad** moviendo toda la lógi
 ---
 
 ## APIs Implementadas
+
+---
+
+## Cambios Recientes (2026-04-03)
+
+1. Se unificó el estado canónico `pending_resolution` y se mantuvo compatibilidad con estados legacy en consultas/UI.
+2. Se enriqueció la tarjeta de moderación en backoffice con tipo de apuesta, marcador final y badge de lista para moderación.
+3. Se corrigió la determinación de ganador en aprobaciones pendientes cuando hay discrepancias entre status legacy, `winner_id` y claims.
+4. Se fortaleció la sincronización de eventos con apuestas desde backoffice (consulta independiente).
+5. Se implementó timeout de eventos estancados: si siguen `scheduled/live` por 4h desde inicio, pasan a `finished`.
+6. Se endureció auth de API con mejor extracción de sesión/token desde cookies y formatos alternativos.
+7. Se añadieron actualizaciones en vivo (realtime/foco/visibilidad) en vistas críticas para reducir recargas manuales.
+8. Se ajustó la lógica de botones de participante para evitar acciones inválidas cuando ya hay reclamo del rival.
+9. Se mejoró la mensajería UX para estados finales (`resolved/cancelled/disputed`) evitando estados crudos.
+10. Se eliminaron prompts del navegador en backoffice bets y se reemplazaron por modales internos con motivo.
+11. Se agregó escalado automático de `pending_resolution*` a `disputed` tras 30 minutos sin respuesta de contraparte.
+12. Se habilitó auto-resolver en apuestas `disputed` además de `taken`.
+13. Se implementó auto-resolver específico para `half_time` usando marcador HT en metadata o API externa.
+14. Se implementó auto-resolver específico para `first_scorer` usando metadata y fallback a eventos de fixture.
+15. Se persisten datos extendidos de evento en metadata: marcador de medio tiempo y primer anotador (cuando disponible).
+16. Se restringieron `half_time` y `first_scorer` a fútbol (UI + backend), bloqueados para otros deportes.
+17. Se corrigió el listado de eventos en crear apuesta para incluir `scheduled/live` en ventana reciente, mejorando béisbol.
+18. En backoffice events, se dejó vista inicial en `Eventos Guardados` y jerarquía: hoy, próximos y pasados desplegables.
+19. Se limitó la sección de eventos pasados a 7 días para reducir ruido operativo.
+20. Se mejoró UX del calendario en filtros (`Desde/Hasta`) con botones explícitos para abrir picker.
+
+### Auditoría de lógica de negocio (backend/API)
+
+- Las mutaciones críticas de estado, arbitraje, aprobación, disputa, auto-resolución, wallets y transacciones se ejecutan en backend/API.
+- El frontend conserva cálculos de presentación y validaciones UX, pero no actúa como fuente de verdad para persistencia.
 
 ### 1️⃣ Autenticación y Bonificación
 

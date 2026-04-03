@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 export async function POST(request: NextRequest) {
   try {
     const { userId, eventId, betType, selection, amount, multiplier, fee } = await request.json()
+    const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
 
     const authHeader = request.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
@@ -42,6 +43,26 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminSupabaseClient()
+
+    const { data: eventRow, error: eventError } = await supabase
+      .from("events")
+      .select("id, sport")
+      .eq("id", eventId)
+      .single()
+
+    if (eventError || !eventRow) {
+      return NextResponse.json(
+        { error: "Event not found" },
+        { status: 404 }
+      )
+    }
+
+    if (footballOnlyBetTypes.has(betType) && eventRow.sport !== "football") {
+      return NextResponse.json(
+        { error: "Este tipo de apuesta solo esta disponible para futbol" },
+        { status: 400 }
+      )
+    }
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
