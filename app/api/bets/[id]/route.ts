@@ -28,7 +28,20 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     }
 
     const isParticipant = !!authenticatedUserId && (authenticatedUserId === bet.creator_id || authenticatedUserId === bet.acceptor_id)
-    const canRead = bet.status === 'open' || isParticipant
+
+    const eventRow = Array.isArray(bet.event) ? bet.event[0] : bet.event
+    const eventStartRaw = eventRow?.start_time
+    const eventStartMs = eventStartRaw ? new Date(eventStartRaw).getTime() : NaN
+    const acceptanceDeadlineMs = Number.isNaN(eventStartMs)
+      ? NaN
+      : eventStartMs + ACCEPT_WINDOW_MINUTES * 60 * 1000
+
+    // Keep detail visibility consistent with marketplace: public/taker reads only
+    // while the acceptance window is still open; participants can always read.
+    const canReadOpenByWindow =
+      bet.status === 'open' && !Number.isNaN(acceptanceDeadlineMs) && Date.now() <= acceptanceDeadlineMs
+
+    const canRead = canReadOpenByWindow || isParticipant
 
     if (!canRead) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
