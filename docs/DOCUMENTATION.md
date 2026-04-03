@@ -130,6 +130,258 @@ Se ha completado una **migración completa de seguridad** moviendo toda la lógi
 18. En backoffice events, se dejó vista inicial en `Eventos Guardados` y jerarquía: hoy, próximos y pasados desplegables.
 19. Se limitó la sección de eventos pasados a 7 días para reducir ruido operativo.
 20. Se mejoró UX del calendario en filtros (`Desde/Hasta`) con botones explícitos para abrir picker.
+21. Se movió la limpieza de apuestas `open` expiradas a un endpoint dedicado `POST /api/cleanup/open-bets` para ejecución cron/manual.
+22. Se eliminó la ejecución de esa limpieza en GET de listados para reducir costo de lectura.
+23. Se integró la ejecución del cleanup al flujo operativo de backoffice al actualizar/sincronizar eventos, manteniendo el control explícito por acción administrativa.
+
+### Detalle técnico: cleanup de apuestas abiertas expiradas
+
+#### Objetivo
+
+Evitar ejecutar lógica de cierre automático de apuestas en cada endpoint de lectura (`GET`) para reducir costo de consulta y acoplarla a una operación explícita (cron/manual o acción de backoffice).
+
+#### Arquitectura aplicada
+
+1. **Helper reusable de dominio**
+- Archivo: `lib/open-bets-cleanup.ts`
+- Función principal: `cleanupExpiredOpenBets(supabase, decidedBy)`
+- Responsabilidad:
+  - Buscar apuestas `open` sin `acceptor_id`.
+  - Detectar expiración por ventana de aceptación o estado del evento (`live/finished`).
+  - Cambiar estado a `cancelled`.
+  - Reembolsar `amount + fee_amount` al creador.
+  - Insertar transacción `bet_cancelled_refund`.
+  - Registrar decisión en `arbitration_decisions` con mensaje positivo.
+
+2. **Endpoint dedicado de cleanup**
+- Archivo: `app/api/cleanup/open-bets/route.ts`
+- Método: `POST`
+- Ruta: `/api/cleanup/open-bets`
+- Ejecuta el helper y devuelve métricas de ejecución.
+
+3. **Desacople de endpoints de lectura**
+- Se removió la ejecución de cleanup en:
+  - `app/api/admin/bets/route.ts` (GET)
+  - `app/api/my-bets/route.ts` (GET)
+
+4. **Disparo operativo desde backoffice**
+- En `app/backoffice/bets/page.tsx`:
+  - `Actualizar eventos` ejecuta refresh + cleanup dedicado.
+  - `Sync` por evento también devuelve resultado de cleanup desde backend.
+
+5. **Disparo backend durante sync de resultados**
+- En `app/api/admin/events/results/route.ts` (POST):
+  - Después de actualizar marcador/status de evento, ejecuta cleanup.
+  - Incluye resumen `cleanup` en la respuesta.
+
+#### Contrato del endpoint `/api/cleanup/open-bets`
+
+**Request**
+- `POST /api/cleanup/open-bets`
+- Sin body obligatorio.
+- Autorización:
+  - O bien secret técnico (`x-cleanup-secret` o `Authorization: Bearer <secret>`),
+  - O bien usuario `backoffice_admin` autenticado.
+
+**Response (200)**
+```json
+{
+  "success": true,
+  "message": "Open bets cleanup completed",
+  "scanned": 42,
+  "cancelled": 7,
+  "refunded": 7
+}
+```
+
+#### Reglas de negocio de expiración
+
+- Universo: apuestas con `status = open` y `acceptor_id IS NULL`.
+- Una apuesta se auto-cancela si se cumple cualquiera:
+  1. Ya venció la ventana de aceptación (`start_time + 10 min`).
+  2. El evento está `live`.
+  3. El evento está `finished`.
+
+#### Efectos transaccionales por apuesta cancelada
+
+1. `bets.status` → `cancelled` (solo si aún estaba `open`).
+2. `wallets.balance_fantasy` del creador incrementa en `amount + fee_amount`.
+3. Inserta `transactions` con `operation = bet_cancelled_refund`.
+4. Inserta `arbitration_decisions` con:
+  - `action = auto_cancel_open_expired`
+  - `source = system`
+  - `reason` positivo para motivar al creador.
+
+#### Seguridad y acceso
+
+- Variables soportadas para secret técnico:
+  - `CLEANUP_API_SECRET`
+  - fallback: `CRON_SECRET`
+- Si no se envía secret válido, el endpoint exige control de rol backoffice (`requireBackofficeAdmin`).
+
+#### Operación recomendada (cron)
+
+Ejecutar cada 5-10 minutos:
+- URL: `POST https://<dominio>/api/cleanup/open-bets`
+- Header: `x-cleanup-secret: <CLEANUP_API_SECRET>`
+
+Esto mantiene consistencia operativa sin penalizar endpoints de lectura frecuentes.
+
+#### Diagrama de secuencia (flujo cleanup)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant BO as Backoffice/Cron
+  participant API as POST /api/cleanup/open-bets
+  participant CL as cleanupExpiredOpenBets
+  participant DB as Supabase
+
+  BO->>API: Ejecuta cleanup (secret o admin auth)
+  API->>CL: Invoca helper de limpieza
+  CL->>DB: Busca bets open sin acceptor
+  loop Por cada apuesta expirada
+    CL->>DB: Update bets.status = cancelled
+    CL->>DB: Refund wallet (amount + fee)
+    CL->>DB: Insert transaction bet_cancelled_refund
+    CL->>DB: Insert arbitration_decision (mensaje positivo)
+  end
+  CL-->>API: { scanned, cancelled, refunded }
+  API-->>BO: 200 OK + métricas de ejecución
+```
+
+#### Diagramas adicionales de lógica de negocio
+
+##### 1) Máquina de estados de apuesta
+
+```mermaid
+stateDiagram-v2
+  [*] --> open: Crear apuesta
+  open --> taken: Aceptar apuesta
+  open --> cancelled: Cancelación manual admin
+  open --> cancelled: Auto-cancel por evento fuera de tiempo
+
+  taken --> pending_resolution: Auto-resolve/manual con ganador claro
+  taken --> disputed: Datos ambiguos o conflicto
+
+  pending_resolution --> resolved: Aprobación admin
+  pending_resolution --> disputed: Timeout 30 min sin contraparte
+
+  disputed --> pending_resolution: Auto-resolve posterior con data suficiente
+  disputed --> resolved: Resolución manual admin
+  disputed --> cancelled: Cancelación admin
+
+  resolved --> [*]
+  cancelled --> [*]
+```
+
+##### 2) Flujo crear y tomar apuesta
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U1 as Creador
+  participant API1 as POST /api/bets/create
+  participant DB as Supabase
+  participant U2 as Aceptante
+  participant API2 as PATCH /api/bets/[id]
+
+  U1->>API1: Crear apuesta (evento, tipo, selección, monto)
+  API1->>DB: Validar usuario/evento/tipo
+  API1->>DB: Validar balance creador
+  API1->>DB: Insert bet(status=open)
+  API1->>DB: Debitar wallet + registrar transaction
+  API1-->>U1: Bet creada
+
+  U2->>API2: Tomar apuesta
+  API2->>DB: Validar open + no self-take + ventana aceptación
+  API2->>DB: Validar balance aceptante
+  API2->>DB: Update bet(status=taken, acceptor_id)
+  API2->>DB: Debitar wallet aceptante + transaction
+  API2-->>U2: Bet tomada
+```
+
+##### 3) Auto-resolve de apuestas (direct/exact_score/half_time/first_scorer)
+
+```mermaid
+flowchart TD
+  A[POST /api/admin/bets auto-resolve] --> B{status = taken o disputed?}
+  B -- No --> X[Error]
+  B -- Sí --> C[Cargar bet + event + metadata]
+  C --> D{Tipo apuesta}
+
+  D -->|direct| E[Comparar marcador final]
+  D -->|exact_score| F[Comparar score exacto]
+  D -->|half_time| G[Usar halftime metadata/API]
+  D -->|first_scorer| H[Usar first_scorer metadata/API]
+
+  E --> I{Ganador claro?}
+  F --> I
+  G --> I
+  H --> I
+
+  I -- Sí --> J[Update bet -> pending_resolution + winner_id]
+  I -- No --> K[Update bet -> disputed]
+
+  J --> L[Log arbitration_decision auto_resolve_pending]
+  K --> M[Log arbitration_decision auto_resolve_disputed]
+```
+
+##### 4) Moderación manual en backoffice
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant BO as Backoffice UI
+  participant API as PATCH /api/admin/bets
+  participant DB as Supabase
+
+  BO->>API: Acción resolve/cancel/dispute/approve_pending + motivo
+  API->>DB: Validar rol admin
+  API->>DB: Aplicar transición de estado
+  alt approve_pending o resolve
+    API->>DB: Acreditar premio al winner + transaction
+  end
+  alt cancel
+    API->>DB: Reembolsos a partes + transactions
+  end
+  API->>DB: Insert arbitration_decision
+  API-->>BO: Resultado acción
+```
+
+##### 5) Sync de eventos y preparación para moderación
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant BO as Backoffice Bets
+  participant API as POST /api/admin/events/results
+  participant EXT as API-Sports
+  participant DB as Supabase
+
+  BO->>API: Sync event_id
+  API->>DB: Leer evento + metadata
+  API->>EXT: Consultar fixture/game por external_id
+  EXT-->>API: Scores + status (+ eventos fútbol)
+  API->>DB: Update home/away score + status
+  API->>DB: Persist metadata(match_details: halftime, first_scorer)
+  API->>DB: Ejecutar cleanup open-bets expiradas
+  API-->>BO: event actualizado + cleanup stats
+```
+
+##### 6) Vista backoffice en vivo (sin recarga intrusiva)
+
+```mermaid
+flowchart LR
+  A[Backoffice Bets Page] --> B[Supabase Realtime: bets/events/arbitration_decisions]
+  A --> C[Focus/visibility refresh silencioso]
+  B --> D[Debounce refresh]
+  C --> D
+  D --> E[Refetch /api/admin/bets]
+  D --> F[Refetch /api/admin/events/results]
+  E --> G[UI actualizada]
+  F --> G
+```
 
 ### Auditoría de lógica de negocio (backend/API)
 

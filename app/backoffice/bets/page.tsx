@@ -198,6 +198,44 @@ export default function BackofficeBets() {
     }
   }
 
+  async function runOpenBetsCleanup(options?: { silent?: boolean }) {
+    try {
+      const res = await authFetch('/api/cleanup/open-bets', {
+        method: 'POST',
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        if (!options?.silent) {
+          showToast(data.error || 'No se pudo ejecutar limpieza de apuestas abiertas', 'error')
+        }
+        return null
+      }
+
+      if (!options?.silent && data.cancelled > 0) {
+        showToast(`Se cerraron ${data.cancelled} apuesta(s) abierta(s) fuera de tiempo`, 'info')
+      }
+
+      return data
+    } catch (err) {
+      console.error('Error running open bets cleanup:', err)
+      if (!options?.silent) {
+        showToast('Error al ejecutar limpieza de apuestas abiertas', 'error')
+      }
+      return null
+    }
+  }
+
+  async function refreshEventsFromBackoffice() {
+    await fetchEventsWithBets()
+    const cleanup = await runOpenBetsCleanup()
+
+    if (cleanup && cleanup.cancelled > 0) {
+      await fetchBets({ silent: true })
+      await fetchEventsWithBets({ silent: true })
+    }
+  }
+
   function scheduleLiveRefresh(delayMs = 250) {
     if (liveRefreshTimeoutRef.current !== null) {
       window.clearTimeout(liveRefreshTimeoutRef.current)
@@ -373,6 +411,9 @@ export default function BackofficeBets() {
       }
 
       showToast(`Marcador guardado: ${data.event.home_score ?? '-'} - ${data.event.away_score ?? '-'} (${data.event.status})`, 'success')
+      if (data.cleanup?.cancelled > 0) {
+        showToast(`Se cerraron ${data.cleanup.cancelled} apuesta(s) abierta(s) fuera de tiempo`, 'info')
+      }
       fetchEventsWithBets()
       fetchBets()
     } catch (err) {
@@ -591,7 +632,7 @@ export default function BackofficeBets() {
                 Consulta marcador final en API externa y guárdalo localmente, sin arbitrar apuestas.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => fetchEventsWithBets()}>
+            <Button variant="outline" size="sm" onClick={refreshEventsFromBackoffice}>
               {loadingEventsWithBets ? 'Actualizando...' : 'Actualizar eventos'}
             </Button>
           </div>

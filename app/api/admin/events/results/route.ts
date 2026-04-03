@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
@@ -359,11 +360,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
+    const cleanupResult = await cleanupExpiredOpenBets(supabase, auth.userId || "system")
+
     return NextResponse.json({
       success: true,
       event: updatedEvent,
       score_source: "external_api",
       message: "Marcador consultado y guardado localmente",
+      cleanup: cleanupResult,
     })
   } catch (error: unknown) {
     console.error("Admin events results POST error:", error)

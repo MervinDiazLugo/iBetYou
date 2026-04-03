@@ -31,6 +31,12 @@ interface BetWithDetails {
   acceptor?: {
     nickname: string
   }
+  decision_history?: {
+    id: string
+    action: string
+    reason?: string | null
+    created_at: string
+  }[]
 }
 
 export function useMyBets() {

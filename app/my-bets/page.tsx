@@ -211,6 +211,14 @@ export default function MyBetsPage() {
                         </p>
                       </div>
                     )}
+
+                    {bet.status === "cancelled" && bet.creator_id === user.id && bet.decision_history?.[0]?.action === "auto_cancel_open_expired" && (
+                      <div className="mt-3 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2">
+                        <p className="text-xs text-green-600 font-medium">
+                          {bet.decision_history?.[0]?.reason || "Tu apuesta se cerró automáticamente porque el evento ya inició. ¡Buen intento! Crea una nueva apuesta y sigue participando."}
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </Link>
