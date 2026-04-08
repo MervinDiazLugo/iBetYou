@@ -6,6 +6,13 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const sport = searchParams.get("sport")
   const status = searchParams.get("status")
+  const paginated = searchParams.get("paginated") === "1"
+  const rawLimit = Number(searchParams.get("limit") || "50")
+  const rawOffset = Number(searchParams.get("offset") || "0")
+  const search = (searchParams.get("search") || "").trim()
+
+  const limit = Number.isFinite(rawLimit) ? Math.max(1, Math.min(50, rawLimit)) : 50
+  const offset = Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0
 
   try {
     let query = supabase
@@ -15,6 +22,12 @@ export async function GET(request: NextRequest) {
 
     if (sport && sport !== 'all') {
       query = query.eq('sport', sport)
+    }
+
+    if (search) {
+      // Avoid breaking Supabase OR syntax if the search contains commas.
+      const safeSearch = search.replace(/,/g, ' ')
+      query = query.or(`home_team.ilike.%${safeSearch}%,away_team.ilike.%${safeSearch}%`)
     }
 
     if (status) {
@@ -31,7 +44,21 @@ export async function GET(request: NextRequest) {
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
     query = query.lte('start_time', thirtyDaysFromNow.toISOString())
 
-    const { data, error } = await query.limit(50)
+    if (paginated) {
+      const { data, error } = await query.range(offset, offset + limit)
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+
+      const rows = data || []
+      const hasMore = rows.length > limit
+      const events = hasMore ? rows.slice(0, limit) : rows
+
+      return NextResponse.json({ events, hasMore })
+    }
+
+    const { data, error } = await query.limit(limit)
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 })

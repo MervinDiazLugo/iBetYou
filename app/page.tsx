@@ -51,6 +51,12 @@ function HomeContent() {
   const { showToast } = useToast()
   const [events, setEvents] = useState<Event[]>([])
   const [selectedEventForBet, setSelectedEventForBet] = useState<Event | null>(null)
+  const [eventsSportFilter, setEventsSportFilter] = useState("all")
+  const [eventsVisibleBySport, setEventsVisibleBySport] = useState<Record<string, number>>({
+    football: 10,
+    basketball: 10,
+    baseball: 10,
+  })
   const [loadingBets, setLoadingBets] = useState(false)
   const sessionTokenRef = useRef<string | null>(null)
   const userIdRef = useRef<string | null>(null)
@@ -248,12 +254,26 @@ function HomeContent() {
   })
 
   const filteredEvents = events.filter(event => {
-    const matchesSport = selectedSport === 'all' || (event.sport as string) === selectedSport
+    const matchesSport = eventsSportFilter === 'all' || (event.sport as string) === eventsSportFilter
     const matchesSearch = !searchTerm ||
       event.home_team.toLowerCase().includes(searchTerm.toLowerCase()) ||
       event.away_team.toLowerCase().includes(searchTerm.toLowerCase())
     return matchesSport && matchesSearch
   })
+
+  const eventsBySport = {
+    football: filteredEvents.filter((event) => event.sport === "football"),
+    basketball: filteredEvents.filter((event) => event.sport === "basketball"),
+    baseball: filteredEvents.filter((event) => event.sport === "baseball"),
+  }
+
+  useEffect(() => {
+    setEventsVisibleBySport({
+      football: 10,
+      basketball: 10,
+      baseball: 10,
+    })
+  }, [eventsSportFilter, searchTerm])
 
   const ownOpenBetsCount = user
     ? inProgressBets.filter((bet) => bet.status === 'open' && bet.creator_id === user.id).length
@@ -270,6 +290,11 @@ function HomeContent() {
       default:
         return "🏆"
     }
+  }
+
+  const getSportLabel = (sportId: string) => {
+    const sport = sports.find((item) => item.id === sportId)
+    return sport?.name || sportId
   }
 
   return (
@@ -322,73 +347,138 @@ function HomeContent() {
         </div>
 
         {/* Eventos Disponibles */}
-        {filteredEvents.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center gap-2 mb-3">
-              <Calendar className="h-5 w-5 text-blue-400" />
-              <h2 className="text-lg sm:text-xl font-bold">Eventos Disponibles</h2>
-              <Badge variant="outline" className="ml-2 text-xs">
-                {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}
-              </Badge>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {filteredEvents.slice(0, 10).map((event) => (
-                <Card key={event.id} className="overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer">
-                  <div className="h-0.5 bg-gradient-to-r from-blue-500 to-cyan-400" />
-                  <CardContent className="pt-3 pb-3 space-y-2 px-3">
-                    <div className="flex items-center justify-between gap-1">
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 leading-none truncate max-w-[65%]">
-                        {getSportIcon(event.sport)} {event.league}
-                      </Badge>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
-                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between gap-1">
-                      <div className="flex-1 text-center min-w-0">
-                        {event.home_logo ? (
-                          <img src={event.home_logo} alt={event.home_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
-                        ) : (
-                          <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
-                            {event.home_team.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="text-[10px] font-semibold leading-tight truncate">{event.home_team}</div>
-                      </div>
-                      <div className="text-[11px] font-bold text-muted-foreground px-1">VS</div>
-                      <div className="flex-1 text-center min-w-0">
-                        {event.away_logo ? (
-                          <img src={event.away_logo} alt={event.away_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
-                        ) : (
-                          <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
-                            {event.away_team.slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                        <div className="text-[10px] font-semibold leading-tight truncate">{event.away_team}</div>
-                      </div>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      className="w-full text-[11px] h-7 bg-blue-600 hover:bg-blue-700 text-white"
-                      onClick={() => {
-                        if (!user) {
-                          window.location.href = '/login'
-                          return
-                        }
-                        setSelectedEventForBet(event)
-                        setShowCreateModal(true)
-                      }}
-                    >
-                      Apostar aquí
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <Calendar className="h-5 w-5 text-blue-400" />
+            <h2 className="text-lg sm:text-xl font-bold">Eventos Disponibles</h2>
+            <Badge variant="outline" className="ml-2 text-xs">
+              {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}
+            </Badge>
           </div>
-        )}
+
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
+            {sports.map((sport) => (
+              <Button
+                key={`events-${sport.id}`}
+                variant={eventsSportFilter === sport.id ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEventsSportFilter(sport.id)}
+                className="whitespace-nowrap"
+              >
+                <span>{sport.icon}</span>
+                {sport.name}
+              </Button>
+            ))}
+          </div>
+
+          {filteredEvents.length === 0 ? (
+            <Card>
+              <CardContent className="py-6 text-center">
+                <p className="text-muted-foreground">No hay eventos disponibles para este filtro</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {(eventsSportFilter === "all"
+                ? ["football", "basketball", "baseball"]
+                : [eventsSportFilter]
+              ).map((sportId) => {
+                const sportEvents = eventsBySport[sportId as keyof typeof eventsBySport] || []
+                if (sportEvents.length === 0) return null
+
+                const visibleCount = eventsVisibleBySport[sportId] || 10
+                const visibleEvents = sportEvents.slice(0, visibleCount)
+                const hasMore = visibleCount < sportEvents.length
+
+                return (
+                  <div key={`event-group-${sportId}`}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h3 className="text-base font-semibold">
+                        {getSportIcon(sportId)} {getSportLabel(sportId)}
+                      </h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {sportEvents.length}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                      {visibleEvents.map((event) => (
+                        <Card key={event.id} className="overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer">
+                          <div className="h-0.5 bg-gradient-to-r from-blue-500 to-cyan-400" />
+                          <CardContent className="pt-3 pb-3 space-y-2 px-3">
+                            <div className="flex items-center justify-between gap-1">
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 leading-none truncate max-w-[65%]">
+                                {getSportIcon(event.sport)} {event.league}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground shrink-0">
+                                {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-1">
+                              <div className="flex-1 text-center min-w-0">
+                                {event.home_logo ? (
+                                  <img src={event.home_logo} alt={event.home_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
+                                ) : (
+                                  <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
+                                    {event.home_team.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="text-[10px] font-semibold leading-tight truncate">{event.home_team}</div>
+                              </div>
+                              <div className="text-[11px] font-bold text-muted-foreground px-1">VS</div>
+                              <div className="flex-1 text-center min-w-0">
+                                {event.away_logo ? (
+                                  <img src={event.away_logo} alt={event.away_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
+                                ) : (
+                                  <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
+                                    {event.away_team.slice(0, 2).toUpperCase()}
+                                  </div>
+                                )}
+                                <div className="text-[10px] font-semibold leading-tight truncate">{event.away_team}</div>
+                              </div>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              className="w-full text-[11px] h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                              onClick={() => {
+                                if (!user) {
+                                  window.location.href = '/login'
+                                  return
+                                }
+                                setSelectedEventForBet(event)
+                                setShowCreateModal(true)
+                              }}
+                            >
+                              Apostar aquí
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+
+                    {hasMore && (
+                      <div className="mt-3 flex justify-center">
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setEventsVisibleBySport((prev) => ({
+                              ...prev,
+                              [sportId]: (prev[sportId] || 10) + 10,
+                            }))
+                          }}
+                        >
+                          Mostrar más {getSportLabel(sportId).toLowerCase()}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
 
         {/* Loading State */}
         {loading && (
