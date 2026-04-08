@@ -82,6 +82,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     Math.floor(((Number(balance.fantasy) || 0) / 1.03) * 100) / 100
   )
   const maxAllowedAmount = maxAmountByBalance
+  const openedFromEventCard = Boolean(initialEvent && !cloneBetId)
 
   useEffect(() => {
     const availableBetTypes = getAvailableBetTypes(selectedSport)
@@ -212,7 +213,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         const res = await fetch(`/api/events/list?sport=${selectedSport}`)
         const data = await res.json()
         if (Array.isArray(data)) {
-          setEvents(data.map((match: any) => ({
+          const mappedEvents = data.map((match: any) => ({
             id: match.id,
             sport: match.sport,
             home_team: match.home_team,
@@ -222,14 +223,34 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
             start_time: match.start_time,
             league: match.league,
             country: match.country,
-          })))
+          }))
+
+          if (openedFromEventCard && initialEvent && initialEvent.sport === selectedSport) {
+            const alreadyIncluded = mappedEvents.some((event: Event) => event.id === initialEvent.id)
+            setEvents(alreadyIncluded ? mappedEvents : [initialEvent, ...mappedEvents])
+            return
+          }
+
+          setEvents(mappedEvents)
         }
       } catch (err) {
         console.error("Error fetching events:", err)
       }
     }
     fetchEvents()
-  }, [selectedSport])
+  }, [selectedSport, openedFromEventCard, initialEvent?.id])
+
+  const visibleEvents = openedFromEventCard && selectedEvent
+    ? [selectedEvent]
+    : events.filter((event) => {
+        if (!eventFilter) return true
+        const search = eventFilter.toLowerCase()
+        return (
+          event.home_team.toLowerCase().includes(search) ||
+          event.away_team.toLowerCase().includes(search) ||
+          event.league.toLowerCase().includes(search)
+        )
+      })
 
   const getBetOptions = () => {
     if (!selectedEvent) return []
@@ -365,6 +386,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   type="button"
                   variant={selectedSport === sport.id ? "default" : "outline"}
                   size="sm"
+                  disabled={openedFromEventCard}
                   onClick={() => { setSelectedSport(sport.id); setSelectedEvent(null) }}
                 >
                   {sport.icon} {sport.name}
@@ -393,20 +415,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Partido</label>
-            <Input
-              placeholder="Buscar partido..."
-              value={eventFilter}
-              onChange={(e) => setEventFilter(e.target.value)}
-              className="mb-2"
-            />
+            {!openedFromEventCard && (
+              <Input
+                placeholder="Buscar partido..."
+                value={eventFilter}
+                onChange={(e) => setEventFilter(e.target.value)}
+                className="mb-2"
+              />
+            )}
             <div className="grid gap-2 max-h-48 overflow-y-auto">
-              {events.filter(e => {
-                if (!eventFilter) return true
-                const search = eventFilter.toLowerCase()
-                return e.home_team.toLowerCase().includes(search) || 
-                       e.away_team.toLowerCase().includes(search) ||
-                       e.league.toLowerCase().includes(search)
-              }).slice(0, 10).map((event) => (
+              {visibleEvents.map((event) => (
                 <div
                   key={event.id}
                   className={`p-3 rounded-lg border cursor-pointer ${selectedEvent?.id === event.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
