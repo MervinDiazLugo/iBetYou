@@ -73,11 +73,21 @@ function HomeContent() {
       setShowCreateModal(true)
       if (clone) {
         setCloneBetId(clone)
+        setSelectedEventForBet(null)
+      } else {
+        setCloneBetId(null)
+        setSelectedEventForBet(null)
       }
       // Clear the URL param
       window.history.replaceState({}, '', '/')
     }
   }, [searchParams])
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false)
+    setCloneBetId(null)
+    setSelectedEventForBet(null)
+  }
 
   // Check auth and load data via API
   useEffect(() => {
@@ -301,9 +311,18 @@ function HomeContent() {
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent onClose={() => setShowCreateModal(false)}>
-          <CreateBetForm onClose={() => { setShowCreateModal(false); setCloneBetId(null); setSelectedEventForBet(null) }} cloneBetId={cloneBetId} initialEvent={selectedEventForBet} />
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeCreateModal()
+            return
+          }
+          setShowCreateModal(true)
+        }}
+      >
+        <DialogContent onClose={closeCreateModal}>
+          <CreateBetForm onClose={closeCreateModal} cloneBetId={cloneBetId} initialEvent={selectedEventForBet} />
         </DialogContent>
       </Dialog>
 
@@ -441,7 +460,8 @@ function HomeContent() {
 
                             <Button
                               size="sm"
-                              className="w-full text-[11px] h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                              className="w-full text-[11px] h-7 hover:!bg-[#22c55e]"
+                              style={createBetCtaStyle}
                               onClick={() => {
                                 if (!user) {
                                   window.location.href = '/login'
