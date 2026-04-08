@@ -1,14 +1,14 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect, Suspense, useRef } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Search, Trophy, Users, Clock, ChevronRight, Wallet } from "lucide-react"
+import { Search, Trophy, Users, Clock, ChevronRight, Wallet, Calendar } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import type { Bet, Event, User } from "@/types"
 import Link from "next/link"
@@ -49,7 +49,14 @@ function HomeContent() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [cloneBetId, setCloneBetId] = useState<string | null>(null)
   const { showToast } = useToast()
+  const [events, setEvents] = useState<Event[]>([])
+  const [selectedEventForBet, setSelectedEventForBet] = useState<Event | null>(null)
+  const [loadingBets, setLoadingBets] = useState(false)
+  const sessionTokenRef = useRef<string | null>(null)
+  const userIdRef = useRef<string | null>(null)
+  const initialLoadDoneRef = useRef(false)
 
+  const router = useRouter()
   const supabase = createBrowserSupabaseClient()
 
   useEffect(() => {
@@ -86,7 +93,9 @@ function HomeContent() {
 
           if (session?.access_token) {
             authHeaders.Authorization = `Bearer ${session.access_token}`
+            sessionTokenRef.current = session.access_token
           }
+          userIdRef.current = authUser.id
 
           // Get user profile and wallet
           const walletRes = await fetch(`/api/wallet?user_id=${authUser.id}`, {
@@ -112,7 +121,7 @@ function HomeContent() {
           }
 
           // Load marketplace (open bets excluding user's own)
-          const marketplaceRes = await fetch(`/api/bets?user_id=${authUser.id}&limit=20`, {
+          const marketplaceRes = await fetch(`/api/bets?user_id=${authUser.id}&limit=50`, {
             headers: authHeaders
           })
           const marketplaceData = await marketplaceRes.json()
@@ -139,7 +148,7 @@ function HomeContent() {
           const myTakenBetsData = await myTakenBetsRes.json()
           
           // Get all taken bets (for cloning) - exclude user's own bets
-          const takenBetsRes = await fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=20`, {
+          const takenBetsRes = await fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=50`, {
             headers: authHeaders
           })
           const takenBetsData = await takenBetsRes.json()
@@ -157,10 +166,10 @@ function HomeContent() {
           }
         } else {
           // Public marketplace for anonymous users
-          const marketplaceRes = await fetch(`/api/bets?limit=20`)
+          const marketplaceRes = await fetch(`/api/bets?limit=50`)
           const marketplaceData = await marketplaceRes.json()
 
-          const takenBetsRes = await fetch(`/api/bets?type=taken&limit=20`)
+          const takenBetsRes = await fetch(`/api/bets?type=taken&limit=50`)
           const takenBetsData = await takenBetsRes.json()
 
           if (isMounted) {
@@ -181,6 +190,7 @@ function HomeContent() {
         if (isMounted) {
           setLoading(false)
         }
+        initialLoadDoneRef.current = true
       }
     }
 
@@ -190,6 +200,29 @@ function HomeContent() {
       isMounted = false
     }
   }, [])
+
+  // Load available events on mount (all sports, filter client-side)
+  useEffect(() => {
+    fetch('/api/events/list')
+      .then(r => r.json())
+      .then(data => setEvents(Array.isArray(data) ? data : []))
+      .catch(() => setEvents([]))
+  }, [])
+
+  // Re-fetch marketplace bets when sport filter changes (skip initial render)
+  useEffect(() => {
+    if (!initialLoadDoneRef.current) return
+    setLoadingBets(true)
+    const sportParam = selectedSport !== 'all' ? `&sport=${selectedSport}` : ''
+    const userParam = userIdRef.current ? `&user_id=${userIdRef.current}` : ''
+    const headers: HeadersInit = {}
+    if (sessionTokenRef.current) headers.Authorization = `Bearer ${sessionTokenRef.current}`
+    fetch(`/api/bets?limit=50${userParam}${sportParam}`, { headers })
+      .then(r => r.json())
+      .then(data => setBets(data.bets || []))
+      .catch(() => {})
+      .finally(() => setLoadingBets(false))
+  }, [selectedSport])
 
   const matchesMarketplaceFilters = (bet: BetWithDetails) => {
     const matchesSearch =
@@ -212,6 +245,14 @@ function HomeContent() {
     const eventStart = new Date(bet.event?.start_time)
     if (eventStart < new Date()) return false
     return matchesMarketplaceFilters(bet)
+  })
+
+  const filteredEvents = events.filter(event => {
+    const matchesSport = selectedSport === 'all' || (event.sport as string) === selectedSport
+    const matchesSearch = !searchTerm ||
+      event.home_team.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.away_team.toLowerCase().includes(searchTerm.toLowerCase())
+    return matchesSport && matchesSearch
   })
 
   const ownOpenBetsCount = user
@@ -237,7 +278,7 @@ function HomeContent() {
 
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent onClose={() => setShowCreateModal(false)}>
-          <CreateBetForm onClose={() => { setShowCreateModal(false); setCloneBetId(null) }} cloneBetId={cloneBetId} />
+          <CreateBetForm onClose={() => { setShowCreateModal(false); setCloneBetId(null); setSelectedEventForBet(null) }} cloneBetId={cloneBetId} initialEvent={selectedEventForBet} />
         </DialogContent>
       </Dialog>
 
@@ -280,85 +321,71 @@ function HomeContent() {
           </div>
         </div>
 
-        {/* Mis Apuestas - Always show link when logged in */}
-        {!loading && user && (
+        {/* Eventos Disponibles */}
+        {filteredEvents.length > 0 && (
           <div className="mb-8">
-            {/* Mis Apuestas en Curso - bets the user created (open + taken) */}
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Clock className="h-5 w-5 text-orange-500" />
-                <h2 className="text-lg sm:text-xl font-bold">Mis Apuestas en Curso</h2>
-              </div>
-              {inProgressBets.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {inProgressBets.slice(0, 5).map((bet) => {
-                    const potentialWin = bet.amount * bet.multiplier + bet.amount
-                    const betTypeLabels: Record<string, string> = {
-                      direct: "Directa",
-                      exact_score: "Resultado Exacto",
-                      first_scorer: "Primer Anotador",
-                      half_time: "Medio Tiempo",
-                    }
-                    return (
-                      <Card key={bet.id} className="border-orange-500/30 overflow-hidden bg-gradient-to-b from-card to-card/70">
-                        <CardHeader className="pb-2 space-y-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <Badge variant="secondary" className="text-[10px] py-0.5 px-2 max-w-[75%] truncate leading-none">
-                              {getSportIcon(bet.event.sport)} {bet.event.league}
-                            </Badge>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-orange-500/10 leading-none">
-                                Abierta
-                              </Badge>
-                              <Badge variant="outline" className="text-[10px] py-0.5 px-2 leading-none">
-                                {betTypeLabels[bet.bet_type] || bet.bet_type}
-                              </Badge>
-                            </div>
-                          </div>
-                          <div className="text-sm leading-snug font-semibold text-center px-1">
-                            <span className="block truncate">{bet.event.home_team}</span>
-                            <span className="text-xs text-muted-foreground font-normal">vs</span>
-                            <span className="block truncate">{bet.event.away_team}</span>
-                          </div>
-                        </CardHeader>
-                        <CardContent className="space-y-3 pb-3">
-                          <div className="rounded-lg border border-border bg-secondary/40 p-2">
-                            <div className="text-[10px] text-muted-foreground mb-1">Tu selección</div>
-                            <div className="text-xs font-semibold text-primary leading-snug truncate">
-                              {bet.creator_selection}
-                            </div>
-                          </div>
+            <div className="flex items-center gap-2 mb-3">
+              <Calendar className="h-5 w-5 text-blue-400" />
+              <h2 className="text-lg sm:text-xl font-bold">Eventos Disponibles</h2>
+              <Badge variant="outline" className="ml-2 text-xs">
+                {filteredEvents.length} evento{filteredEvents.length !== 1 ? 's' : ''}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+              {filteredEvents.slice(0, 10).map((event) => (
+                <Card key={event.id} className="overflow-hidden hover:border-blue-500/50 transition-all cursor-pointer">
+                  <div className="h-0.5 bg-gradient-to-r from-blue-500 to-cyan-400" />
+                  <CardContent className="pt-3 pb-3 space-y-2 px-3">
+                    <div className="flex items-center justify-between gap-1">
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 leading-none truncate max-w-[65%]">
+                        {getSportIcon(event.sport)} {event.league}
+                      </Badge>
+                      <span className="text-[10px] text-muted-foreground shrink-0">
+                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                      </span>
+                    </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-[10px]">
-                            <div className="rounded-md bg-secondary/30 px-2 py-1.5">
-                              <div className="text-muted-foreground mb-0.5">Apuesta</div>
-                              <div className="text-foreground font-semibold text-xs">{formatCurrency(bet.amount)}</div>
-                            </div>
-                            <div className="rounded-md bg-green-500/10 px-2 py-1.5">
-                              <div className="text-muted-foreground mb-0.5">Potencial</div>
-                              <div className="text-green-500 font-semibold text-xs">{formatCurrency(potentialWin)}</div>
-                            </div>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex-1 text-center min-w-0">
+                        {event.home_logo ? (
+                          <img src={event.home_logo} alt={event.home_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
+                        ) : (
+                          <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
+                            {event.home_team.slice(0, 2).toUpperCase()}
                           </div>
-                        </CardContent>
-                        <CardFooter className="pt-0 pb-3">
-                          <Button variant="outline" size="sm" className="w-full text-xs h-7 border-orange-500/30 hover:bg-orange-500/10" asChild>
-                            <Link href={`/bet/${bet.id}`}>Ver</Link>
-                          </Button>
-                        </CardFooter>
-                      </Card>
-                    )
-                  })}
-                </div>
-              ) : (
-                <Card>
-                  <CardContent className="py-6 text-center">
-                    <p className="text-muted-foreground mb-4">No tienes apuestas en curso</p>
-                    <Button asChild>
-                      <Link href="/create">Crear una apuesta</Link>
+                        )}
+                        <div className="text-[10px] font-semibold leading-tight truncate">{event.home_team}</div>
+                      </div>
+                      <div className="text-[11px] font-bold text-muted-foreground px-1">VS</div>
+                      <div className="flex-1 text-center min-w-0">
+                        {event.away_logo ? (
+                          <img src={event.away_logo} alt={event.away_team} className="w-7 h-7 mx-auto mb-0.5 object-contain" />
+                        ) : (
+                          <div className="w-7 h-7 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
+                            {event.away_team.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="text-[10px] font-semibold leading-tight truncate">{event.away_team}</div>
+                      </div>
+                    </div>
+
+                    <Button
+                      size="sm"
+                      className="w-full text-[11px] h-7 bg-blue-600 hover:bg-blue-700 text-white"
+                      onClick={() => {
+                        if (!user) {
+                          window.location.href = '/login'
+                          return
+                        }
+                        setSelectedEventForBet(event)
+                        setShowCreateModal(true)
+                      }}
+                    >
+                      Apostar aquí
                     </Button>
                   </CardContent>
                 </Card>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -624,6 +651,85 @@ function HomeContent() {
               )})}
             </div>
           </>
+        )}
+
+        {/* Mis Apuestas en Curso */}
+        {!loading && user && (
+          <div className="mt-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Clock className="h-5 w-5 text-orange-500" />
+              <h2 className="text-lg sm:text-xl font-bold">Mis Apuestas en Curso</h2>
+            </div>
+            {inProgressBets.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                {inProgressBets.slice(0, 5).map((bet) => {
+                  const potentialWin = bet.amount * bet.multiplier + bet.amount
+                  const betTypeLabels: Record<string, string> = {
+                    direct: "Directa",
+                    exact_score: "Resultado Exacto",
+                    first_scorer: "Primer Anotador",
+                    half_time: "Medio Tiempo",
+                  }
+                  return (
+                    <Card key={bet.id} className="border-orange-500/30 overflow-hidden bg-gradient-to-b from-card to-card/70">
+                      <CardHeader className="pb-2 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="secondary" className="text-[10px] py-0.5 px-2 max-w-[75%] truncate leading-none">
+                            {getSportIcon(bet.event.sport)} {bet.event.league}
+                          </Badge>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <Badge variant="outline" className="text-[10px] py-0.5 px-2 bg-orange-500/10 leading-none">
+                              {bet.status === 'taken' ? 'En curso' : 'Abierta'}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] py-0.5 px-2 leading-none">
+                              {betTypeLabels[bet.bet_type] || bet.bet_type}
+                            </Badge>
+                          </div>
+                        </div>
+                        <div className="text-sm leading-snug font-semibold text-center px-1">
+                          <span className="block truncate">{bet.event.home_team}</span>
+                          <span className="text-xs text-muted-foreground font-normal">vs</span>
+                          <span className="block truncate">{bet.event.away_team}</span>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3 pb-3">
+                        <div className="rounded-lg border border-border bg-secondary/40 p-2">
+                          <div className="text-[10px] text-muted-foreground mb-1">Tu selección</div>
+                          <div className="text-xs font-semibold text-primary leading-snug truncate">
+                            {bet.creator_selection}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-[10px]">
+                          <div className="rounded-md bg-secondary/30 px-2 py-1.5">
+                            <div className="text-muted-foreground mb-0.5">Apuesta</div>
+                            <div className="text-foreground font-semibold text-xs">{formatCurrency(bet.amount)}</div>
+                          </div>
+                          <div className="rounded-md bg-green-500/10 px-2 py-1.5">
+                            <div className="text-muted-foreground mb-0.5">Potencial</div>
+                            <div className="text-green-500 font-semibold text-xs">{formatCurrency(potentialWin)}</div>
+                          </div>
+                        </div>
+                      </CardContent>
+                      <CardFooter className="pt-0 pb-3">
+                        <Button variant="outline" size="sm" className="w-full text-xs h-7 border-orange-500/30 hover:bg-orange-500/10" asChild>
+                          <Link href={`/bet/${bet.id}`}>Ver</Link>
+                        </Button>
+                      </CardFooter>
+                    </Card>
+                  )
+                })}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="py-6 text-center">
+                  <p className="text-muted-foreground mb-4">No tienes apuestas en curso</p>
+                  <Button asChild>
+                    <Link href="/create">Crear una apuesta</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+          </div>
         )}
       </main>
     </div>

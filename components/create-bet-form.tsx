@@ -48,9 +48,10 @@ function getAvailableBetTypes(sport: string) {
 interface CreateBetFormProps {
   onClose: () => void
   cloneBetId?: string | null
+  initialEvent?: Event | null
 }
 
-export function CreateBetForm({ onClose, cloneBetId }: CreateBetFormProps) {
+export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFormProps) {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
   const { showToast } = useToast()
@@ -134,6 +135,7 @@ export function CreateBetForm({ onClose, cloneBetId }: CreateBetFormProps) {
   // Load cloned bet data
   useEffect(() => {
     async function loadCloneBet() {
+      if (!cloneBetId && initialEvent) return
       if (!cloneBetId) return
       
       try {
@@ -195,6 +197,14 @@ export function CreateBetForm({ onClose, cloneBetId }: CreateBetFormProps) {
     
     loadCloneBet()
   }, [cloneBetId])
+
+  // Pre-select event from marketplace
+  useEffect(() => {
+    if (initialEvent && !cloneBetId) {
+      setSelectedSport(initialEvent.sport)
+      setSelectedEvent(initialEvent)
+    }
+  }, [initialEvent?.id])
 
   useEffect(() => {
     async function fetchEvents() {

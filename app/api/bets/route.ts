@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
   const type = searchParams.get('type') // my_open, my_active, my_created_taken
   const userId = searchParams.get('user_id')
   const limit = parseInt(searchParams.get('limit') || '20')
+  const sport = searchParams.get('sport')
 
   // Public marketplace reads (safe):
   // - default listing -> open bets
@@ -88,6 +89,10 @@ export async function GET(request: NextRequest) {
 
         return startMs >= acceptanceDeadlineNow
       })
+    }
+
+    if (sport && sport !== 'all') {
+      bets = bets.filter((bet: any) => bet.event?.sport === sport)
     }
 
     return NextResponse.json({ bets })
