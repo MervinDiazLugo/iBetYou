@@ -753,26 +753,44 @@ export async function POST(request: NextRequest) {
       }
     } else if (bet.bet_type === 'exact_score') {
       const creatorParts = creatorSelection?.split('-') || []
-      const acceptorParts = acceptorSelection?.split('-') || []
-      
       const creatorHome = parseInt(creatorParts[0]) || 0
       const creatorAway = parseInt(creatorParts[1]) || 0
-      const acceptorHome = parseInt(acceptorParts[0]) || 0
-      const acceptorAway = parseInt(acceptorParts[1]) || 0
 
       const creatorMatch = homeScore === creatorHome && awayScore === creatorAway
-      const acceptorMatch = homeScore === acceptorHome && awayScore === acceptorAway
 
-      if (creatorMatch && !acceptorMatch) {
-        winner_id = bet.creator_id
-        pendingStatus = 'pending_resolution'
-      } else if (acceptorMatch && !creatorMatch) {
-        winner_id = bet.acceptor_id
-        pendingStatus = 'pending_resolution'
-      } else if (!creatorMatch && !acceptorMatch) {
-        reason = 'Ningún usuario acertó el score exacto'
+      // For asymmetric bets (exact_score), acceptor bets AGAINST the creator's score
+      // For symmetric bets, acceptor has their own score selection
+      const isAsymmetric = bet.type === 'asymmetric'
+      
+      if (isAsymmetric) {
+        // Asymmetric: creator chose a score, acceptor bet against it
+        // If creator matches, creator wins. Otherwise, acceptor wins (bet against creator)
+        if (creatorMatch) {
+          winner_id = bet.creator_id
+          pendingStatus = 'pending_resolution'
+        } else {
+          // Creator didn't match - acceptor wins (they bet against the score)
+          winner_id = bet.acceptor_id
+          pendingStatus = 'pending_resolution'
+        }
       } else {
-        reason = 'Ambos acertaron el score - requiere revisión'
+        // Symmetric: both have specific score selections
+        const acceptorParts = acceptorSelection?.split('-') || []
+        const acceptorHome = parseInt(acceptorParts[0]) || 0
+        const acceptorAway = parseInt(acceptorParts[1]) || 0
+        const acceptorMatch = homeScore === acceptorHome && awayScore === acceptorAway
+
+        if (creatorMatch && !acceptorMatch) {
+          winner_id = bet.creator_id
+          pendingStatus = 'pending_resolution'
+        } else if (acceptorMatch && !creatorMatch) {
+          winner_id = bet.acceptor_id
+          pendingStatus = 'pending_resolution'
+        } else if (!creatorMatch && !acceptorMatch) {
+          reason = 'Ningún usuario acertó el score exacto'
+        } else {
+          reason = 'Ambos acertaron el score - requiere revisión'
+        }
       }
     } else if (bet.bet_type === 'half_time') {
       if (halftimeHomeScore === null || halftimeAwayScore === null) {

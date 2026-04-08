@@ -6,7 +6,6 @@ const ACCEPT_WINDOW_MINUTES = 10
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string; }> }) {
   const authenticatedUserId = await getAuthenticatedUserId(request)
-
   const supabase = createAdminSupabaseClient()
   const paramsResolved = await context.params
   const betId = paramsResolved.id
@@ -36,12 +35,22 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       ? NaN
       : eventStartMs + ACCEPT_WINDOW_MINUTES * 60 * 1000
 
-    // Keep detail visibility consistent with marketplace: public/taker reads only
-    // while the acceptance window is still open; participants can always read.
     const canReadOpenByWindow =
       bet.status === 'open' && !Number.isNaN(acceptanceDeadlineMs) && Date.now() <= acceptanceDeadlineMs
 
-    const canRead = canReadOpenByWindow || isParticipant
+    // Check if user is a backoffice admin
+    let isAdmin = false
+    if (authenticatedUserId) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authenticatedUserId)
+        .single()
+      isAdmin = profile?.role === 'backoffice_admin'
+    }
+
+    // Admins can see all bets, participants can see their own, open bets are public during acceptance window
+    const canRead = isAdmin || canReadOpenByWindow || isParticipant
 
     if (!canRead) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
