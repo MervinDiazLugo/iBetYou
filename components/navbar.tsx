@@ -150,6 +150,13 @@ export function Navbar() {
                         >
                           Perfil
                         </Link>
+                        <Link
+                          href="/balance"
+                          className="block px-3 py-2 rounded-md text-sm hover:bg-secondary"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          Balance de Jugadas
+                        </Link>
                       </div>
 
                       <div className="border-t border-border p-3 text-sm">
@@ -221,6 +228,9 @@ export function Navbar() {
                   </Link>
                   <Link href="/profile" className="px-4 py-2 hover:bg-secondary rounded">
                     Perfil
+                  </Link>
+                  <Link href="/balance" className="px-4 py-2 hover:bg-secondary rounded">
+                    Balance de Jugadas
                   </Link>
                 </>
               )}
