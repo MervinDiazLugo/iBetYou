@@ -813,8 +813,12 @@ function HomeContent() {
               <Card>
                 <CardContent className="py-6 text-center">
                   <p className="text-muted-foreground mb-4">No tienes apuestas en curso</p>
-                  <Button asChild>
-                    <Link href="/create">Crear una apuesta</Link>
+                  <Button
+                    className={createBetCtaClass}
+                    style={createBetCtaStyle}
+                    onClick={() => setShowCreateModal(true)}
+                  >
+                    Crear una apuesta
                   </Button>
                 </CardContent>
               </Card>
