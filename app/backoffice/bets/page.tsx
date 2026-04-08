@@ -31,6 +31,7 @@ interface Bet {
   amount: number
   multiplier: number
   creator_selection: string
+  acceptor_selection?: string | null
   status: string
   created_at: string
   updated_at?: string
@@ -353,7 +354,7 @@ export default function BackofficeBets() {
     }
   }
 
-  async function autoResolveBet(betId: string, eventId: number) {
+  async function autoResolveBet(betId: string, eventId: number, forceResolve: boolean = false) {
     setAutoResolving(betId)
     try {
       const res = await authFetch('/api/admin/bets', {
@@ -361,33 +362,37 @@ export default function BackofficeBets() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ bet_id: betId, event_id: eventId })
+        body: JSON.stringify({ bet_id: betId, event_id: eventId, force_resolve: forceResolve })
       })
 
       const data = await res.json()
       const scoreInfo = (data.homeScore !== undefined && data.awayScore !== undefined)
-        ? `Marcador usado: ${data.homeScore} - ${data.awayScore}`
+        ? `Marcador: ${data.homeScore} - ${data.awayScore}`
         : 'Marcador no disponible'
       const sourceInfo = data.score_source === 'external_api'
-        ? 'Fuente: API externa (guardado en BD)'
-        : 'Fuente: BD (resultado previamente guardado)'
+        ? '(API externa)'
+        : '(BD)'
       
       if (res.ok) {
-        if (data.pending_approval) {
-          showToast(`${scoreInfo}. ${sourceInfo}. Pendiente de aprobación.`, 'info')
-        } else if (data.result === 'tie') {
-          showToast(`${scoreInfo}. ${sourceInfo}. Empate: dinero devuelto.`, 'info')
-        } else if (data.success === false && data.error) {
-          showToast(`${scoreInfo}. ${sourceInfo}. Pasó a disputa: ${data.error}`, 'error')
+        if (data.result === 'tie') {
+          showToast(`✓ EMPATE RESUELTO: ${scoreInfo} ${sourceInfo} - Dinero devuelto`, 'success')
+        } else if (data.success && !data.pending_approval) {
+          showToast(`✓ APUESTA RESUELTA: ${scoreInfo} ${sourceInfo} - ${data.message}`, 'success')
         } else {
-          showToast(`${scoreInfo}. ${sourceInfo}. Auto-resolución ejecutada`, 'success')
+          showToast(`${scoreInfo} ${sourceInfo}. ${data.message || 'Auto-resolución ejecutada'}`, 'success')
         }
         fetchBets()
       } else {
-        showToast(data.error || 'Error al auto-resolver', 'error')
+        if (data.error && !data.pending_approval) {
+          // Es un conflicto que requiere force_resolve
+          showToast(`⚠ CONFLICTO: ${data.error} - ${scoreInfo} ${sourceInfo}. En disputa hasta que lo resuelvas.`, 'error')
+        } else {
+          showToast(data.error || 'Error al auto-resolver', 'error')
+        }
       }
     } catch (err) {
       console.error('Error:', err)
+      showToast('Error de conexión al resolver', 'error')
     } finally {
       setAutoResolving(null)
     }
@@ -1018,11 +1023,11 @@ export default function BackofficeBets() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md">
             <CardHeader>
-              <CardTitle>Resolver Apuesta</CardTitle>
+              <CardTitle>Resolver Apuesta Manualmente</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Selecciona el ganador de la apuesta:
+                {selectedBet.event.home_team} {selectedBet.event.home_score ?? '-'} - {selectedBet.event.away_score ?? '-'} {selectedBet.event.away_team}
               </p>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Motivo de resolución</label>
@@ -1032,10 +1037,11 @@ export default function BackofficeBets() {
                   placeholder="Ej: Ganador validado manualmente"
                 />
               </div>
+              <p className="text-sm text-muted-foreground font-medium">Selecciona el ganador:</p>
               <div className="flex flex-col gap-3">
                 <Button
                   variant="outline"
-                  className="justify-start"
+                  className="justify-start h-auto py-3 px-4 flex-col items-start"
                   onClick={() => {
                     const reason = resolveReason.trim()
                     if (!reason) {
@@ -1046,25 +1052,46 @@ export default function BackofficeBets() {
                   }}
                   disabled={actionLoading}
                 >
-                  <Trophy className="h-4 w-4 mr-2 text-green-500" />
-                  {selectedBet.event.home_team} - {selectedBet.creator_selection === selectedBet.event.home_team ? '(Selección del creador)' : ''}
+                  <div className="flex items-center gap-2 w-full">
+                    <Trophy className="h-4 w-4 text-green-500" />
+                    <div className="text-left">
+                      <div className="font-medium">{selectedBet.creator?.nickname}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Selección: {selectedBet.creator_selection || 'No especificada'}
+                      </div>
+                    </div>
+                  </div>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="justify-start"
-                  onClick={() => {
-                    const reason = resolveReason.trim()
-                    if (!reason) {
-                      showToast('Debes ingresar un motivo de resolución', 'error')
-                      return
-                    }
-                    handleAction(selectedBet.id, 'resolve', selectedBet.acceptor_id || 'draw', reason)
-                  }}
-                  disabled={actionLoading}
-                >
-                  <Trophy className="h-4 w-4 mr-2 text-blue-500" />
-                  {selectedBet.event.away_team}
-                </Button>
+                
+                {selectedBet.acceptor && (
+                  <Button
+                    variant="outline"
+                    className="justify-start h-auto py-3 px-4 flex-col items-start"
+                    onClick={() => {
+                      const reason = resolveReason.trim()
+                      if (!reason) {
+                        showToast('Debes ingresar un motivo de resolución', 'error')
+                        return
+                      }
+                      if (!selectedBet.acceptor_id) {
+                        showToast('Error: ID del aceptante no disponible', 'error')
+                        return
+                      }
+                      handleAction(selectedBet.id, 'resolve', selectedBet.acceptor_id, reason)
+                    }}
+                    disabled={actionLoading}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <Trophy className="h-4 w-4 text-blue-500" />
+                      <div className="text-left">
+                        <div className="font-medium">{selectedBet.acceptor?.nickname}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Selección: {selectedBet.acceptor_selection || 'Contra la selección del creador'}
+                        </div>
+                      </div>
+                    </div>
+                  </Button>
+                )}
               </div>
               <div className="flex gap-2 pt-4">
                 <Button
