@@ -722,41 +722,40 @@ export default function BetDetailPage() {
             )}
             
             {user && user.id !== bet.creator_id && bet.status === "open" && (
-              <div className="bg-secondary/50 rounded-lg p-4">
-                <div className="text-sm text-muted-foreground mb-2">¿Qué ganás si aceptás?</div>
-                <div className="text-center">
+              <div className="bg-secondary/50 rounded-lg p-4 space-y-2">
+                <div className="text-sm font-medium">¿Qué ganás si aceptás?</div>
+                <div className="text-sm">
                   {bet.bet_type === "exact_score" ? (
-                    <>
-                      <span className="font-medium">Si el resultado </span>
-                      <span className="font-bold text-red-400">NO</span>
-                      <span className="font-medium"> es </span>
-                      <span className="font-bold text-primary">{bet.creator_selection}</span>
-                      <span className="font-medium">, ganás neto </span>
-                      <span className="font-bold text-green-500">{formatCurrency(acceptorNetGain)}</span>
-                      <span className="font-medium"> (cobrás del creador </span>
-                      <span className="font-bold text-primary">{formatCurrency(acceptorGrossGain)}</span>
-                      <span className="font-medium">)</span>
-                    </>
+                    <>Si el resultado <span className="font-bold text-red-400">NO</span> es <span className="font-bold text-primary">{bet.creator_selection}</span>:</>  
                   ) : (
-                    <>
-                      <span className="font-medium">Si </span>
-                      <span className="font-bold text-red-400">NO</span>
-                      <span className="font-medium"> gana </span>
-                      <span className="font-bold text-primary">{bet.creator_selection}</span>
-                      <span className="font-medium">, ganás neto </span>
-                      <span className="font-bold text-green-500">{formatCurrency(acceptorNetGain)}</span>
-                      <span className="font-medium"> (cobrás del creador </span>
-                      <span className="font-bold text-primary">{formatCurrency(acceptorGrossGain)}</span>
-                      <span className="font-medium">)</span>
-                    </>
+                    <>Si <span className="font-bold text-red-400">NO</span> gana <span className="font-bold text-primary">{bet.creator_selection}</span>:</>  
                   )}
                 </div>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-muted-foreground text-sm">Retorno total:</span>
+                  <span className="font-bold text-green-500 text-lg">{formatCurrency(potentialWin)}</span>
+                  <span className="text-xs text-muted-foreground">
+                    (recuperás tu {formatCurrency(acceptorStake)} + {formatCurrency(acceptorGrossGain)} del creador)
+                  </span>
+                </div>
+                <div className="flex items-baseline gap-2 flex-wrap">
+                  <span className="text-muted-foreground text-sm">Ganancia neta:</span>
+                  <span className="font-bold text-green-500">{formatCurrency(acceptorNetGain)}</span>
+                  <span className="text-xs text-muted-foreground">(descontando fee de {formatCurrency(acceptorFee)})</span>
+                </div>
+                {isAsymmetric && (
+                  <div className="text-xs text-muted-foreground border-t border-border/40 pt-2 mt-1">
+                    Apostás más porque la probabilidad de un resultado exacto es baja. El multiplicador x{bet.multiplier} refleja eso: el creador arriesga menos por una mayor ganancia potencial.
+                  </div>
+                )}
               </div>
             )}
             
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-secondary rounded-lg p-4 text-center">
-                <div className="text-sm text-muted-foreground">Tu apuesta</div>
+                <div className="text-sm text-muted-foreground">
+                  {user?.id === bet.creator_id ? 'Tu apuesta' : 'Tu colateral'}
+                </div>
                 <div className="text-2xl font-bold text-primary">
                   {formatCurrency(user?.id === bet.creator_id ? bet.amount : acceptorStake)}
                 </div>
@@ -765,6 +764,9 @@ export default function BetDetailPage() {
                     ? `+ ${formatCurrency(bet.fee_amount)} fee`
                     : `+ ${formatCurrency(acceptorFee)} fee`}
                 </div>
+                {user?.id !== bet.creator_id && (
+                  <div className="text-[11px] text-blue-400/80 mt-0.5">se devuelve si ganás</div>
+                )}
               </div>
               <div className="bg-secondary rounded-lg p-4 text-center">
                 <div className="text-sm text-muted-foreground">Ganás (neto)</div>
@@ -774,7 +776,7 @@ export default function BetDetailPage() {
                 <div className="text-xs text-muted-foreground mt-1">
                   {user?.id === bet.creator_id
                     ? `Retorno total: ${formatCurrency(potentialWin)}`
-                    : `Cobrás del creador: ${formatCurrency(acceptorGrossGain)}`}
+                    : `Retorno total: ${formatCurrency(potentialWin)}`}
                 </div>
               </div>
             </div>
