@@ -750,6 +750,31 @@ export default function BetDetailPage() {
                 )}
               </div>
             )}
+
+            {bet.status === "open" && (!user || user.id !== bet.creator_id) && (
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-3">
+                <div className="text-sm font-semibold">Comparativa rápida: Creador vs Tú</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="rounded-md border border-border bg-background/80 p-3 space-y-1">
+                    <div className="font-medium text-muted-foreground">Creador</div>
+                    <div>Stake: <span className="font-semibold">{formatCurrency(bet.amount)}</span></div>
+                    <div>Fee: <span className="font-semibold">{formatCurrency(bet.fee_amount)}</span></div>
+                    <div>Si acierta: <span className="font-semibold text-green-500">+{formatCurrency(creatorNetGain)}</span></div>
+                    <div>Si falla: <span className="font-semibold text-amber-600">-{formatCurrency(bet.amount)}</span></div>
+                  </div>
+                  <div className="rounded-md border border-border bg-background/80 p-3 space-y-1">
+                    <div className="font-medium text-muted-foreground">Tú al aceptar</div>
+                    <div>Stake: <span className="font-semibold">{formatCurrency(acceptorStake)}</span></div>
+                    <div>Fee: <span className="font-semibold">{formatCurrency(acceptorFee)}</span></div>
+                    <div>Si ganás: <span className="font-semibold text-green-500">+{formatCurrency(acceptorNetGain)}</span></div>
+                    <div>Si perdés: <span className="font-semibold text-amber-600">-{formatCurrency(acceptorStake)}</span></div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Resultado exacto y multiplicadores altos implican mayor complejidad para ambos lados.
+                </p>
+              </div>
+            )}
             
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-secondary rounded-lg p-4 text-center">

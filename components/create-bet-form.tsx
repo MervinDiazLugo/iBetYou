@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { formatCurrency } from "@/lib/utils"
 import { useToast } from "@/components/toast"
 import { Trophy, Calendar, DollarSign, AlertCircle } from "lucide-react"
 
@@ -21,6 +20,12 @@ interface Event {
   start_time: string
   league: string
   country?: string
+  metadata?: {
+    venue?: {
+      name?: string | null
+      city?: string | null
+    }
+  }
 }
 
 const betTypes = [
@@ -71,6 +76,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const [amount, setAmount] = useState(10)
   const [multiplier, setMultiplier] = useState(1)
   const [feeIncluded, setFeeIncluded] = useState(true)
+  const [balanceLoaded, setBalanceLoaded] = useState(false)
   const [eventFilter, setEventFilter] = useState("")
 
   const fee = amount * 0.03
@@ -82,7 +88,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     Math.floor(((Number(balance.fantasy) || 0) / 1.03) * 100) / 100
   )
   const maxAllowedAmount = maxAmountByBalance
+  const maxAmountInteger = Math.max(1, Math.floor(maxAllowedAmount))
   const openedFromEventCard = Boolean(initialEvent && !cloneBetId)
+  const formatPesos = (value: number) => `$${value.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
   useEffect(() => {
     const availableBetTypes = getAvailableBetTypes(selectedSport)
@@ -99,6 +107,14 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       setMultiplier(1)
     }
   }, [betType, multiplier])
+
+  useEffect(() => {
+    if (!balanceLoaded) return
+    setAmount((prev) => {
+      const normalized = Math.round(prev)
+      return Math.min(Math.max(normalized, 1), maxAmountInteger)
+    })
+  }, [maxAmountInteger, balanceLoaded])
 
   useEffect(() => {
     async function checkAuth() {
@@ -124,6 +140,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
             const data = await res.json()
             setUser({ email: data.user.email, nickname: data.user.nickname })
             setBalance(data.balance)
+            setBalanceLoaded(true)
           }
         }
       } catch (err) {
@@ -240,7 +257,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     fetchEvents()
   }, [selectedSport, openedFromEventCard, initialEvent?.id])
 
-  const visibleEvents = openedFromEventCard && selectedEvent
+  const visibleEvents = selectedEvent
     ? [selectedEvent]
     : events.filter((event) => {
         if (!eventFilter) return true
@@ -397,27 +414,43 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Tipo de Apuesta</label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {getAvailableBetTypes(selectedSport).map((type) => (
                 <div
                   key={type.id}
                   className={`p-2 rounded-lg border cursor-pointer ${betType === type.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
                   onClick={() => setBetType(type.id)}
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span>{type.icon}</span>
-                    <span className="font-medium text-sm">{type.label}</span>
+                    <span className="font-medium text-sm truncate">{type.label}</span>
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Partido</label>
-            {!openedFromEventCard && (
+          <div className="rounded-lg border border-border bg-muted/10 p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-sm font-medium">Evento</label>
+              {!openedFromEventCard && selectedEvent && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => {
+                    setSelectedEvent(null)
+                    setBetSelection("")
+                  }}
+                >
+                  Cancelar seleccion
+                </Button>
+              )}
+            </div>
+            {!openedFromEventCard && !selectedEvent && (
               <Input
-                placeholder="Buscar partido..."
+                placeholder="Buscar evento..."
                 value={eventFilter}
                 onChange={(e) => setEventFilter(e.target.value)}
                 className="mb-2"
@@ -427,30 +460,57 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               {visibleEvents.map((event) => (
                 <div
                   key={event.id}
-                  className={`p-3 rounded-lg border cursor-pointer ${selectedEvent?.id === event.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
+                  className={`p-2.5 rounded-lg border cursor-pointer ${selectedEvent?.id === event.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
                   onClick={() => setSelectedEvent(event)}
                 >
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <span className="text-sm">
-                      {event.sport === 'football' && '⚽'}
-                      {event.sport === 'basketball' && '🏀'}
-                      {event.sport === 'baseball' && '⚾'}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">{event.league}</Badge>
-                    {event.country && <span className="text-[10px] text-muted-foreground">{event.country}</span>}
-                    <span className="text-[10px] text-muted-foreground ml-auto">
-                      {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - {new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="flex-1 text-center">
-                      {event.home_logo && <img src={event.home_logo} alt="" className="w-6 h-6 mx-auto mb-1 object-contain" />}
-                      <span className="font-semibold text-xs">{event.home_team}</span>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-[30%] min-w-[108px] rounded-md bg-muted/20 px-2 py-1.5">
+                      <div className="flex items-center gap-1 text-[10px] leading-tight min-w-0">
+                        <span className="text-sm shrink-0">
+                          {event.sport === 'football' && '⚽'}
+                          {event.sport === 'basketball' && '🏀'}
+                          {event.sport === 'baseball' && '⚾'}
+                        </span>
+                        <span className="truncate font-medium">{event.league}</span>
+                        {event.country && (
+                          <>
+                            <span className="text-muted-foreground shrink-0">|</span>
+                            <span className="truncate text-muted-foreground">{event.country}</span>
+                          </>
+                        )}
+                      </div>
+                      <div className="mt-0.5 text-[10px] text-muted-foreground truncate" title={`${new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - ${new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}${(event.metadata?.venue?.name || event.metadata?.venue?.city) ? ` · ${[event.metadata?.venue?.name, event.metadata?.venue?.city].filter(Boolean).join(', ')}` : ''}`}>
+                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - {new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                        {(event.metadata?.venue?.name || event.metadata?.venue?.city) && ` · ${[event.metadata?.venue?.name, event.metadata?.venue?.city].filter(Boolean).join(', ')}`}
+                      </div>
                     </div>
-                    <span className="text-xs text-muted-foreground">vs</span>
-                    <div className="flex-1 text-center">
-                      {event.away_logo && <img src={event.away_logo} alt="" className="w-6 h-6 mx-auto mb-1 object-contain" />}
-                      <span className="font-semibold text-xs">{event.away_team}</span>
+
+                    <div className="w-[70%] min-w-0 flex items-center">
+                      <div className="w-full flex items-center min-w-0 px-1">
+                        <div className="w-[calc(50%-18px)] min-w-0 flex items-center gap-2.5">
+                          {event.home_logo ? (
+                            <img src={event.home_logo} alt="" className="w-5 h-5 object-contain shrink-0" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[8px] font-bold shrink-0">
+                              {event.home_team.slice(0, 1)}
+                            </div>
+                          )}
+                          <span className="font-semibold text-xs truncate">{event.home_team}</span>
+                        </div>
+
+                        <span className="w-9 text-center text-[11px] text-muted-foreground shrink-0 px-1"> vs </span>
+
+                        <div className="w-[calc(50%-18px)] min-w-0 flex items-center justify-end gap-2.5">
+                          <span className="font-semibold text-xs truncate text-right">{event.away_team}</span>
+                          {event.away_logo ? (
+                            <img src={event.away_logo} alt="" className="w-5 h-5 object-contain shrink-0" />
+                          ) : (
+                            <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[8px] font-bold shrink-0">
+                              {event.away_team.slice(0, 1)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -506,29 +566,32 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Monto (USD)</label>
-            <div className="flex items-center gap-2">
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
-              <Input
-                type="number"
-                min={3}
-                max={Math.max(3, maxAllowedAmount)}
-                step="0.01"
+            <div className="rounded-lg border p-3 bg-muted/20">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-1.5 text-muted-foreground">
+                  <DollarSign className="h-4 w-4" />
+                  <span className="text-sm">Monto seleccionado</span>
+                </div>
+                <span className="text-lg font-semibold">{formatPesos(amount)}</span>
+              </div>
+              <input
+                type="range"
+                min={1}
+                max={maxAmountInteger}
+                step={1}
                 value={amount}
-                onChange={(e) => {
-                  const next = Number(e.target.value)
-                  if (!Number.isFinite(next)) {
-                    setAmount(0)
-                    return
-                  }
-                  const clamped = Math.min(Math.max(next, 0), Math.max(0, maxAllowedAmount))
-                  setAmount(clamped)
-                }}
-                required
+                onChange={(e) => setAmount(Number(e.target.value))}
+                className="w-full accent-yellow-500"
+                style={{ accentColor: "#eab308" }}
+                aria-label="Monto de apuesta"
               />
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                <span>$1</span>
+                <span>{formatPesos(maxAmountInteger)}</span>
+              </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Máximo disponible según tu balance: {formatCurrency(maxAllowedAmount)}
+              Máximo disponible según tu balance: {formatPesos(maxAllowedAmount)}
             </p>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -573,9 +636,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={loading || !selectedEvent || (!betSelection && betType !== "exact_score") || (Number(balance.fantasy) || 0) < totalNeeded || maxAllowedAmount < 3}
+                disabled={loading || !selectedEvent || (!betSelection && betType !== "exact_score") || (Number(balance.fantasy) || 0) < totalNeeded || maxAllowedAmount < 1}
               >
-                {loading ? "Creando..." : `Publicar (${formatCurrency(amount)})`}
+                {loading ? "Creando..." : `Publicar (${formatPesos(amount)})`}
               </Button>
             </div>
           </div>
