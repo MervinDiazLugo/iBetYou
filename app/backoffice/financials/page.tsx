@@ -8,25 +8,25 @@ import { Button } from "@/components/ui/button"
 import { RefreshCw, DollarSign, TrendingUp, Lock, Wallet, Trophy, BarChart2 } from "lucide-react"
 
 function formatCurrency(n: number) {
-  return new Intl.NumberFormat("es-AR", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n)
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n)
 }
 
 const statusLabels: Record<string, string> = {
-  open: "Abiertas",
-  taken: "Tomadas",
-  pending_resolution: "Pend. Resolución",
-  pending_resolution_creator: "Pend. (Creador)",
-  pending_resolution_acceptor: "Pend. (Aceptante)",
-  disputed: "En Disputa",
-  resolved: "Resueltas",
-  cancelled: "Canceladas",
+  open: "Open",
+  taken: "Taken",
+  pending_resolution: "Pending Resolution",
+  pending_resolution_creator: "Pending (Creator)",
+  pending_resolution_acceptor: "Pending (Acceptor)",
+  disputed: "Disputed",
+  resolved: "Resolved",
+  cancelled: "Cancelled",
 }
 
 const betTypeLabels: Record<string, string> = {
-  direct: "Directa",
-  half_time: "Medio Tiempo",
-  exact_score: "Resultado Exacto",
-  first_scorer: "Primer Anotador",
+  direct: "Direct",
+  half_time: "Half Time",
+  exact_score: "Exact Score",
+  first_scorer: "First Scorer",
 }
 
 interface Metrics {
@@ -72,7 +72,7 @@ export default function FinancieroPage() {
       const res = await fetch("/api/admin/metrics", {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
-      if (!res.ok) throw new Error("Error al cargar métricas")
+      if (!res.ok) throw new Error("Failed to load metrics")
       const data = await res.json()
       setMetrics(data)
     } catch (e: any) {
@@ -84,7 +84,7 @@ export default function FinancieroPage() {
 
   useEffect(() => { fetchMetrics() }, [fetchMetrics])
 
-  if (loading) return <div className="text-center py-16 text-muted-foreground">Cargando métricas...</div>
+  if (loading) return <div className="text-center py-16 text-muted-foreground">Loading metrics...</div>
   if (error) return <div className="text-center py-16 text-red-500">{error}</div>
   if (!metrics) return null
 
@@ -93,23 +93,23 @@ export default function FinancieroPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Finanzas</h1>
+        <h1 className="text-2xl font-bold">Financials</h1>
         <Button variant="outline" size="sm" onClick={fetchMetrics}>
           <RefreshCw className="h-4 w-4 mr-2" />
-          Actualizar
+          Refresh
         </Button>
       </div>
 
-      {/* KPIs principales */}
+      {/* Main KPIs */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <Wallet className="h-4 w-4 text-blue-400" />
-              <span className="text-xs text-muted-foreground">En billeteras</span>
+              <span className="text-xs text-muted-foreground">In wallets</span>
             </div>
             <div className="text-2xl font-bold text-blue-400">{formatCurrency(metrics.wallets.totalBalanceFantasy)}</div>
-            <div className="text-xs text-muted-foreground mt-1">{metrics.wallets.walletsWithBalance} usuarios con saldo</div>
+            <div className="text-xs text-muted-foreground mt-1">{metrics.wallets.walletsWithBalance} users with balance</div>
           </CardContent>
         </Card>
 
@@ -117,11 +117,11 @@ export default function FinancieroPage() {
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <Lock className="h-4 w-4 text-orange-400" />
-              <span className="text-xs text-muted-foreground">Retenido en apuestas</span>
+              <span className="text-xs text-muted-foreground">Locked in bets</span>
             </div>
             <div className="text-2xl font-bold text-orange-400">{formatCurrency(metrics.locked.total)}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              Abiertas: {formatCurrency(metrics.locked.inOpenBets)} · Activas: {formatCurrency(metrics.locked.inActiveBets)}
+              Open: {formatCurrency(metrics.locked.inOpenBets)} · Active: {formatCurrency(metrics.locked.inActiveBets)}
             </div>
           </CardContent>
         </Card>
@@ -130,11 +130,11 @@ export default function FinancieroPage() {
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <TrendingUp className="h-4 w-4 text-green-400" />
-              <span className="text-xs text-muted-foreground">Fees cobrados</span>
+              <span className="text-xs text-muted-foreground">Fees collected</span>
             </div>
             <div className="text-2xl font-bold text-green-400">{formatCurrency(metrics.fees.collected)}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              Pendientes: {formatCurrency(metrics.fees.pending)}
+              Pending: {formatCurrency(metrics.fees.pending)}
             </div>
           </CardContent>
         </Card>
@@ -143,36 +143,36 @@ export default function FinancieroPage() {
           <CardContent className="pt-5">
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="h-4 w-4 text-purple-400" />
-              <span className="text-xs text-muted-foreground">Volumen total</span>
+              <span className="text-xs text-muted-foreground">Total volume</span>
             </div>
             <div className="text-2xl font-bold text-purple-400">{formatCurrency(metrics.bets.totalVolume)}</div>
             <div className="text-xs text-muted-foreground mt-1">
-              Promedio por apuesta: {formatCurrency(metrics.bets.avgBetAmount)}
+              Avg per bet: {formatCurrency(metrics.bets.avgBetAmount)}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Balance total del sistema */}
+      {/* System total */}
       <Card className="border-primary/30 bg-primary/5">
         <CardContent className="pt-5">
           <div className="flex flex-wrap gap-8 items-center">
             <div>
-              <div className="text-xs text-muted-foreground mb-1">Total en el sistema</div>
+              <div className="text-xs text-muted-foreground mb-1">Total in system</div>
               <div className="text-3xl font-bold">{formatCurrency(totalInSystem)}</div>
-              <div className="text-xs text-muted-foreground mt-1">(billeteras + retenido en apuestas)</div>
+              <div className="text-xs text-muted-foreground mt-1">(wallets + locked in bets)</div>
             </div>
             <div className="flex-1 flex flex-wrap gap-6">
               <div>
-                <div className="text-xs text-muted-foreground">Fees acumulados (total histórico)</div>
+                <div className="text-xs text-muted-foreground">All-time fees</div>
                 <div className="text-xl font-bold text-green-400">{formatCurrency(metrics.fees.total)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Fee promedio por apuesta resuelta</div>
+                <div className="text-xs text-muted-foreground">Avg fee per resolved bet</div>
                 <div className="text-xl font-bold">{formatCurrency(metrics.fees.avgPerResolvedBet)}</div>
               </div>
               <div>
-                <div className="text-xs text-muted-foreground">Volumen resuelto</div>
+                <div className="text-xs text-muted-foreground">Resolved volume</div>
                 <div className="text-xl font-bold">{formatCurrency(metrics.bets.resolvedVolume)}</div>
               </div>
             </div>
@@ -181,12 +181,12 @@ export default function FinancieroPage() {
       </Card>
 
       <div className="grid md:grid-cols-2 gap-4">
-        {/* Apuestas por estado */}
+        {/* Bets by status */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <Trophy className="h-4 w-4" />
-              Apuestas por estado
+              Bets by status
               <Badge variant="outline" className="ml-auto">{metrics.bets.total} total</Badge>
             </CardTitle>
           </CardHeader>
@@ -215,12 +215,12 @@ export default function FinancieroPage() {
           </CardContent>
         </Card>
 
-        {/* Apuestas por tipo */}
+        {/* Bets by type */}
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <BarChart2 className="h-4 w-4" />
-              Apuestas por tipo
+              Bets by type
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -249,30 +249,30 @@ export default function FinancieroPage() {
         </Card>
       </div>
 
-      {/* Detalle billeteras */}
+      {/* Wallet breakdown */}
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <Wallet className="h-4 w-4" />
-            Detalle de billeteras
+            Wallet breakdown
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
             <div>
-              <div className="text-muted-foreground">Total billeteras</div>
+              <div className="text-muted-foreground">Total wallets</div>
               <div className="text-xl font-bold">{metrics.wallets.totalWallets}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Con saldo</div>
+              <div className="text-muted-foreground">With balance</div>
               <div className="text-xl font-bold">{metrics.wallets.walletsWithBalance}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Balance fantasy total</div>
+              <div className="text-muted-foreground">Fantasy balance</div>
               <div className="text-xl font-bold">{formatCurrency(metrics.wallets.totalBalanceFantasy)}</div>
             </div>
             <div>
-              <div className="text-muted-foreground">Balance real total</div>
+              <div className="text-muted-foreground">Real balance</div>
               <div className="text-xl font-bold">{formatCurrency(metrics.wallets.totalBalanceReal)}</div>
             </div>
           </div>

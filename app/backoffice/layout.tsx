@@ -24,7 +24,7 @@ const navigation = [
   { name: "Eventos", href: "/backoffice/events", icon: Calendar },
   { name: "Recargas", href: "/backoffice/wallets", icon: Wallet },
   { name: "Usuarios", href: "/backoffice/users", icon: Users },
-  { name: "Finanzas", href: "/backoffice/financiero", icon: BarChart2 },
+  { name: "Financials", href: "/backoffice/financials", icon: BarChart2 },
 ]
 
 export default function BackofficeLayout({
