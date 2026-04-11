@@ -284,6 +284,25 @@ export default function BackofficeBets() {
         showToast(`Auto-resueltas ${autoResolveData.resolved} apuesta(s) de resultado exacto`, 'success')
       }
 
+      // Also auto-resolve disputed "direct" bets based on final score
+      const disputedResolveRes = await authFetch('/api/admin/bets/auto-resolve-disputed', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dry_run: false })
+      })
+
+      const disputedResolveData = await disputedResolveRes.json()
+
+      if (!disputedResolveRes.ok) {
+        showToast(disputedResolveData.error || 'Error al auto-resolver apuestas en disputa', 'error')
+      } else if (disputedResolveData.resolved > 0) {
+        showToast(`Auto-resueltas ${disputedResolveData.resolved} apuesta(s) en disputa`, 'success')
+      } else if (disputedResolveData.skipped > 0) {
+        showToast(`No se pudieron resolver ${disputedResolveData.skipped} apuesta(s) en disputa (selección no coincide)`, 'info')
+      }
+
       await fetchEventsWithBets({ silent: true })
       await fetchBets({ silent: true })
 
