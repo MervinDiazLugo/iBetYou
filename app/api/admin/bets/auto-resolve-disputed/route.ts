@@ -106,21 +106,38 @@ export async function POST(request: NextRequest) {
       let creatorChoseAway = creatorSel === awayNormalized
 
       if (!creatorChoseHome && !creatorChoseAway) {
-        const homeWords = homeNormalized.split(" ").filter((w: string) => w.length > 2)
-        const awayWords = awayNormalized.split(" ").filter((w: string) => w.length > 2)
+        // Try more aggressive fuzzy matching
+        const homeWords = homeNormalized.split(" ").filter((w: string) => w.length > 1)
+        const awayWords = awayNormalized.split(" ").filter((w: string) => w.length > 1)
         const creatorWords = creatorSel.split(" ")
 
         for (const word of creatorWords) {
-          if (homeWords.includes(word)) {
+          if (!word || word.length < 2) continue
+          if (homeWords.includes(word) || homeNormalized.includes(word)) {
             creatorChoseHome = true
             break
           }
-          if (awayWords.includes(word)) {
+          if (awayWords.includes(word) || awayNormalized.includes(word)) {
             creatorChoseAway = true
             break
           }
         }
+
+        // Last resort: check if either team name is contained in creator selection
+        if (!creatorChoseHome && !creatorChoseAway) {
+          if (homeNormalized.length > 3 && creatorSel.includes(homeNormalized.substring(0, Math.min(10, homeNormalized.length)))) {
+            creatorChoseHome = true
+          }
+          if (awayNormalized.length > 3 && creatorSel.includes(awayNormalized.substring(0, Math.min(10, awayNormalized.length)))) {
+            creatorChoseAway = true
+          }
+        }
       }
+
+      // Debug logging
+      console.log(`[AutoResolve] Bet ${bet.id}: creator_selection="${bet.creator_selection}", home="${home_team}", away="${away_team}"`)
+      console.log(`[AutoResolve] Normalized: creator="${creatorSel}", home="${homeNormalized}", away="${awayNormalized}"`)
+      console.log(`[AutoResolve] Result: creatorChoseHome=${creatorChoseHome}, creatorChoseAway=${creatorChoseAway}`)
 
       const homeWon = home_score > away_score
       const awayWon = away_score > home_score
@@ -188,8 +205,9 @@ export async function POST(request: NextRequest) {
         results.push({
           bet_id: bet.id,
           status: "skipped",
-          reason: `creator_selection "${bet.creator_selection}" no coincide con equipos "${home_team}" vs "${away_team}"`,
+          reason: `creator_selection "${bet.creator_selection}" no coincide con equipos "${home_team}" vs "${away_team}" - fuzzy match failed`,
         })
+        console.log(`[AutoResolve] SKIPPED: ${bet.id} - creator_selection didn't match`)
         continue
       }
 
@@ -274,6 +292,11 @@ export async function POST(request: NextRequest) {
       resolved,
       skipped,
       results,
+      debug_info: {
+        timestamp: new Date().toISOString(),
+        bet_types_processed: "direct",
+        statuses_filtered: ["disputed", "taken"],
+      },
     })
   } catch (error: any) {
     console.error("Auto-resolve disputed bets error:", error)
