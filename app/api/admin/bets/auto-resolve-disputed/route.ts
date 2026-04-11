@@ -104,8 +104,9 @@ export async function POST(request: NextRequest) {
 
       let creatorChoseHome = creatorSel === homeNormalized
       let creatorChoseAway = creatorSel === awayNormalized
+      const creatorChoseDraw = ['empate', 'draw', 'tie'].includes(creatorSel)
 
-      if (!creatorChoseHome && !creatorChoseAway) {
+      if (!creatorChoseHome && !creatorChoseAway && !creatorChoseDraw) {
         // Try more aggressive fuzzy matching - check any word overlap
         const homeWords = homeNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
         const awayWords = awayNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
@@ -147,10 +148,13 @@ export async function POST(request: NextRequest) {
 
       const homeWon = home_score > away_score
       const awayWon = away_score > home_score
+      const isTie = home_score === away_score
 
       let winnerId: string | null = null
 
-      if (creatorChoseHome && homeWon) {
+      if (creatorChoseDraw) {
+        winnerId = isTie ? bet.creator_id : bet.acceptor_id
+      } else if (creatorChoseHome && homeWon) {
         winnerId = bet.creator_id
       } else if (creatorChoseHome && awayWon) {
         winnerId = bet.acceptor_id
@@ -158,7 +162,7 @@ export async function POST(request: NextRequest) {
         winnerId = bet.creator_id
       } else if (creatorChoseAway && homeWon) {
         winnerId = bet.acceptor_id
-      } else if (home_score === away_score) {
+      } else if (isTie) {
         if (!dryRun) {
           const totalRefund = Number(bet.amount)
           const { data: creatorWallet } = await supabase

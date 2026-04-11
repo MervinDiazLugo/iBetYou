@@ -729,8 +729,9 @@ export async function POST(request: NextRequest) {
       // Determinar qué equipo eligió el creador
       const creatorChoseHome = creatorSelectionNormalized === homeTeamNormalized
       const creatorChoseAway = creatorSelectionNormalized === awayTeamNormalized
-      
-      if (!creatorChoseHome && !creatorChoseAway) {
+      const creatorChoseDraw = ['empate', 'draw', 'tie'].includes(creatorSelectionNormalized)
+
+      if (!creatorChoseHome && !creatorChoseAway && !creatorChoseDraw) {
         // creator_selection no coincide con ningún equipo
         conflictReason = `creator_selection "${creatorSelection}" no coincide con equipos "${event.home_team}" vs "${event.away_team}"`
       } else {
@@ -738,8 +739,14 @@ export async function POST(request: NextRequest) {
         const homeWon = homeScore > awayScore
         const awayWon = awayScore > homeScore
         const isTie = homeScore === awayScore
-        
-        if (creatorChoseHome) {
+
+        if (creatorChoseDraw) {
+          if (isTie) {
+            winner_id = bet.creator_id
+          } else {
+            winner_id = bet.acceptor_id
+          }
+        } else if (creatorChoseHome) {
           // Creator aposta por HOME
           if (homeWon) {
             winner_id = bet.creator_id
