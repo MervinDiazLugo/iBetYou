@@ -106,35 +106,41 @@ export async function POST(request: NextRequest) {
       let creatorChoseAway = creatorSel === awayNormalized
 
       if (!creatorChoseHome && !creatorChoseAway) {
-        // Try more aggressive fuzzy matching
-        const homeWords = homeNormalized.split(" ").filter((w: string) => w.length > 1)
-        const awayWords = awayNormalized.split(" ").filter((w: string) => w.length > 1)
-        const creatorWords = creatorSel.split(" ")
+        // Try more aggressive fuzzy matching - check any word overlap
+        const homeWords = homeNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
+        const awayWords = awayNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
+        const creatorWords = creatorSel.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
 
         for (const word of creatorWords) {
           if (!word || word.length < 2) continue
-          if (homeWords.includes(word) || homeNormalized.includes(word)) {
+          // Check if this word appears in either team name
+          if (homeNormalized.includes(word)) {
             creatorChoseHome = true
             break
           }
-          if (awayWords.includes(word) || awayNormalized.includes(word)) {
+          if (awayNormalized.includes(word)) {
             creatorChoseAway = true
             break
           }
         }
 
-        // Last resort: check if either team name is contained in creator selection
+        // Reverse check: check if team name words appear in creator selection
         if (!creatorChoseHome && !creatorChoseAway) {
-          if (homeNormalized.length > 3 && creatorSel.includes(homeNormalized.substring(0, Math.min(10, homeNormalized.length)))) {
-            creatorChoseHome = true
+          for (const word of homeWords) {
+            if (creatorSel.includes(word)) {
+              creatorChoseHome = true
+              break
+            }
           }
-          if (awayNormalized.length > 3 && creatorSel.includes(awayNormalized.substring(0, Math.min(10, awayNormalized.length)))) {
-            creatorChoseAway = true
+          for (const word of awayWords) {
+            if (creatorSel.includes(word)) {
+              creatorChoseAway = true
+              break
+            }
           }
         }
       }
 
-      // Debug logging
       console.log(`[AutoResolve] Bet ${bet.id}: creator_selection="${bet.creator_selection}", home="${home_team}", away="${away_team}"`)
       console.log(`[AutoResolve] Normalized: creator="${creatorSel}", home="${homeNormalized}", away="${awayNormalized}"`)
       console.log(`[AutoResolve] Result: creatorChoseHome=${creatorChoseHome}, creatorChoseAway=${creatorChoseAway}`)
