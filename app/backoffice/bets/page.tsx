@@ -139,6 +139,7 @@ export default function BackofficeBets() {
   const [eventsWithBets, setEventsWithBets] = useState<EventWithBets[]>([])
   const [loadingEventsWithBets, setLoadingEventsWithBets] = useState(false)
   const [syncingEventId, setSyncingEventId] = useState<number | null>(null)
+  const [syncingAllEvents, setSyncingAllEvents] = useState(false)
   const [resolveReason, setResolveReason] = useState<string>("Ganador validado manualmente")
   const [reasonModal, setReasonModal] = useState<{
     mode: 'approve' | 'dispute'
@@ -228,12 +229,82 @@ export default function BackofficeBets() {
   }
 
   async function refreshEventsFromBackoffice() {
-    await fetchEventsWithBets()
-    const cleanup = await runOpenBetsCleanup()
+    setSyncingAllEvents(true)
+    setLoadingEventsWithBets(true)
+    try {
+      const eventsRes = await authFetch('/api/admin/events/results')
+      const eventsData = await eventsRes.json()
 
-    if (cleanup && cleanup.cancelled > 0) {
-      await fetchBets({ silent: true })
+      if (!eventsRes.ok) {
+        showToast(eventsData.error || 'No se pudieron cargar eventos para sincronizar', 'error')
+        return
+      }
+
+      const eventsToSync: EventWithBets[] = eventsData.events || []
+      setEventsWithBets(eventsToSync)
+
+      let syncedCount = 0
+      let failedCount = 0
+      let cancelledCount = 0
+
+      for (const eventItem of eventsToSync) {
+        const syncRes = await authFetch('/api/admin/events/results', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ event_id: eventItem.id })
+        })
+
+        const syncData = await syncRes.json()
+        if (syncRes.ok) {
+          syncedCount += 1
+          cancelledCount += Number(syncData.cleanup?.cancelled || 0)
+        } else {
+          failedCount += 1
+        }
+      }
+
+      const cleanup = await runOpenBetsCleanup({ silent: true })
+      cancelledCount += Number(cleanup?.cancelled || 0)
+
+      const autoResolveRes = await authFetch('/api/admin/bets/auto-resolve-finished', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ dry_run: false })
+      })
+
+      const autoResolveData = await autoResolveRes.json()
+
+      if (!autoResolveRes.ok) {
+        showToast(autoResolveData.error || 'Error al auto-resolver apuestas exact_score', 'error')
+      } else if (autoResolveData.resolved > 0) {
+        showToast(`Auto-resueltas ${autoResolveData.resolved} apuesta(s) de resultado exacto`, 'success')
+      }
+
       await fetchEventsWithBets({ silent: true })
+      await fetchBets({ silent: true })
+
+      if (syncedCount > 0) {
+        const failedSuffix = failedCount > 0 ? ` · Fallidos: ${failedCount}` : ''
+        showToast(`Eventos sincronizados: ${syncedCount}${failedSuffix}`, failedCount > 0 ? 'info' : 'success')
+      } else if (eventsToSync.length === 0) {
+        showToast('No hay eventos con apuestas para sincronizar', 'info')
+      } else {
+        showToast('No se pudo sincronizar ningún evento', 'error')
+      }
+
+      if (cancelledCount > 0) {
+        showToast(`Se cerraron ${cancelledCount} apuesta(s) abierta(s) fuera de tiempo`, 'info')
+      }
+    } catch (err) {
+      console.error('Error refreshing events from backoffice:', err)
+      showToast('Error al actualizar eventos', 'error')
+    } finally {
+      setSyncingAllEvents(false)
+      setLoadingEventsWithBets(false)
     }
   }
 
@@ -637,8 +708,13 @@ export default function BackofficeBets() {
                 Consulta marcador final en API externa y guárdalo localmente, sin arbitrar apuestas.
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={refreshEventsFromBackoffice}>
-              {loadingEventsWithBets ? 'Actualizando...' : 'Actualizar eventos'}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshEventsFromBackoffice}
+              disabled={syncingAllEvents || loadingEventsWithBets}
+            >
+              {syncingAllEvents ? 'Sincronizando...' : loadingEventsWithBets ? 'Actualizando...' : 'Actualizar eventos'}
             </Button>
           </div>
         </CardHeader>
@@ -668,7 +744,7 @@ export default function BackofficeBets() {
                       size="sm"
                       variant="outline"
                       onClick={() => syncEventResult(eventItem.id)}
-                      disabled={syncingEventId === eventItem.id}
+                      disabled={syncingEventId === eventItem.id || syncingAllEvents}
                     >
                       {syncingEventId === eventItem.id ? 'Consultando...' : 'Sync'}
                     </Button>
