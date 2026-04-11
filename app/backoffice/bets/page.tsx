@@ -720,31 +720,34 @@ export default function BackofficeBets() {
         </CardHeader>
         <CardContent className="flex gap-2">
           {bets.some(b => b.status === 'disputed') && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={async () => {
-                if (!confirm('¿Resolver automáticamente todas las apuestas en disputa basadas en el marcador final?')) return
-                try {
-                  const res = await authFetch('/api/admin/bets/auto-resolve-disputed', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ dry_run: false })
-                  })
-                  const data = await res.json()
-                  if (res.ok) {
-                    showToast(`Resueltas ${data.resolved} apuestas en disputa`, 'success')
-                    fetchBets()
-                  } else {
-                    showToast(data.error || 'Error al resolver', 'error')
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-orange-500/10 border-orange-500/30 text-orange-500 hover:bg-orange-500/20"
+                onClick={async () => {
+                  if (!confirm('¿Resolver automáticamente TODAS las apuestas en disputa basadas en el marcador final?')) return
+                  try {
+                    const res = await authFetch('/api/admin/bets/auto-resolve-disputed', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ dry_run: false })
+                    })
+                    const data = await res.json()
+                    if (res.ok) {
+                      showToast(`✓ Resueltas ${data.resolved} apuesta(s) en disputa. ${data.skipped > 0 ? `Saltadas: ${data.skipped}` : ''}`, 'success')
+                      fetchBets()
+                    } else {
+                      showToast(data.error || 'Error al resolver', 'error')
+                    }
+                  } catch (err) {
+                    showToast('Error de conexión', 'error')
                   }
-                } catch (err) {
-                  showToast('Error de conexión', 'error')
-                }
-              }}
-            >
-              🤖 Auto-resolver disputadas
-            </Button>
+                }}
+              >
+                🤖 Auto-resolver disputadas
+              </Button>
+            </div>
           )}
           {loadingEventsWithBets ? (
             <p className="text-sm text-muted-foreground">Cargando eventos con apuestas...</p>
