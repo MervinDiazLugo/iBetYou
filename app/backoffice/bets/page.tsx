@@ -936,6 +936,7 @@ export default function BackofficeBets() {
                           <span className="text-muted-foreground">Creador: </span>
                           <span className="font-medium">{bet.creator?.nickname}</span>
                           <div className="text-xs font-bold text-green-400 mt-1">
+                            <span className="text-muted-foreground font-normal">Apuesta: </span>
                             {(() => {
                               const sel = bet.creator_selection || (bet.selection ? JSON.parse(bet.selection || '{}').selection : null)
                               return sel || 'No especificada'
@@ -955,6 +956,7 @@ export default function BackofficeBets() {
                             <span className="text-muted-foreground">Tomada por: </span>
                             <span className="font-medium">{bet.acceptor?.nickname}</span>
                             <div className="text-xs font-bold text-blue-400 mt-1">
+                              <span className="text-muted-foreground font-normal">Apuesta: </span>
                               {(() => {
                                 const sel = bet.acceptor_selection || (bet.selection ? JSON.parse(bet.selection || '{}').acceptor_selection : null)
                                 return sel || 'Contra la selección del creador'
