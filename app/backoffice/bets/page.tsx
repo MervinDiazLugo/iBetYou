@@ -718,7 +718,34 @@ export default function BackofficeBets() {
             </Button>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex gap-2">
+          {bets.some(b => b.status === 'disputed') && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                if (!confirm('¿Resolver automáticamente todas las apuestas en disputa basadas en el marcador final?')) return
+                try {
+                  const res = await authFetch('/api/admin/bets/auto-resolve-disputed', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dry_run: false })
+                  })
+                  const data = await res.json()
+                  if (res.ok) {
+                    showToast(`Resueltas ${data.resolved} apuestas en disputa`, 'success')
+                    fetchBets()
+                  } else {
+                    showToast(data.error || 'Error al resolver', 'error')
+                  }
+                } catch (err) {
+                  showToast('Error de conexión', 'error')
+                }
+              }}
+            >
+              🤖 Auto-resolver disputadas
+            </Button>
+          )}
           {loadingEventsWithBets ? (
             <p className="text-sm text-muted-foreground">Cargando eventos con apuestas...</p>
           ) : eventsWithBets.length === 0 ? (
