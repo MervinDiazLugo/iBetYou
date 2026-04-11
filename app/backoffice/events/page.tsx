@@ -60,7 +60,6 @@ interface SavedEvent {
 }
 
 export default function BackofficeEvents() {
-  const supabase = createBrowserSupabaseClient()
   const dateFromRef = useRef<HTMLInputElement | null>(null)
   const dateToRef = useRef<HTMLInputElement | null>(null)
   const [view, setView] = useState<'external' | 'saved'>('saved')
@@ -87,16 +86,13 @@ export default function BackofficeEvents() {
   const { showToast } = useToast()
 
   async function authFetch(input: RequestInfo | URL, init?: RequestInit) {
+    const supabase = createBrowserSupabaseClient()
     const { data: { session } } = await supabase.auth.getSession()
     const headers = new Headers(init?.headers)
     if (session?.access_token) {
       headers.set("Authorization", `Bearer ${session.access_token}`)
     }
-
-    return fetch(input, {
-      ...init,
-      headers,
-    })
+    return fetch(input, { ...init, headers })
   }
 
   async function fetchExternalEvents() {
@@ -159,7 +155,7 @@ export default function BackofficeEvents() {
 
   async function fetchSavedEvents() {
     try {
-      const res = await authFetch(`/api/admin/events?sport=all&limit=500`)
+      const res = await authFetch(`/api/admin/events?sport=all`)
       const data = await res.json()
       const events = data.events || []
       setSavedEvents(events)
