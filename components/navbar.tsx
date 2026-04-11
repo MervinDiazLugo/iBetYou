@@ -111,6 +111,9 @@ export function Navbar() {
             <Link href="/como-jugar" className="text-sm font-medium hover:text-primary">
               Cómo Jugar
             </Link>
+            <Link href="/leaderboard" className="text-sm font-medium hover:text-primary">
+              Leaderboard
+            </Link>
           </div>
 
           {/* User Section */}
@@ -213,6 +216,9 @@ export function Navbar() {
               </Link>
               <Link href="/como-jugar" className="px-4 py-2 hover:bg-secondary rounded">
                 Cómo Jugar
+              </Link>
+              <Link href="/leaderboard" className="px-4 py-2 hover:bg-secondary rounded">
+                Leaderboard
               </Link>
               <Link
                 href="/create"
