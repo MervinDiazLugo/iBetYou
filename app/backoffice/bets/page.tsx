@@ -923,8 +923,7 @@ export default function BackofficeBets() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div style={{background:'red',color:'white',padding:'4px',marginBottom:'8px',fontSize:'12px'}}>DEBUG: creador={bet.creator_selection} aceptante={bet.acceptor_selection}</div>
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-3 mb-2">
                         <span className="font-bold">{bet.event.home_team}</span>
