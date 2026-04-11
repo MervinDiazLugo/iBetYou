@@ -935,12 +935,14 @@ export default function BackofficeBets() {
                         <div>
                           <span className="text-muted-foreground">Creador: </span>
                           <span className="font-medium">{bet.creator?.nickname}</span>
-                          <div className="text-xs font-bold text-green-400 mt-1">
-                            <span className="text-muted-foreground font-normal">Apuesta: </span>
-                            {(() => {
-                              const sel = bet.creator_selection || (bet.selection ? JSON.parse(bet.selection || '{}').selection : null)
-                              return sel || 'No especificada'
-                            })()}
+                          <div className="mt-1.5">
+                            <span className="text-xs text-muted-foreground">Apuesta: </span>
+                            <span className="inline-block px-2 py-0.5 rounded bg-green-500/20 text-green-400 text-xs font-semibold border border-green-500/30">
+                              {(() => {
+                                const sel = bet.creator_selection || (bet.selection ? JSON.parse(bet.selection || '{}').selection : null)
+                                return sel || 'No especificada'
+                              })()}
+                            </span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             ID: {bet.creator_id}
@@ -955,12 +957,14 @@ export default function BackofficeBets() {
                           <div>
                             <span className="text-muted-foreground">Tomada por: </span>
                             <span className="font-medium">{bet.acceptor?.nickname}</span>
-                            <div className="text-xs font-bold text-blue-400 mt-1">
-                              <span className="text-muted-foreground font-normal">Apuesta: </span>
-                              {(() => {
-                                const sel = bet.acceptor_selection || (bet.selection ? JSON.parse(bet.selection || '{}').acceptor_selection : null)
-                                return sel || 'Contra la selección del creador'
-                              })()}
+                            <div className="mt-1.5">
+                              <span className="text-xs text-muted-foreground">Apuesta: </span>
+                              <span className="inline-block px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 text-xs font-semibold border border-blue-500/30">
+                                {(() => {
+                                  const sel = bet.acceptor_selection || (bet.selection ? JSON.parse(bet.selection || '{}').acceptor_selection : null)
+                                  return sel || 'Contra la selección del creador'
+                                })()}
+                              </span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
                               ID: {bet.acceptor_id}
