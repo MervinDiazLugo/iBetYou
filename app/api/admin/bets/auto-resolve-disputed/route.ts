@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
       let creatorChoseAway = creatorSel === awayNormalized
 
       if (!creatorChoseHome && !creatorChoseAway) {
-        const homeWords = homeNormalized.split(" ").filter(w => w.length > 2)
-        const awayWords = awayNormalized.split(" ").filter(w => w.length > 2)
+        const homeWords = homeNormalized.split(" ").filter((w: string) => w.length > 2)
+        const awayWords = awayNormalized.split(" ").filter((w: string) => w.length > 2)
         const creatorWords = creatorSel.split(" ")
 
         for (const word of creatorWords) {
