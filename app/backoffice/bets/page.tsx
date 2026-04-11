@@ -886,6 +886,9 @@ export default function BackofficeBets() {
                           <span className="text-muted-foreground">Creador: </span>
                           <span className="font-medium">{bet.creator?.nickname}</span>
                           <div className="text-xs text-muted-foreground mt-1">
+                            Apostó: {bet.creator_selection || 'No especificada'}
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-0.5">
                             ID: {bet.creator_id}
                           </div>
                           {bet.creator_email && (
@@ -899,6 +902,9 @@ export default function BackofficeBets() {
                             <span className="text-muted-foreground">Tomada por: </span>
                             <span className="font-medium">{bet.acceptor?.nickname}</span>
                             <div className="text-xs text-muted-foreground mt-1">
+                              Apostó: {bet.acceptor_selection || 'Contra la selección del creador'}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
                               ID: {bet.acceptor_id}
                             </div>
                             {bet.acceptor_email && (
