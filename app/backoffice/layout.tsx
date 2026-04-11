@@ -4,16 +4,16 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { 
-  LayoutDashboard, 
-  Trophy, 
-  Calendar, 
-  Wallet, 
-  Settings,
+import {
+  LayoutDashboard,
+  Trophy,
+  Calendar,
+  Wallet,
   LogOut,
   Menu,
   X,
-  Users
+  Users,
+  BarChart2
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -24,6 +24,7 @@ const navigation = [
   { name: "Eventos", href: "/backoffice/events", icon: Calendar },
   { name: "Recargas", href: "/backoffice/wallets", icon: Wallet },
   { name: "Usuarios", href: "/backoffice/users", icon: Users },
+  { name: "Finanzas", href: "/backoffice/financiero", icon: BarChart2 },
 ]
 
 export default function BackofficeLayout({
