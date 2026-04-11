@@ -33,6 +33,7 @@ interface Bet {
   creator_selection: string
   selection?: string | null
   acceptor_selection?: string | null
+  winner_id?: string | null
   status: string
   created_at: string
   updated_at?: string
@@ -978,6 +979,17 @@ export default function BackofficeBets() {
                       <div className="text-xs text-muted-foreground mt-2">
                         Estado evento: {bet.event.status || 'unknown'}
                       </div>
+                      {bet.status === 'resolved' && bet.winner_id && (
+                        <div className="text-sm font-bold mt-1">
+                          Ganador: <span className="text-yellow-400">
+                            {bet.winner_id === bet.creator_id
+                              ? bet.creator?.nickname
+                              : bet.winner_id === bet.acceptor_id
+                                ? bet.acceptor?.nickname
+                                : bet.winner_id}
+                          </span>
+                        </div>
+                      )}
                       {hasFinalScore && (
                         <div className="text-xs font-medium text-foreground/90 mt-1">
                           Marcador final: {bet.event.home_team} {bet.event.home_score} - {bet.event.away_score} {bet.event.away_team}
