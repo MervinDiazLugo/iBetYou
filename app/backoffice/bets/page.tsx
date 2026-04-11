@@ -746,7 +746,6 @@ export default function BackofficeBets() {
                 size="sm"
                 className="bg-orange-500/10 border-orange-500/30 text-orange-500 hover:bg-orange-500/20"
                 onClick={async () => {
-                  if (!confirm('¿Resolver automáticamente TODAS las apuestas en disputa basadas en el marcador final?')) return
                   try {
                     const res = await authFetch('/api/admin/bets/auto-resolve-disputed', {
                       method: 'POST',
