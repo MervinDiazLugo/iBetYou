@@ -2,14 +2,11 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { formatCurrency } from "@/lib/utils"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { RefreshCw, DollarSign, TrendingUp, Lock, Wallet, Trophy, BarChart2 } from "lucide-react"
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(n)
-}
 
 const statusLabels: Record<string, string> = {
   open: "Open",
@@ -61,12 +58,12 @@ export default function FinancieroPage() {
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const supabase = createBrowserSupabaseClient()
 
   const fetchMetrics = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
+      const supabase = createBrowserSupabaseClient()
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token
       const res = await fetch("/api/admin/metrics", {
@@ -80,7 +77,7 @@ export default function FinancieroPage() {
     } finally {
       setLoading(false)
     }
-  }, [supabase])
+  }, [])
 
   useEffect(() => { fetchMetrics() }, [fetchMetrics])
 

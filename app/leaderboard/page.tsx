@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import Navbar from "@/components/navbar"
+import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Trophy, Flame, Activity, Target, TrendingUp, Users, BarChart2, Star } from "lucide-react"
@@ -39,6 +39,7 @@ interface Stats {
     topLeagues: { name: string; count: number }[]
   }
   recentResolved: {
+    betId: string
     winnerNickname: string | null
     winnerAvatar: string | null
     betType: string
@@ -268,8 +269,8 @@ export default function LeaderboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-2">
-                    {stats.recentResolved.map((r, i) => (
-                      <div key={i} className="flex items-center gap-3 text-sm py-1 border-b border-border/30 last:border-0">
+                    {stats.recentResolved.map((r) => (
+                      <div key={r.betId} className="flex items-center gap-3 text-sm py-1 border-b border-border/30 last:border-0">
                         <Badge variant="outline" className="text-xs shrink-0">{betTypeLabels[r.betType] || r.betType}</Badge>
                         <span className="text-muted-foreground truncate flex-1">
                           {r.homeTeam} vs {r.awayTeam}

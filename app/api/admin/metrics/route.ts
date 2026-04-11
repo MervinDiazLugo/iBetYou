@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { NON_FINAL_BET_STATUSES } from "@/lib/bet-constants"
 
 export async function GET(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
       .reduce((sum, b) => sum + Number(b.fee_amount || 0), 0)
 
     const feesPending = allBets
-      .filter((b) => ["open", "taken", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor", "disputed"].includes(b.status))
+      .filter((b) => (NON_FINAL_BET_STATUSES as readonly string[]).includes(b.status))
       .reduce((sum, b) => sum + Number(b.fee_amount || 0), 0)
 
     const feesTotal = allBets
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     // Taken/active: creator amount + acceptor amount (amount * multiplier for asymmetric, amount for symmetric) + fee
     const activeBets = allBets.filter((b) =>
-      ["taken", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor", "disputed"].includes(b.status)
+      (NON_FINAL_BET_STATUSES as readonly string[]).includes(b.status) && b.status !== "open"
     )
     const lockedActive = activeBets.reduce((sum, b) => {
       const creatorStake = Number(b.amount || 0)

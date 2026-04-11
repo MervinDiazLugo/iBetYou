@@ -1,25 +1,23 @@
 import { NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
+import { NON_FINAL_BET_STATUSES } from "@/lib/bet-constants"
 
 export async function GET() {
   const supabase = createAdminSupabaseClient()
 
   try {
-    // All resolved bets with event info
-    const { data: resolvedBets } = await supabase
-      .from("bets")
-      .select("creator_id, acceptor_id, winner_id, bet_type, resolved_at, event:events(home_team, away_team, league, sport)")
-      .eq("status", "resolved")
-      .order("resolved_at", { ascending: false })
-
-    // All bets for platform stats
+    // Single query for all bets — split into resolved/active in JS
     const { data: allBets } = await supabase
       .from("bets")
-      .select("status, bet_type, event_id, created_at, event:events(league, sport)")
+      .select("id, creator_id, acceptor_id, winner_id, bet_type, status, resolved_at, event:events(home_team, away_team, league, sport)")
+
+    const resolvedBets = (allBets || [])
+      .filter((b) => b.status === "resolved")
+      .sort((a, b) => (b.resolved_at ?? "").localeCompare(a.resolved_at ?? ""))
 
     // Active bets count
     const activeBetsCount = (allBets || []).filter((b) =>
-      ["open", "taken", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor", "disputed"].includes(b.status)
+      (NON_FINAL_BET_STATUSES as readonly string[]).includes(b.status)
     ).length
 
     // ── User win stats ─────────────────────────────────────────────────────
@@ -107,10 +105,11 @@ export async function GET() {
       .map(([name, count]) => ({ name, count }))
 
     // Recent resolved (last 8, no money info)
-    const recentResolved = (resolvedBets || []).slice(0, 8).map((b) => {
+    const recentResolved = resolvedBets.slice(0, 8).map((b) => {
       const event = Array.isArray(b.event) ? b.event[0] : b.event
       const winnerProfile = b.winner_id ? profileMap[b.winner_id] : null
       return {
+        betId: b.id,
         winnerNickname: winnerProfile?.nickname || null,
         winnerAvatar: winnerProfile?.avatar_url || null,
         betType: b.bet_type,
