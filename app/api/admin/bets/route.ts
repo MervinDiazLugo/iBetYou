@@ -1020,10 +1020,14 @@ export async function POST(request: NextRequest) {
         }
 
         const creatorMatch = creatorNormalized === expectedSelection
-        const acceptorMatch = acceptorNormalized === expectedSelection
+        const acceptorHasExplicitSelection = !!acceptorNormalized
+        const acceptorMatch = acceptorHasExplicitSelection && acceptorNormalized === expectedSelection
 
         if (creatorMatch && !acceptorMatch) {
           winner_id = bet.creator_id
+        } else if (!creatorMatch && !acceptorHasExplicitSelection) {
+          // Acceptor bet "contra creador" — wins when creator loses
+          winner_id = bet.acceptor_id
         } else if (acceptorMatch && !creatorMatch) {
           winner_id = bet.acceptor_id
         } else if (!creatorMatch && !acceptorMatch) {
@@ -1062,10 +1066,14 @@ export async function POST(request: NextRequest) {
         }
 
         const creatorMatch = selectionMatchesFirstScorer(creatorNormalized)
-        const acceptorMatch = selectionMatchesFirstScorer(acceptorNormalized)
+        const acceptorHasExplicitSelection = !!acceptorNormalized
+        const acceptorMatch = acceptorHasExplicitSelection && selectionMatchesFirstScorer(acceptorNormalized)
 
         if (creatorMatch && !acceptorMatch) {
           winner_id = bet.creator_id
+        } else if (!creatorMatch && !acceptorHasExplicitSelection) {
+          // Acceptor bet "contra creador" — wins when creator loses
+          winner_id = bet.acceptor_id
         } else if (acceptorMatch && !creatorMatch) {
           winner_id = bet.acceptor_id
         } else if (!creatorMatch && !acceptorMatch) {
