@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
 
   try {
     // Paginate through all rows (Supabase caps at 1000 per request by default)
+    // Apply filters BEFORE .range() so pagination counts filtered rows correctly
     const PAGE_SIZE = 1000
     let allData: Record<string, unknown>[] = []
     let from = 0
@@ -24,13 +25,12 @@ export async function GET(request: NextRequest) {
         .from("events")
         .select("*")
         .order("start_time", { ascending: true })
-        .range(from, from + PAGE_SIZE - 1)
 
       if (sport !== "all") {
         query = query.eq("sport", sport)
       }
 
-      const { data, error } = await query
+      const { data, error } = await query.range(from, from + PAGE_SIZE - 1)
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       if (!data || data.length === 0) break
 
@@ -176,16 +176,20 @@ async function batchUpsertEvents(
 ): Promise<{ count: number; error?: string }> {
   const externalIds = events.map((e) => e.external_id).filter(Boolean)
 
-  const { data: existing, error: fetchError } = await supabase
-    .from("events")
-    .select("id, external_id")
-    .in("external_id", externalIds)
+  const existingMap = new Map<string, number>()
 
-  if (fetchError) return { count: 0, error: fetchError.message }
+  if (externalIds.length > 0) {
+    const { data: existing, error: fetchError } = await supabase
+      .from("events")
+      .select("id, external_id")
+      .in("external_id", externalIds)
 
-  const existingMap = new Map(
-    (existing || []).map((e: { id: number; external_id: string }) => [e.external_id, e.id])
-  )
+    if (fetchError) return { count: 0, error: fetchError.message }
+
+    for (const e of existing || []) {
+      existingMap.set((e as { id: number; external_id: string }).external_id, (e as { id: number; external_id: string }).id)
+    }
+  }
 
   const toInsert = events.filter((e) => !existingMap.has(e.external_id as string))
   const toUpdate = events.filter((e) => existingMap.has(e.external_id as string))

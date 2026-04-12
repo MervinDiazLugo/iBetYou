@@ -66,6 +66,7 @@ export default function BackofficeEvents() {
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([])
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingSaved, setLoadingSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<string>("")
   const [sport, setSport] = useState<string>("football")
@@ -154,13 +155,18 @@ export default function BackofficeEvents() {
   }
 
   async function fetchSavedEvents() {
+    setLoadingSaved(true)
     try {
       const res = await authFetch(`/api/admin/events?sport=all`)
+      if (!res.ok) {
+        const err = await res.json()
+        showToast(err.error || 'Error al cargar eventos', 'error')
+        return
+      }
       const data = await res.json()
       const events = data.events || []
       setSavedEvents(events)
-      
-      // Build set of saved external_ids
+
       const ids = new Set<string>()
       events.forEach((e: SavedEvent) => {
         if (e.external_id) ids.add(e.external_id)
@@ -168,6 +174,9 @@ export default function BackofficeEvents() {
       setSavedExternalIds(ids)
     } catch (err) {
       console.error('Error fetching saved events:', err)
+      showToast('Error al cargar eventos', 'error')
+    } finally {
+      setLoadingSaved(false)
     }
   }
 
@@ -695,7 +704,9 @@ export default function BackofficeEvents() {
             </CardContent>
           </Card>
 
-          {filteredSavedEvents.length === 0 ? (
+          {loadingSaved ? (
+            <div className="text-center py-12 text-muted-foreground">Cargando eventos...</div>
+          ) : filteredSavedEvents.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
