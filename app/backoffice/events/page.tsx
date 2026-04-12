@@ -103,8 +103,11 @@ export default function BackofficeEvents() {
   async function fetchExternalEvents() {
     setLoading(true)
     setSelectedEvents(new Set())
+    // 'all' is only valid for saved events; external API requires a specific sport
+    const effectiveSport = sport === 'all' ? 'football' : sport
+    if (sport === 'all') setSport('football')
     try {
-      const res = await authFetch(`/api/events?sport=${sport}&from=${dateFrom}&to=${dateTo}`)
+      const res = await authFetch(`/api/events?sport=${effectiveSport}&from=${dateFrom}&to=${dateTo}`)
       
       if (!res.ok) {
         const error = await res.json()

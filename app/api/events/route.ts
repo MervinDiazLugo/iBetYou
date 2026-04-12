@@ -4,6 +4,7 @@ import { requireBackofficeAdmin } from "@/lib/server-auth"
 const API_KEY = process.env.API_FOOTBALL_KEY
 const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
+const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v3.basketball.api-sports.io"
 const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 
 export async function GET(request: NextRequest) {
@@ -58,7 +59,7 @@ export async function GET(request: NextRequest) {
       if (sport === "football") {
         url = `${API_FOOTBALL_URL}/fixtures?date=${date}`
       } else if (sport === "basketball") {
-        url = `${API_FOOTBALL_URL}/fixtures?date=${date}`
+        url = `${API_BASKETBALL_URL}/games?date=${date}`
       } else if (sport === "baseball") {
         url = `${API_BASEBALL_URL}/games?date=${date}`
       }
