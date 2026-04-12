@@ -7,10 +7,10 @@ import { Badge } from "@/components/ui/badge"
 import { Trophy, Flame, Activity, Target, TrendingUp, Users, BarChart2, Star } from "lucide-react"
 
 const betTypeLabels: Record<string, string> = {
-  direct: "Direct",
-  half_time: "Half Time",
-  exact_score: "Exact Score",
-  first_scorer: "First Scorer",
+  direct: "Resultado",
+  half_time: "Medio Tiempo",
+  exact_score: "Marcador Exacto",
+  first_scorer: "Primer Goleador",
 }
 
 interface RankingEntry {
@@ -71,7 +71,7 @@ function MedalIcon({ rank }: { rank: number }) {
 
 function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "wins" | "winRate" | "participated" | "recentWins" }) {
   if (entries.length === 0) {
-    return <p className="text-center text-muted-foreground py-6 text-sm">No data yet</p>
+    return <p className="text-center text-muted-foreground py-6 text-sm">Sin datos aún</p>
   }
   return (
     <div className="space-y-2">
@@ -84,14 +84,14 @@ function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "w
           <div className="flex-1 min-w-0">
             <div className="font-medium text-sm truncate">{entry.nickname}</div>
             <div className="text-xs text-muted-foreground">
-              {entry.participated} bets · {entry.wins}W {entry.losses}L
+              {entry.participated} apuestas · {entry.wins}G {entry.losses}P
             </div>
           </div>
           <div className="text-right shrink-0">
-            {metric === "wins" && <div className="font-bold text-green-400">{entry.wins} wins</div>}
+            {metric === "wins" && <div className="font-bold text-green-400">{entry.wins} victorias</div>}
             {metric === "winRate" && <div className="font-bold text-blue-400">{entry.winRate}%</div>}
-            {metric === "participated" && <div className="font-bold text-purple-400">{entry.participated} bets</div>}
-            {metric === "recentWins" && <div className="font-bold text-orange-400">{entry.recentWins} wins</div>}
+            {metric === "participated" && <div className="font-bold text-purple-400">{entry.participated} apuestas</div>}
+            {metric === "recentWins" && <div className="font-bold text-orange-400">{entry.recentWins} victorias</div>}
           </div>
         </div>
       ))}
@@ -123,13 +123,13 @@ export default function LeaderboardPage() {
             <Trophy className="h-8 w-8 text-yellow-400" />
             Leaderboard
           </h1>
-          <p className="text-muted-foreground">Best bettors on the platform</p>
+          <p className="text-muted-foreground">Los mejores apostadores de la plataforma</p>
         </div>
 
         {loading ? (
-          <div className="text-center py-20 text-muted-foreground">Loading...</div>
+          <div className="text-center py-20 text-muted-foreground">Cargando...</div>
         ) : !stats ? (
-          <div className="text-center py-20 text-red-500">Could not load stats</div>
+          <div className="text-center py-20 text-red-500">No se pudieron cargar las estadísticas</div>
         ) : (
           <div className="space-y-6">
             {/* Platform stats */}
@@ -138,7 +138,7 @@ export default function LeaderboardPage() {
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <BarChart2 className="h-4 w-4 text-primary" />
-                    <span className="text-xs text-muted-foreground">Total bets</span>
+                    <span className="text-xs text-muted-foreground">Total apuestas</span>
                   </div>
                   <div className="text-2xl font-bold">{stats.platform.totalBets}</div>
                 </CardContent>
@@ -147,7 +147,7 @@ export default function LeaderboardPage() {
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Trophy className="h-4 w-4 text-green-400" />
-                    <span className="text-xs text-muted-foreground">Resolved</span>
+                    <span className="text-xs text-muted-foreground">Resueltas</span>
                   </div>
                   <div className="text-2xl font-bold text-green-400">{stats.platform.totalResolved}</div>
                 </CardContent>
@@ -156,7 +156,7 @@ export default function LeaderboardPage() {
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Activity className="h-4 w-4 text-blue-400" />
-                    <span className="text-xs text-muted-foreground">Active bets</span>
+                    <span className="text-xs text-muted-foreground">Apuestas activas</span>
                   </div>
                   <div className="text-2xl font-bold text-blue-400">{stats.platform.activeBetsCount}</div>
                 </CardContent>
@@ -165,7 +165,7 @@ export default function LeaderboardPage() {
                 <CardContent className="pt-4 pb-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Users className="h-4 w-4 text-purple-400" />
-                    <span className="text-xs text-muted-foreground">Bettors</span>
+                    <span className="text-xs text-muted-foreground">Apostadores</span>
                   </div>
                   <div className="text-2xl font-bold text-purple-400">{stats.platform.totalParticipants}</div>
                 </CardContent>
@@ -178,10 +178,10 @@ export default function LeaderboardPage() {
                 {/* Tabs */}
                 <div className="flex gap-2 flex-wrap">
                   {([
-                    { id: "wins", label: "Most Wins", icon: Trophy },
-                    { id: "rate", label: "Best Rate", icon: Target },
-                    { id: "active", label: "Most Active", icon: Activity },
-                    { id: "hot", label: "Hot 🔥", icon: Flame },
+                    { id: "wins", label: "Más victorias", icon: Trophy },
+                    { id: "rate", label: "Mejor racha", icon: Target },
+                    { id: "active", label: "Más activos", icon: Activity },
+                    { id: "hot", label: "En racha 🔥", icon: Flame },
                   ] as { id: Tab; label: string; icon: any }[]).map(({ id, label, icon: Icon }) => (
                     <button
                       key={id}
@@ -199,10 +199,10 @@ export default function LeaderboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">
-                      {tab === "wins" && "Top by total wins"}
-                      {tab === "rate" && "Top by win rate (min. 3 bets)"}
-                      {tab === "active" && "Most active bettors"}
-                      {tab === "hot" && "Hot in the last 30 days"}
+                      {tab === "wins" && "Top por victorias totales"}
+                      {tab === "rate" && "Top por porcentaje de victoria (mín. 3 apuestas)"}
+                      {tab === "active" && "Apostadores más activos"}
+                      {tab === "hot" && "En racha en los últimos 30 días"}
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -220,7 +220,7 @@ export default function LeaderboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <Star className="h-4 w-4" /> Popular bet types
+                      <Star className="h-4 w-4" /> Tipos de apuesta populares
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -241,7 +241,7 @@ export default function LeaderboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4" /> Top leagues
+                      <TrendingUp className="h-4 w-4" /> Ligas más activas
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -264,7 +264,7 @@ export default function LeaderboardPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
                     <Activity className="h-4 w-4" />
-                    Recent results
+                    Resultados recientes
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
