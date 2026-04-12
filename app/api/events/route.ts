@@ -1,5 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
+import https from "node:https"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+
+/** Fetch with ONLY the x-apisports-key header — some api-sports endpoints
+ *  reject requests that contain extra framework-injected headers (Accept,
+ *  Accept-Encoding, User-Agent, etc.).  Using node:https directly gives us
+ *  full control over what gets sent. */
+function fetchApiSports(url: string, apiKey: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const { hostname, pathname, search } = new URL(url)
+    const req = https.request(
+      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": apiKey } },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (c) => chunks.push(c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
+          catch (e) { reject(e) }
+        })
+      }
+    )
+    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
+    req.on("error", reject)
+    req.end()
+  })
+}
 
 const API_KEY = process.env.API_FOOTBALL_KEY
 const API_BASKETBALL_KEY = process.env.API_BASKETBALL_KEY || process.env.API_FOOTBALL_KEY
@@ -68,38 +93,16 @@ export async function GET(request: NextRequest) {
       if (!url) continue
 
       try {
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 10000)
-
-        const response = await fetch(url, {
-          headers: { "x-apisports-key": sportApiKey },
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        clearTimeout(timeout)
-
-        if (response.ok) {
-          const data = await response.json()
-          if (data.response && Array.isArray(data.response)) {
-            allEvents = [...allEvents, ...data.response]
-          }
-        } else {
-          let reason = `HTTP ${response.status}`
-          try {
-            const errBody = await response.json()
-            if (errBody?.message) reason += `: ${errBody.message}`
-            else if (errBody?.errors) reason += `: ${JSON.stringify(errBody.errors)}`
-          } catch { /* ignore parse errors */ }
-          failedDates.push({ date, status: response.status, reason })
+        const data = await fetchApiSports(url, sportApiKey)
+        if (data.response && Array.isArray(data.response)) {
+          allEvents = [...allEvents, ...data.response]
+        } else if (data.errors && Object.keys(data.errors).length > 0) {
+          failedDates.push({ date, reason: JSON.stringify(data.errors) })
         }
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Unknown fetch error"
-        const cause = e instanceof Error && (e as any).cause instanceof Error ? (e as any).cause.message : undefined
+        const msg = e instanceof Error ? e.message : "Unknown error"
         console.error(`Error fetching ${sport} ${date}:`, e)
-        failedDates.push({
-          date,
-          reason: cause ? `${msg}: ${cause}` : msg,
-        })
+        failedDates.push({ date, reason: msg })
       }
     }
 
