@@ -133,6 +133,49 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, count })
     }
 
+    if (action === "cleanup_old") {
+      const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
+
+      // 1. Get all event IDs older than 2 weeks
+      const { data: oldEvents, error: oldError } = await supabase
+        .from("events")
+        .select("id")
+        .lt("start_time", twoWeeksAgo)
+
+      if (oldError) return NextResponse.json({ error: oldError.message }, { status: 500 })
+      if (!oldEvents || oldEvents.length === 0) {
+        return NextResponse.json({ success: true, deleted: 0, protected: 0 })
+      }
+
+      const oldIds = oldEvents.map((e) => e.id)
+
+      // 2. Find which of those have bets (must not be deleted)
+      const { data: betsRefs, error: betsError } = await supabase
+        .from("bets")
+        .select("event_id")
+        .in("event_id", oldIds)
+
+      if (betsError) return NextResponse.json({ error: betsError.message }, { status: 500 })
+
+      const protectedIds = new Set((betsRefs || []).map((b) => b.event_id))
+      const toDelete = oldIds.filter((id) => !protectedIds.has(id))
+
+      // 3. Batch delete only events with no bets
+      let deleted = 0
+      for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+        const batch = toDelete.slice(i, i + BATCH_SIZE)
+        const { error: delError } = await supabase.from("events").delete().in("id", batch)
+        if (delError) return NextResponse.json({ error: delError.message }, { status: 500 })
+        deleted += batch.length
+      }
+
+      return NextResponse.json({
+        success: true,
+        deleted,
+        protected: protectedIds.size,
+      })
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: unknown) {
     console.error("Admin events POST error:", error)

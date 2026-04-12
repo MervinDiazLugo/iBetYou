@@ -283,6 +283,29 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleCleanupOld() {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cleanup_old' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast(
+          `${data.deleted} eventos eliminados · ${data.protected} conservados (tienen apuestas)`,
+          'success'
+        )
+        fetchSavedEvents()
+      } else {
+        showToast(data.error || 'Error al limpiar', 'error')
+      }
+    } catch (err) {
+      console.error('Error cleanup:', err)
+      showToast('Error al limpiar eventos', 'error')
+    }
+  }
+
   async function handleCreate() {
     if (!newEvent.home_team || !newEvent.away_team || !newEvent.start_time) {
       showToast('Completa los campos requeridos', 'error')
@@ -446,10 +469,16 @@ export default function BackofficeEvents() {
           <h1 className="text-3xl font-bold">Eventos</h1>
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
-        <Button onClick={() => { setShowCreate(true); setView('saved') }}>
-          <Plus className="h-4 w-4 mr-2" />
-          Crear Evento
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleCleanupOld}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Limpiar &gt;2 semanas
+          </Button>
+          <Button onClick={() => { setShowCreate(true); setView('saved') }}>
+            <Plus className="h-4 w-4 mr-2" />
+            Crear Evento
+          </Button>
+        </div>
       </div>
 
       {/* Tabs */}
