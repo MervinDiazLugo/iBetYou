@@ -79,6 +79,7 @@ export default function BackofficeEvents() {
   const [savedExternalIds, setSavedExternalIds] = useState<Set<string>>(new Set())
   const [showCreate, setShowCreate] = useState(false)
   const [countryFilter, setCountryFilter] = useState<string>("")
+  const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [newEvent, setNewEvent] = useState({
     sport: 'football',
     league: '',
@@ -284,8 +285,17 @@ export default function BackofficeEvents() {
   }
 
   async function handleDeleteEvent(id: number) {
-    if (!confirm('¿Estás seguro de eliminar este evento?')) return
-    
+    setConfirmDialog({
+      title: 'Eliminar evento',
+      message: '¿Estás seguro de eliminar este evento? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await _doDeleteEvent(id)
+      },
+    })
+  }
+
+  async function _doDeleteEvent(id: number) {
     try {
       const res = await authFetch(`/api/admin/events?id=${id}`, {
         method: 'DELETE',
@@ -300,7 +310,17 @@ export default function BackofficeEvents() {
   }
 
   async function handleCleanupOld() {
-    if (!confirm('¿Eliminar eventos pasados (más de 2 semanas)?\n\nSolo se eliminan los que NO tienen apuestas asociadas. Los eventos con apuestas se conservan siempre.')) return
+    setConfirmDialog({
+      title: 'Limpiar eventos > 2 semanas',
+      message: 'Se eliminarán eventos anteriores a hace 2 semanas que NO tengan apuestas. Los eventos con apuestas se conservan siempre.',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await _doCleanupOld()
+      },
+    })
+  }
+
+  async function _doCleanupOld() {
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
@@ -324,7 +344,17 @@ export default function BackofficeEvents() {
   }
 
   async function handleCleanupNoBets() {
-    if (!confirm('¿Eliminar TODOS los eventos sin apuestas?\n\nSe borrarán todos los eventos que no tienen ninguna apuesta asociada, sin importar la fecha. Los eventos con apuestas no se tocan.')) return
+    setConfirmDialog({
+      title: 'Eliminar eventos sin apuestas',
+      message: 'Se borrarán TODOS los eventos que no tienen ninguna apuesta, sin importar la fecha. Los eventos con apuestas no se tocan.',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await _doCleanupNoBets()
+      },
+    })
+  }
+
+  async function _doCleanupNoBets() {
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
@@ -344,7 +374,17 @@ export default function BackofficeEvents() {
   }
 
   async function handleDedup() {
-    if (!confirm('¿Eliminar eventos duplicados?\n\nSe detectan eventos con el mismo ID externo y se conserva solo uno. Las apuestas de los duplicados se reasignan al evento conservado automáticamente.')) return
+    setConfirmDialog({
+      title: 'Eliminar duplicados',
+      message: 'Se detectan eventos con el mismo ID externo y se conserva solo uno. Las apuestas de los duplicados se reasignan al evento conservado automáticamente.',
+      onConfirm: async () => {
+        setConfirmDialog(null)
+        await _doDedup()
+      },
+    })
+  }
+
+  async function _doDedup() {
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
@@ -927,6 +967,32 @@ export default function BackofficeEvents() {
               </div>
             </CardContent>
           </Card>
+        </div>
+      )}
+
+      {/* Confirmation dialog */}
+      {confirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-lg font-semibold">{confirmDialog.title}</h2>
+            <p className="text-sm text-muted-foreground">{confirmDialog.message}</p>
+            <div className="flex gap-3 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setConfirmDialog(null)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                className="flex-1"
+                onClick={confirmDialog.onConfirm}
+              >
+                Confirmar
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

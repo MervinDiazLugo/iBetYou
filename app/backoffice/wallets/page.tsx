@@ -15,6 +15,7 @@ import {
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { useToast } from "@/components/toast"
 
 interface WalletData {
   user_id: string
@@ -30,6 +31,7 @@ interface WalletData {
 
 export default function BackofficeWallets() {
   const supabase = createBrowserSupabaseClient()
+  const { showToast } = useToast()
   const [wallets, setWallets] = useState<WalletData[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>("")
@@ -73,7 +75,7 @@ export default function BackofficeWallets() {
 
   async function handleTransaction(action: 'add' | 'subtract') {
     if (!selectedWallet || actionData.amount <= 0) {
-      alert('Ingresa un monto válido')
+      showToast('Ingresa un monto válido', 'error')
       return
     }
 
@@ -96,12 +98,12 @@ export default function BackofficeWallets() {
       const data = await res.json()
       
       if (res.ok) {
-        alert(`Transacción exitosa: ${action === 'add' ? 'Agregado' : 'Restado'} ${formatCurrency(actionData.amount)}`)
+        showToast(`${action === 'add' ? 'Agregado' : 'Restado'} ${formatCurrency(actionData.amount)} exitosamente`, 'success')
         setSelectedWallet(null)
         setActionData({ amount: 0, token_type: 'fantasy', notes: '' })
         fetchWallets()
       } else {
-        alert(data.error || 'Error al realizar la transacción')
+        showToast(data.error || 'Error al realizar la transacción', 'error')
       }
     } catch (err) {
       console.error('Error:', err)

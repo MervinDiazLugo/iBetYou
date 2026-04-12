@@ -82,6 +82,8 @@ export default function BetDetailPage() {
   const [nowMs, setNowMs] = useState(Date.now())
   const [adminActionLoading, setAdminActionLoading] = useState(false)
   const [adminAutoResolving, setAdminAutoResolving] = useState(false)
+  const [promptDialog, setPromptDialog] = useState<{ title: string; defaultValue: string; onConfirm: (value: string) => void } | null>(null)
+  const [promptValue, setPromptValue] = useState("")
   
   const betId = params.id as string
 
@@ -626,9 +628,8 @@ export default function BetDetailPage() {
                     <Button
                       variant="destructive"
                       onClick={() => {
-                        const reason = window.prompt('Motivo de cancelación (requerido):', 'Cancelada por administración')
-                        if (!reason) return
-                        handleAdminAction('cancel', undefined, reason)
+                        setPromptValue('Cancelada por administración')
+                        setPromptDialog({ title: 'Motivo de cancelación', defaultValue: 'Cancelada por administración', onConfirm: (reason) => handleAdminAction('cancel', undefined, reason) })
                       }}
                       disabled={adminActionLoading || adminAutoResolving}
                     >
@@ -640,9 +641,8 @@ export default function BetDetailPage() {
                     <Button
                       variant="outline"
                       onClick={() => {
-                        const reason = window.prompt('Motivo de disputa (requerido):', 'Requiere verificación manual')
-                        if (!reason) return
-                        handleAdminAction('dispute', undefined, reason)
+                        setPromptValue('Requiere verificación manual')
+                        setPromptDialog({ title: 'Motivo de disputa', defaultValue: 'Requiere verificación manual', onConfirm: (reason) => handleAdminAction('dispute', undefined, reason) })
                       }}
                       disabled={adminActionLoading || adminAutoResolving}
                     >
@@ -696,9 +696,8 @@ export default function BetDetailPage() {
                       <Button
                         variant="outline"
                         onClick={() => {
-                          const reason = window.prompt('Motivo de resolución (requerido):', 'Ganador validado manualmente')
-                          if (!reason) return
-                          handleAdminAction('resolve', bet.creator_id, reason)
+                          setPromptValue('Ganador validado manualmente')
+                          setPromptDialog({ title: `Resolver: gana ${bet.creator?.nickname || 'Creador'}`, defaultValue: 'Ganador validado manualmente', onConfirm: (reason) => handleAdminAction('resolve', bet.creator_id, reason) })
                         }}
                         disabled={adminActionLoading || adminAutoResolving}
                       >
@@ -707,9 +706,8 @@ export default function BetDetailPage() {
                       <Button
                         variant="outline"
                         onClick={() => {
-                          const reason = window.prompt('Motivo de resolución (requerido):', 'Ganador validado manualmente')
-                          if (!reason) return
-                          handleAdminAction('resolve', bet.acceptor_id || undefined, reason)
+                          setPromptValue('Ganador validado manualmente')
+                          setPromptDialog({ title: `Resolver: gana ${bet.acceptor?.nickname || 'Aceptante'}`, defaultValue: 'Ganador validado manualmente', onConfirm: (reason) => handleAdminAction('resolve', bet.acceptor_id || undefined, reason) })
                         }}
                         disabled={adminActionLoading || adminAutoResolving}
                       >
@@ -1087,6 +1085,43 @@ export default function BetDetailPage() {
             </CardContent>
           </Card>
         )}
+      {/* Admin prompt dialog */}
+      {promptDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-lg font-semibold">{promptDialog.title}</h2>
+            <input
+              className="w-full px-3 py-2 rounded-md border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && promptValue.trim()) {
+                  const cb = promptDialog.onConfirm
+                  setPromptDialog(null)
+                  cb(promptValue.trim())
+                }
+              }}
+              autoFocus
+            />
+            <div className="flex gap-3 pt-1">
+              <Button variant="outline" className="flex-1" onClick={() => setPromptDialog(null)}>
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                disabled={!promptValue.trim()}
+                onClick={() => {
+                  const cb = promptDialog.onConfirm
+                  setPromptDialog(null)
+                  cb(promptValue.trim())
+                }}
+              >
+                Confirmar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       </main>
     </div>
   )

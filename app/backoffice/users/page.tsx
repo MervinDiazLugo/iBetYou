@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Users, ShieldCheck, Ban, Clock, Search, UserPlus, AlertTriangle } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { useToast } from "@/components/toast"
 
 interface AdminUser {
   id: string
@@ -20,6 +21,7 @@ interface AdminUser {
 
 export default function BackofficeUsersPage() {
   const supabase = createBrowserSupabaseClient()
+  const { showToast } = useToast()
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState("")
@@ -74,7 +76,7 @@ export default function BackofficeUsersPage() {
       })
       const data = await res.json()
       if (!res.ok) {
-        alert(data.error || "No se pudo completar la acción")
+        showToast(data.error || "No se pudo completar la acción", 'error')
         return
       }
       fetchUsers()
