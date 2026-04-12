@@ -68,10 +68,15 @@ export async function GET(request: NextRequest) {
       if (!url) continue
 
       try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 10000)
+
         const response = await fetch(url, {
           headers: { "x-apisports-key": sportApiKey },
-          next: { revalidate: 300 },
+          cache: "no-store",
+          signal: controller.signal,
         })
+        clearTimeout(timeout)
 
         if (response.ok) {
           const data = await response.json()
@@ -87,11 +92,13 @@ export async function GET(request: NextRequest) {
           } catch { /* ignore parse errors */ }
           failedDates.push({ date, status: response.status, reason })
         }
-      } catch (e) {
-        console.error(`Error fetching ${date}:`, e)
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : "Unknown fetch error"
+        const cause = e instanceof Error && (e as any).cause instanceof Error ? (e as any).cause.message : undefined
+        console.error(`Error fetching ${sport} ${date}:`, e)
         failedDates.push({
           date,
-          reason: e instanceof Error ? e.message : "Unknown fetch error",
+          reason: cause ? `${msg}: ${cause}` : msg,
         })
       }
     }
