@@ -552,7 +552,12 @@ export default function BackofficeEvents() {
           <div className="text-xs text-muted-foreground truncate max-w-[200px]">
             {event.metadata?.venue?.name ? `📍 ${event.metadata.venue.name}${event.metadata.venue.city ? `, ${event.metadata.venue.city}` : ''}` : ''}
           </div>
-          <span className="text-xs text-muted-foreground flex-shrink-0">#{event.id}</span>
+          <div className="flex flex-col items-end flex-shrink-0">
+            <span className="text-xs text-muted-foreground">#{event.id}</span>
+            {event.external_id && (
+              <span className="text-xs text-muted-foreground/60">{event.external_id}</span>
+            )}
+          </div>
           <Badge variant="secondary" className="text-xs flex-shrink-0">
             {event.status}
           </Badge>
