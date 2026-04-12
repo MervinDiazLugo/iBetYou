@@ -111,7 +111,8 @@ export default function BackofficeEvents() {
       
       if (!res.ok) {
         const error = await res.json()
-        showToast(error.error || 'Error al consultar la API', 'error')
+        const detail = error.details?.[0]?.reason ? ` (${error.details[0].reason})` : ''
+        showToast((error.error || 'Error al consultar la API') + detail, 'error')
         setExternalEvents([])
         return
       }

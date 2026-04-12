@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 
 const API_KEY = process.env.API_FOOTBALL_KEY
+const API_BASKETBALL_KEY = process.env.API_BASKETBALL_KEY || process.env.API_FOOTBALL_KEY
 const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v3.basketball.api-sports.io"
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Se requieren parámetros from y to (YYYY-MM-DD)' }, { status: 400 })
   }
 
-  const sportApiKey = sport === "baseball" ? API_BASEBALL_KEY : API_KEY
+  const sportApiKey = sport === "baseball" ? API_BASEBALL_KEY : sport === "basketball" ? API_BASKETBALL_KEY : API_KEY
   if (!sportApiKey) {
     return NextResponse.json({ error: `API key no configurada para ${sport}` }, { status: 500 })
   }
@@ -78,11 +79,13 @@ export async function GET(request: NextRequest) {
             allEvents = [...allEvents, ...data.response]
           }
         } else {
-          failedDates.push({
-            date,
-            status: response.status,
-            reason: `HTTP ${response.status}`,
-          })
+          let reason = `HTTP ${response.status}`
+          try {
+            const errBody = await response.json()
+            if (errBody?.message) reason += `: ${errBody.message}`
+            else if (errBody?.errors) reason += `: ${JSON.stringify(errBody.errors)}`
+          } catch { /* ignore parse errors */ }
+          failedDates.push({ date, status: response.status, reason })
         }
       } catch (e) {
         console.error(`Error fetching ${date}:`, e)
