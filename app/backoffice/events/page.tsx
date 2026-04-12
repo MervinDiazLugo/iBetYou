@@ -300,6 +300,7 @@ export default function BackofficeEvents() {
   }
 
   async function handleCleanupOld() {
+    if (!confirm('¿Eliminar eventos pasados (más de 2 semanas)?\n\nSolo se eliminan los que NO tienen apuestas asociadas. Los eventos con apuestas se conservan siempre.')) return
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
@@ -323,6 +324,7 @@ export default function BackofficeEvents() {
   }
 
   async function handleCleanupNoBets() {
+    if (!confirm('¿Eliminar TODOS los eventos sin apuestas?\n\nSe borrarán todos los eventos que no tienen ninguna apuesta asociada, sin importar la fecha. Los eventos con apuestas no se tocan.')) return
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
@@ -342,6 +344,7 @@ export default function BackofficeEvents() {
   }
 
   async function handleDedup() {
+    if (!confirm('¿Eliminar eventos duplicados?\n\nSe detectan eventos con el mismo ID externo y se conserva solo uno. Las apuestas de los duplicados se reasignan al evento conservado automáticamente.')) return
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'POST',
