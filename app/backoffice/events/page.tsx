@@ -527,7 +527,7 @@ export default function BackofficeEvents() {
           </div>
           <span className="text-xs font-medium text-primary">
             {new Date(event.start_time).toLocaleDateString('es-ES', {
-              day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+              day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
             })}
           </span>
         </div>
@@ -779,8 +779,8 @@ export default function BackofficeEvents() {
                           </Badge>
                         </div>
                         <span className="text-xs font-medium text-primary">
-                          {new Date(event.fixture.date).toLocaleDateString('es-ES', { 
-                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' 
+                          {new Date(event.fixture.date).toLocaleDateString('es-ES', {
+                            day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC'
                           })}
                         </span>
                       </div>
