@@ -121,30 +121,47 @@ export default function BackofficeEvents() {
       
       // Normalize the data based on sport (different API response structures)
       const normalizedEvents = (Array.isArray(data) ? data : []).map((event: any) => {
-        if (sport === 'baseball') {
-          // Baseball: direct structure
+        if (sport === 'basketball') {
+          // Basketball: direct structure, venue is a string, country is a top-level object
           return {
             fixture: {
               id: event.id,
               date: event.date,
-                status: event.status,
-                venue: {
-                  name: event.venue?.name,
-                  city: event.venue?.city,
-                }
+              status: event.status,
+              venue: { name: event.venue || null, city: null },
             },
             league: {
               name: event.league?.name || 'Unknown',
-              country: event.country?.name || 'Unknown'
+              country: event.country?.name || 'Unknown',
             },
             teams: {
               home: { name: event.teams?.home?.name || '', logo: event.teams?.home?.logo || null },
-              away: { name: event.teams?.away?.name || '', logo: event.teams?.away?.logo || null }
+              away: { name: event.teams?.away?.name || '', logo: event.teams?.away?.logo || null },
             },
-            scores: event.scores
+            scores: event.scores,
           }
         }
-        // Football and basketball have the same structure
+        if (sport === 'baseball') {
+          // Baseball: direct structure, venue is an object
+          return {
+            fixture: {
+              id: event.id,
+              date: event.date,
+              status: event.status,
+              venue: { name: event.venue?.name, city: event.venue?.city },
+            },
+            league: {
+              name: event.league?.name || 'Unknown',
+              country: event.country?.name || 'Unknown',
+            },
+            teams: {
+              home: { name: event.teams?.home?.name || '', logo: event.teams?.home?.logo || null },
+              away: { name: event.teams?.away?.name || '', logo: event.teams?.away?.logo || null },
+            },
+            scores: event.scores,
+          }
+        }
+        // Football: nested fixture object
         return event
       })
       
