@@ -15,7 +15,7 @@ type BalanceBetRow = {
   league: string
   sport: string
   selection: string
-  result: "won" | "lost" | "pending"
+  result: "won" | "lost" | "pending" | "cancelled"
   net_amount: number
   stake: number
   fee: number
@@ -153,11 +153,13 @@ export default function BalancePage() {
                             ? "bg-green-500/15 text-green-500 border-green-500/30"
                             : row.result === "lost"
                             ? "bg-red-500/15 text-red-500 border-red-500/30"
+                            : row.result === "cancelled"
+                            ? "bg-muted/50 text-muted-foreground border-border"
                             : "bg-yellow-500/15 text-yellow-500 border-yellow-500/30"
                         }
                         variant="outline"
                       >
-                        {row.result === "won" ? "Ganada" : row.result === "lost" ? "Perdida" : "Pendiente"}
+                        {row.result === "won" ? "Ganada" : row.result === "lost" ? "Perdida" : row.result === "cancelled" ? "Cancelada" : "Pendiente"}
                       </Badge>
                     </div>
 

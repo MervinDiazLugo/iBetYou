@@ -35,13 +35,12 @@ function calculateBetNetForUser(bet: BetRow, userId: string) {
   const fee = isCreator ? Number(bet.fee_amount || 0) : Number(stake * 0.03)
   const totalRisk = stake + fee
 
+  if (bet.status === "cancelled") {
+    return { result: "cancelled" as const, netAmount: 0, stake, fee }
+  }
+
   if (bet.status !== "resolved" || !bet.winner_id) {
-    return {
-      result: "pending" as const,
-      netAmount: 0,
-      stake,
-      fee,
-    }
+    return { result: "pending" as const, netAmount: 0, stake, fee }
   }
 
   const userWon = bet.winner_id === userId
