@@ -16,6 +16,7 @@ interface BetWithDetails {
   fee_amount: number
   creator_selection: string
   acceptor_selection: string | null
+  winner_id?: string | null
   status: string
   created_at: string
   event: {
