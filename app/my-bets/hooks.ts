@@ -19,15 +19,25 @@ interface BetWithDetails {
   status: string
   created_at: string
   event: {
+    id: number
     home_team: string
     away_team: string
+    home_logo?: string | null
+    away_logo?: string | null
     start_time: string
     league: string
     sport: string
+    status?: string
+    home_score?: number | null
+    away_score?: number | null
     metadata?: {
       venue?: {
         name?: string | null
         city?: string | null
+      }
+      match_details?: {
+        halftime_home_score?: number | null
+        halftime_away_score?: number | null
       }
     }
   }
