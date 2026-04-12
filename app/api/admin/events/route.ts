@@ -176,6 +176,48 @@ export async function POST(request: NextRequest) {
       })
     }
 
+    if (action === "dedup") {
+      // 1. Fetch all events that have an external_id, ordered by id asc
+      const { data: allExternal, error: fetchErr } = await supabase
+        .from("events")
+        .select("id, external_id")
+        .not("external_id", "is", null)
+        .order("id", { ascending: true })
+
+      if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+
+      // 2. Group by external_id — keep lowest id, collect the rest as duplicates
+      const groups = new Map<string, number[]>()
+      for (const e of allExternal || []) {
+        const key = e.external_id as string
+        if (!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(e.id as number)
+      }
+
+      const duplicateGroups = [...groups.entries()].filter(([, ids]) => ids.length > 1)
+      if (duplicateGroups.length === 0) {
+        return NextResponse.json({ success: true, removed: 0, message: "No hay duplicados" })
+      }
+
+      let removed = 0
+      for (const [, ids] of duplicateGroups) {
+        const keepId = ids[0]
+        const deleteIds = ids.slice(1)
+
+        // Reassign bets from duplicate events to the kept event BEFORE deleting
+        // (avoids ON DELETE CASCADE wiping bet history)
+        for (const deleteId of deleteIds) {
+          await supabase.from("bets").update({ event_id: keepId }).eq("event_id", deleteId)
+        }
+
+        // Delete the duplicates (safe now — no bets reference them)
+        const { error: delErr } = await supabase.from("events").delete().in("id", deleteIds)
+        if (!delErr) removed += deleteIds.length
+      }
+
+      return NextResponse.json({ success: true, removed, groups: duplicateGroups.length })
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: unknown) {
     console.error("Admin events POST error:", error)
@@ -217,6 +259,18 @@ async function batchUpsertEvents(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
   events: Record<string, unknown>[]
 ): Promise<{ count: number; error?: string }> {
+  // Deduplicate input by external_id (last occurrence wins)
+  const dedupMap = new Map<string, Record<string, unknown>>()
+  const noExternalId: Record<string, unknown>[] = []
+  for (const event of events) {
+    if (event.external_id) {
+      dedupMap.set(event.external_id as string, event)
+    } else {
+      noExternalId.push(event)
+    }
+  }
+  events = [...dedupMap.values(), ...noExternalId]
+
   const externalIds = events.map((e) => e.external_id).filter(Boolean)
 
   const existingMap = new Map<string, number>()

@@ -322,6 +322,30 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleDedup() {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dedup' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        if (data.removed === 0) {
+          showToast('No se encontraron duplicados', 'success')
+        } else {
+          showToast(`${data.removed} duplicados eliminados (${data.groups} grupos)`, 'success')
+          fetchSavedEvents()
+        }
+      } else {
+        showToast(data.error || 'Error al deduplicar', 'error')
+      }
+    } catch (err) {
+      console.error('Error dedup:', err)
+      showToast('Error al eliminar duplicados', 'error')
+    }
+  }
+
   async function handleCreate() {
     if (!newEvent.home_team || !newEvent.away_team || !newEvent.start_time) {
       showToast('Completa los campos requeridos', 'error')
@@ -486,6 +510,10 @@ export default function BackofficeEvents() {
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleDedup}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Eliminar duplicados
+          </Button>
           <Button variant="outline" onClick={handleCleanupOld}>
             <Trash2 className="h-4 w-4 mr-2" />
             Limpiar &gt;2 semanas
