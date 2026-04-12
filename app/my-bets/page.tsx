@@ -235,9 +235,18 @@ export default function MyBetsPage() {
                       Estado evento: {bet.event?.status || "—"}
                     </div>
 
-                    {bet.status === "resolved" && winnerNickname && (
-                      <div className="text-sm font-bold text-primary">
-                        Ganador: {winnerNickname}
+                    {bet.status === "resolved" && bet.winner_id && (
+                      <div className={`rounded-md px-3 py-2 text-sm font-bold border ${
+                        bet.winner_id === user.id
+                          ? "bg-green-500/10 border-green-500/30 text-green-500"
+                          : "bg-red-500/10 border-red-500/30 text-red-500"
+                      }`}>
+                        {bet.winner_id === user.id ? "🏆 ¡Ganaste!" : "😞 Perdiste"}
+                        {winnerNickname && (
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">
+                            Ganador: {winnerNickname}
+                          </span>
+                        )}
                       </div>
                     )}
 
