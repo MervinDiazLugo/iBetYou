@@ -133,6 +133,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, count })
     }
 
+    if (action === "cleanup_no_bets") {
+      // Delete ALL events that have no bets (any status, any date)
+      const { data: allEvents, error: allErr } = await supabase
+        .from("events")
+        .select("id")
+
+      if (allErr) return NextResponse.json({ error: allErr.message }, { status: 500 })
+      if (!allEvents || allEvents.length === 0) {
+        return NextResponse.json({ success: true, deleted: 0 })
+      }
+
+      const allIds = allEvents.map((e) => e.id)
+
+      const { data: betsRefs, error: betsErr } = await supabase
+        .from("bets")
+        .select("event_id")
+        .in("event_id", allIds)
+
+      if (betsErr) return NextResponse.json({ error: betsErr.message }, { status: 500 })
+
+      const withBets = new Set((betsRefs || []).map((b) => b.event_id))
+      const toDelete = allIds.filter((id) => !withBets.has(id))
+
+      let deleted = 0
+      for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
+        const batch = toDelete.slice(i, i + BATCH_SIZE)
+        const { error: delErr } = await supabase.from("events").delete().in("id", batch)
+        if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+        deleted += batch.length
+      }
+
+      return NextResponse.json({ success: true, deleted, protected: withBets.size })
+    }
+
     if (action === "cleanup_old") {
       const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString()
 

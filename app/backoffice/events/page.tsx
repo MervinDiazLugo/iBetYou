@@ -322,6 +322,25 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleCleanupNoBets() {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'cleanup_no_bets' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast(`${data.deleted} eventos eliminados · ${data.protected} conservados (tienen apuestas)`, 'success')
+        fetchSavedEvents()
+      } else {
+        showToast(data.error || 'Error al limpiar', 'error')
+      }
+    } catch (err) {
+      showToast('Error al eliminar eventos', 'error')
+    }
+  }
+
   async function handleDedup() {
     try {
       const res = await authFetch('/api/admin/events', {
@@ -510,6 +529,10 @@ export default function BackofficeEvents() {
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleCleanupNoBets}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Sin apuestas
+          </Button>
           <Button variant="outline" onClick={handleDedup}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Eliminar duplicados
