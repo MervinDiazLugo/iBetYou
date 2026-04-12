@@ -930,6 +930,13 @@ export default function BackofficeBets() {
                         <span className="text-muted-foreground">vs</span>
                         <span className="font-bold">{bet.event.away_team}</span>
                         <Badge variant="outline" className="text-[11px]">ID: {bet.id.slice(0, 8)}</Badge>
+                        <Link
+                          href={`/backoffice/events?event_id=${bet.event_id}`}
+                          className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                          title="Ver evento"
+                        >
+                          Ver evento
+                        </Link>
                       </div>
                       <div className="flex flex-wrap gap-3 mb-3 p-2 rounded-md bg-muted/40 border border-border/40">
                         <div className="flex items-center gap-2">

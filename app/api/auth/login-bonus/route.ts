@@ -23,8 +23,22 @@ export async function POST(request: NextRequest) {
 
     const effectiveUserId = authenticatedUserId
 
-
     const supabase = createAdminSupabaseClient()
+
+    // Admins never receive tokens
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", effectiveUserId)
+      .single()
+
+    if (profile?.role === "backoffice_admin") {
+      await supabase
+        .from("wallets")
+        .update({ balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 })
+        .eq("user_id", effectiveUserId)
+      return NextResponse.json({ success: false, bonus: 0, message: "Admins no reciben tokens" })
+    }
     const today = new Date().toISOString().split('T')[0]
     const bonusPerLogin = 50
     const maxDailyBonus = 500

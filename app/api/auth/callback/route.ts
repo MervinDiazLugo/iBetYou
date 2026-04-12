@@ -13,18 +13,34 @@ export async function GET(request: NextRequest) {
     
     if (!sessionError && sessionData.user) {
       const userId = sessionData.user.id
+
+      // Check if admin — admins get no tokens and go to backoffice
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", userId)
+        .single()
+
+      if (profile?.role === "backoffice_admin") {
+        await supabase
+          .from("wallets")
+          .update({ balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 })
+          .eq("user_id", userId)
+        return NextResponse.redirect(new URL("/backoffice", request.url))
+      }
+
       const today = new Date().toISOString().split('T')[0]
       const bonusPerLogin = 50
       const maxDailyBonus = 500
       const maxAccumulated = 1000
-      
+
       // Get wallet
       const { data: wallet } = await supabase
         .from("wallets")
         .select("balance_fantasy, fantasy_total_accumulated")
         .eq("user_id", userId)
         .single()
-      
+
       if (wallet) {
         const currentAccumulated = wallet?.fantasy_total_accumulated || 0
         const currentBalance = wallet?.balance_fantasy || 0

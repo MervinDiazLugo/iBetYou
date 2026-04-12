@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -60,6 +61,7 @@ interface SavedEvent {
 }
 
 export default function BackofficeEvents() {
+  const searchParams = useSearchParams()
   const dateFromRef = useRef<HTMLInputElement | null>(null)
   const dateToRef = useRef<HTMLInputElement | null>(null)
   const [view, setView] = useState<'external' | 'saved'>('saved')
@@ -69,7 +71,8 @@ export default function BackofficeEvents() {
   const [loadingSaved, setLoadingSaved] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<string>("")
-  const [sport, setSport] = useState<string>("football")
+  const [sport, setSport] = useState<string>("all")
+  const [highlightEventId, setHighlightEventId] = useState<number | null>(null)
   const [dateFrom, setDateFrom] = useState<string>(new Date().toISOString().split('T')[0])
   const [dateTo, setDateTo] = useState<string>(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0])
   const [selectedEvents, setSelectedEvents] = useState<Set<number>>(new Set())
@@ -185,6 +188,19 @@ export default function BackofficeEvents() {
       fetchSavedEvents()
     }
   }, [view])
+
+  // Handle event_id URL param — highlight and scroll to that event after load
+  useEffect(() => {
+    const eventId = searchParams.get('event_id')
+    if (!eventId) return
+    const id = parseInt(eventId)
+    setHighlightEventId(id)
+    setSport('all')
+    // Scroll after events have rendered
+    setTimeout(() => {
+      document.getElementById(`event-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 600)
+  }, [searchParams])
 
   function toggleEvent(id: number, externalId: string) {
     const newSelected = new Set(selectedEvents)
@@ -410,7 +426,7 @@ export default function BackofficeEvents() {
   }
 
   const renderSavedEventCard = (event: SavedEvent) => (
-    <Card key={event.id} className="hover:shadow-md">
+    <Card key={event.id} className={`hover:shadow-md ${highlightEventId === event.id ? "border-primary ring-2 ring-primary/40" : ""}`} id={`event-${event.id}`}>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">

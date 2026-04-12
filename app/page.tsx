@@ -141,11 +141,18 @@ function HomeContent() {
           
           if (walletRes.ok && isMounted) {
             const walletData = await walletRes.json()
+
+            // Admins go to backoffice
+            if (walletData.user?.role === 'backoffice_admin') {
+              router.replace('/backoffice')
+              return
+            }
+
             const nickname = walletData.user?.nickname || authUser.email?.split('@')[0] || 'Usuario'
             if (walletData.user || authUser) {
-              setUser({ 
-                id: authUser.id, 
-                email: authUser.email!, 
+              setUser({
+                id: authUser.id,
+                email: authUser.email!,
                 nickname: nickname
               })
             }

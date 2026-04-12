@@ -5,7 +5,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 
 interface AuthContextType {
-  user: { id: string; email: string; nickname?: string } | null
+  user: { id: string; email: string; nickname?: string; role?: string } | null
   loading: boolean
   signOut: () => Promise<void>
 }
@@ -18,7 +18,7 @@ const AuthContext = createContext<AuthContextType>({
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
-  const [user, setUser] = useState<{ id: string; email: string; nickname?: string } | null>(null)
+  const [user, setUser] = useState<{ id: string; email: string; nickname?: string; role?: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -45,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           id: sessionUser.id,
           email: sessionUser.email || "",
           nickname: data.user?.nickname,
+          role: data.user?.role,
         })
         return
       }
