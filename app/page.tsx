@@ -599,6 +599,73 @@ function HomeContent() {
           )}
         </div>
 
+        {/* Eventos Destacados */}
+        {filteredEvents.some(e => e.featured) && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xl">⭐</span>
+              <h2 className="text-lg sm:text-xl font-bold">Eventos Destacados</h2>
+              <Badge className="bg-amber-400/20 text-amber-400 border-amber-400/40 text-xs" variant="outline">
+                {filteredEvents.filter(e => e.featured).length}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredEvents.filter(e => e.featured).map((event) => (
+                <Card
+                  key={`featured-${event.id}`}
+                  className="overflow-hidden cursor-pointer border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all group"
+                  onClick={() => {
+                    if (!user) { window.location.href = '/login'; return }
+                    setSelectedEventForBet(event)
+                    setShowCreateModal(true)
+                  }}
+                >
+                  <div className="h-1 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500" />
+                  <CardContent className="pt-4 pb-3 px-4">
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <Badge className="bg-amber-400/20 text-amber-300 border-amber-400/40 text-[10px] px-1.5 py-0.5">⭐ Destacado</Badge>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 truncate">
+                        {getSportIcon(event.sport)} {event.league}
+                      </Badge>
+                      <span className="ml-auto text-[10px] text-amber-400 font-semibold whitespace-nowrap">
+                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 my-3">
+                      <div className="flex-1 text-center">
+                        {event.home_logo ? (
+                          <img src={event.home_logo} alt={event.home_team} className="w-10 h-10 mx-auto mb-1 object-contain" />
+                        ) : (
+                          <div className="w-10 h-10 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center text-sm font-bold">
+                            {event.home_team.slice(0, 1)}
+                          </div>
+                        )}
+                        <div className="text-xs font-bold leading-tight">{event.home_team}</div>
+                      </div>
+                      <div className="text-sm font-bold text-amber-400">VS</div>
+                      <div className="flex-1 text-center">
+                        {event.away_logo ? (
+                          <img src={event.away_logo} alt={event.away_team} className="w-10 h-10 mx-auto mb-1 object-contain" />
+                        ) : (
+                          <div className="w-10 h-10 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center text-sm font-bold">
+                            {event.away_team.slice(0, 1)}
+                          </div>
+                        )}
+                        <div className="text-xs font-bold leading-tight">{event.away_team}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-center text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity">
+                      Haz clic para crear apuesta
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Eventos Disponibles */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-3">
