@@ -652,7 +652,11 @@ function HomeContent() {
                       {visibleEvents.map((event) => (
                         <Card
                           key={event.id}
-                          className="overflow-hidden hover:border-blue-500/50 hover:shadow-md transition-all cursor-pointer h-full flex flex-col group"
+                          className={`overflow-hidden hover:shadow-md transition-all cursor-pointer h-full flex flex-col group ${
+                            event.featured
+                              ? "border-amber-400/50 hover:border-amber-400/80"
+                              : "hover:border-blue-500/50"
+                          }`}
                           onClick={() => {
                             if (!user) {
                               window.location.href = '/login'
@@ -662,11 +666,14 @@ function HomeContent() {
                             setShowCreateModal(true)
                           }}
                         >
-                          <div className="h-0.5 bg-gradient-to-r from-blue-500 to-cyan-400" />
+                          <div className={`h-0.5 bg-gradient-to-r ${event.featured ? "from-amber-400 to-yellow-300" : "from-blue-500 to-cyan-400"}`} />
                           <CardContent className="pt-3 pb-3 space-y-2 px-3 flex-1 flex flex-col justify-center">
                             <div className="flex items-center justify-between gap-2 mb-1">
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5 leading-none truncate">
-                                {getSportIcon(event.sport)} {event.league}
+                              <Badge
+                                variant="secondary"
+                                className={`text-[10px] px-1.5 py-0.5 leading-none truncate ${event.featured ? "bg-amber-400/15 text-amber-400 border-amber-400/30" : ""}`}
+                              >
+                                {event.featured ? "⭐ " : ""}{getSportIcon(event.sport)} {event.league}
                               </Badge>
                               <span className="text-[10px] text-muted-foreground whitespace-nowrap">
                                 {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}

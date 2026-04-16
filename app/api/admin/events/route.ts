@@ -259,6 +259,28 @@ export async function POST(request: NextRequest) {
   }
 }
 
+export async function PATCH(request: NextRequest) {
+  const auth = await requireBackofficeAdmin(request)
+  if (!auth.authorized) return auth.response
+
+  const supabase = createAdminSupabaseClient()
+
+  try {
+    const { id, featured } = await request.json()
+
+    if (!id || typeof featured !== "boolean") {
+      return NextResponse.json({ error: "id and featured (boolean) are required" }, { status: 400 })
+    }
+
+    const { error } = await supabase.from("events").update({ featured }).eq("id", id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  } catch (error: unknown) {
+    console.error("Admin patch event error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+}
+
 export async function DELETE(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
   if (!auth.authorized) return auth.response

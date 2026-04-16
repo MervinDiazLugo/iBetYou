@@ -6,15 +6,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { 
-  Calendar, 
-  Plus, 
+import {
+  Calendar,
+  Plus,
   RefreshCw,
   Search,
   Globe,
   Clock,
   Check,
-  Trash2
+  Trash2,
+  Star
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/components/toast"
@@ -55,6 +56,7 @@ interface SavedEvent {
   start_time: string
   status: string
   external_id: string | null
+  featured?: boolean
   metadata?: {
     venue?: { name?: string; city?: string }
   }
@@ -330,6 +332,24 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleToggleFeatured(id: number, currentFeatured: boolean) {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, featured: !currentFeatured }),
+      })
+      if (res.ok) {
+        setSavedEvents(prev => prev.map(e => e.id === id ? { ...e, featured: !currentFeatured } : e))
+      } else {
+        const data = await res.json()
+        showToast(data.error || 'Error al actualizar', 'error')
+      }
+    } catch {
+      showToast('Error al actualizar evento', 'error')
+    }
+  }
+
   async function handleCleanupOld() {
     setConfirmDialog({
       title: 'Limpiar eventos > 2 semanas',
@@ -533,14 +553,27 @@ export default function BackofficeEvents() {
   }
 
   const renderSavedEventCard = (event: SavedEvent) => (
-    <Card key={event.id} className={`hover:shadow-md ${highlightEventId === event.id ? "border-primary ring-2 ring-primary/40" : ""}`} id={`event-${event.id}`}>
+    <Card
+      key={event.id}
+      id={`event-${event.id}`}
+      className={`hover:shadow-md ${
+        highlightEventId === event.id
+          ? "border-primary ring-2 ring-primary/40"
+          : event.featured
+          ? "border-amber-400/60 ring-1 ring-amber-400/30"
+          : ""
+      }`}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-lg">{getSportIcon(event.sport)}</span>
-            <Badge variant="outline">
-              {event.league}
-            </Badge>
+            <Badge variant="outline">{event.league}</Badge>
+            {event.featured && (
+              <Badge className="text-[10px] px-1.5 py-0 bg-amber-400/15 text-amber-400 border-amber-400/40" variant="outline">
+                ⭐ Destacado
+              </Badge>
+            )}
           </div>
           <span className="text-xs font-medium text-primary">
             {new Date(event.start_time).toLocaleDateString('es-ES', {
@@ -578,6 +611,15 @@ export default function BackofficeEvents() {
           <Badge variant="secondary" className="text-xs flex-shrink-0">
             {event.status}
           </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-8 w-8 p-0 flex-shrink-0 ${event.featured ? 'text-amber-400' : 'text-muted-foreground hover:text-amber-400'}`}
+            onClick={() => handleToggleFeatured(event.id, event.featured || false)}
+            title={event.featured ? 'Quitar destacado' : 'Marcar como destacado'}
+          >
+            <Star className="h-4 w-4" fill={event.featured ? 'currentColor' : 'none'} />
+          </Button>
           <Button
             variant="ghost"
             size="sm"

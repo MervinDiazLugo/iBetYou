@@ -28,6 +28,7 @@ export interface Event {
   away_score?: number
   league: string
   country: string
+  featured?: boolean
   metadata?: {
     venue?: {
       name?: string | null
