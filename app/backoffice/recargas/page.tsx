@@ -23,7 +23,7 @@ interface DepositRequest {
   status: "pending" | "approved" | "rejected"
   rejection_reason: string | null
   created_at: string
-  user: { id: string; nickname: string; email: string } | null
+  profile: { id: string; nickname: string; email: string } | null
   deposit_account: { type: string; label: string; details: Record<string, string> } | null
 }
 
@@ -79,12 +79,18 @@ export default function BackofficeRecargas() {
     try {
       const res = await authFetch(`/api/admin/iby/deposit-requests?status=${requestsFilter}`)
       const data = await res.json()
+      if (!res.ok) {
+        showToast(data.error || "Error al cargar solicitudes", "error")
+        return
+      }
       setRequests(data.requests || [])
       const initial: Record<string, string> = {}
       for (const r of data.requests || []) {
         initial[r.id] = r.iby_coins != null ? String(r.iby_coins) : String(r.amount)
       }
       setEditCoins(initial)
+    } catch (err) {
+      showToast("Error de conexión", "error")
     } finally {
       setLoadingRequests(false)
     }
@@ -104,7 +110,7 @@ export default function BackofficeRecargas() {
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Error", "error"); return }
-      showToast(`Aprobada — ${coins} IBC acreditados a ${req.user?.nickname || req.user?.email}`, "success")
+      showToast(`Aprobada — ${coins} IBC acreditados a ${req.profile?.nickname || req.profile?.email}`, "success")
       fetchRequests()
     } finally {
       setActionLoading(null)
@@ -295,8 +301,8 @@ export default function BackofficeRecargas() {
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="font-medium text-sm">
-                            {req.user?.nickname || req.user?.email || "Usuario desconocido"}
-                            <span className="text-xs text-muted-foreground ml-2">{req.user?.email}</span>
+                            {req.profile?.nickname || req.profile?.email || "Usuario desconocido"}
+                            <span className="text-xs text-muted-foreground ml-2">{req.profile?.email}</span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5">
                             {acc ? `${TYPE_LABEL[acc.type] || acc.type} — ${acc.label}` : "Cuenta desconocida"}

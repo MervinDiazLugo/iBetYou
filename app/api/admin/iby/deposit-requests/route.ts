@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
     .select(`
       id, transaction_id, amount, iby_coins, transaction_date,
       status, rejection_reason, created_at, reviewed_at,
-      user:profiles(id, nickname, email),
+      profile:profiles(id, nickname, email),
       deposit_account:deposit_accounts(type, label, details)
     `)
     .order("created_at", { ascending: false })

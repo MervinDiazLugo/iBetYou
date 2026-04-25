@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     .from("deposit_requests")
     .select(`
       id, status, amount, iby_coins, user_id,
-      user:profiles(nickname, email)
+      profile:profiles(nickname, email)
     `)
     .eq("id", id)
     .single()
@@ -52,7 +52,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       })
       .eq("id", id)
 
-    const userRow = Array.isArray(req.user) ? req.user[0] : req.user
+    const userRow = Array.isArray((req as any).profile) ? (req as any).profile[0] : (req as any).profile
     if (userRow?.email) {
       try {
         await sendDepositRejectedEmail({
@@ -111,7 +111,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     })
     .eq("id", id)
 
-  const userRow = Array.isArray(req.user) ? req.user[0] : req.user
+  const userRow = Array.isArray((req as any).profile) ? (req as any).profile[0] : (req as any).profile
   if (userRow?.email) {
     try {
       await sendDepositApprovedEmail({
