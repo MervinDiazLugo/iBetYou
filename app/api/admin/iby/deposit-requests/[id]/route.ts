@@ -19,13 +19,9 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
   const supabase = createAdminSupabaseClient()
 
-  // Fetch the request with user info
   const { data: req, error: fetchError } = await supabase
     .from("deposit_requests")
-    .select(`
-      id, status, amount, iby_coins, user_id,
-      profile:profiles!user_id(nickname, email)
-    `)
+    .select(`id, status, amount, iby_coins, user_id, profile:profiles!user_id(nickname)`)
     .eq("id", id)
     .single()
 
@@ -36,6 +32,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (req.status !== "pending") {
     return NextResponse.json({ error: "Esta solicitud ya fue procesada" }, { status: 409 })
   }
+
+  // Fetch email from auth
+  const { data: authUser } = await supabase.auth.admin.getUserById(req.user_id)
+  const userEmail = authUser?.user?.email || null
+  const profileRow = Array.isArray((req as any).profile) ? (req as any).profile[0] : (req as any).profile
+  const userNickname = profileRow?.nickname || userEmail || "Usuario"
 
   if (action === "reject") {
     if (!rejection_reason?.trim()) {
@@ -52,12 +54,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       })
       .eq("id", id)
 
-    const userRow = Array.isArray((req as any).profile) ? (req as any).profile[0] : (req as any).profile
-    if (userRow?.email) {
+    if (userEmail) {
       try {
         await sendDepositRejectedEmail({
-          to: userRow.email,
-          nickname: userRow.nickname || userRow.email,
+          to: userEmail,
+          nickname: userNickname,
           amount: Number(req.amount),
           reason: rejection_reason.trim(),
         })
@@ -75,7 +76,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Cantidad de iBY coins inválida" }, { status: 400 })
   }
 
-  // Credit wallet
   const { data: wallet } = await supabase
     .from("iby_wallets")
     .select("balance")
@@ -83,7 +83,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     .single()
 
   if (!wallet) {
-    // Auto-create wallet
     await supabase.from("iby_wallets").insert({ user_id: req.user_id, balance: coinsToCredit })
   } else {
     await supabase
@@ -92,7 +91,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .eq("user_id", req.user_id)
   }
 
-  // Log transaction
   await supabase.from("iby_transactions").insert({
     user_id: req.user_id,
     amount: coinsToCredit,
@@ -100,7 +98,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     reference_id: id,
   })
 
-  // Update request
   await supabase
     .from("deposit_requests")
     .update({
@@ -111,12 +108,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     })
     .eq("id", id)
 
-  const userRow = Array.isArray((req as any).profile) ? (req as any).profile[0] : (req as any).profile
-  if (userRow?.email) {
+  if (userEmail) {
     try {
       await sendDepositApprovedEmail({
-        to: userRow.email,
-        nickname: userRow.nickname || userRow.email,
+        to: userEmail,
+        nickname: userNickname,
         ibyCoins: coinsToCredit,
         amount: Number(req.amount),
       })
