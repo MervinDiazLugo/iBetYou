@@ -24,7 +24,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     .from("deposit_requests")
     .select(`
       id, status, amount, iby_coins, user_id,
-      profile:profiles(nickname, email)
+      profile:profiles!user_id(nickname, email)
     `)
     .eq("id", id)
     .single()

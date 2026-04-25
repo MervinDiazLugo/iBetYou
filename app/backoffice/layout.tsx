@@ -22,7 +22,7 @@ const navigation = [
   { name: "Dashboard", href: "/backoffice", icon: LayoutDashboard },
   { name: "Moderación de Apuestas", href: "/backoffice/bets", icon: Trophy },
   { name: "Eventos", href: "/backoffice/events", icon: Calendar },
-  { name: "Recargas iBY", href: "/backoffice/recargas", icon: Wallet },
+  { name: "Recargas iBY", href: "/backoffice/top-up", icon: Wallet },
   { name: "Usuarios", href: "/backoffice/users", icon: Users },
   { name: "Financials", href: "/backoffice/financials", icon: BarChart2 },
 ]
