@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
         event:events(id, home_team, away_team, home_score, away_score, sport)
       `)
       .eq("bet_type", "direct")
-      .in("status", ["disputed", "taken"])
+      .in("status", ["disputed"])
 
     if (betId) {
       query = query.eq("id", betId)
@@ -107,44 +107,35 @@ export async function POST(request: NextRequest) {
       const creatorChoseDraw = ['empate', 'draw', 'tie'].includes(creatorSel)
 
       if (!creatorChoseHome && !creatorChoseAway && !creatorChoseDraw) {
-        // Try more aggressive fuzzy matching - check any word overlap
         const homeWords = homeNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
         const awayWords = awayNormalized.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
         const creatorWords = creatorSel.split(/[\s\-_\.]/).filter((w: string) => w.length > 1)
 
         for (const word of creatorWords) {
           if (!word || word.length < 2) continue
-          // Check if this word appears in either team name
-          if (homeNormalized.includes(word)) {
-            creatorChoseHome = true
-            break
-          }
-          if (awayNormalized.includes(word)) {
-            creatorChoseAway = true
-            break
-          }
+          if (homeNormalized.includes(word)) { creatorChoseHome = true; break }
+          if (awayNormalized.includes(word)) { creatorChoseAway = true; break }
         }
 
-        // Reverse check: check if team name words appear in creator selection
         if (!creatorChoseHome && !creatorChoseAway) {
           for (const word of homeWords) {
-            if (creatorSel.includes(word)) {
-              creatorChoseHome = true
-              break
-            }
+            if (creatorSel.includes(word)) { creatorChoseHome = true; break }
           }
           for (const word of awayWords) {
-            if (creatorSel.includes(word)) {
-              creatorChoseAway = true
-              break
-            }
+            if (creatorSel.includes(word)) { creatorChoseAway = true; break }
           }
         }
       }
 
-      console.log(`[AutoResolve] Bet ${bet.id}: creator_selection="${bet.creator_selection}", home="${home_team}", away="${away_team}"`)
-      console.log(`[AutoResolve] Normalized: creator="${creatorSel}", home="${homeNormalized}", away="${awayNormalized}"`)
-      console.log(`[AutoResolve] Result: creatorChoseHome=${creatorChoseHome}, creatorChoseAway=${creatorChoseAway}`)
+      if (!creatorChoseHome && !creatorChoseAway && !creatorChoseDraw) {
+        skipped += 1
+        results.push({
+          bet_id: bet.id,
+          status: "skipped",
+          reason: `creator_selection "${bet.creator_selection}" no coincide con equipos "${home_team}" vs "${away_team}" - fuzzy match failed`,
+        })
+        continue
+      }
 
       const homeWon = home_score > away_score
       const awayWon = away_score > home_score
@@ -153,72 +144,14 @@ export async function POST(request: NextRequest) {
       let winnerId: string | null = null
 
       if (creatorChoseDraw) {
+        // Creator predicted draw: wins if tied, loses otherwise
         winnerId = isTie ? bet.creator_id : bet.acceptor_id
-      } else if (creatorChoseHome && homeWon) {
-        winnerId = bet.creator_id
-      } else if (creatorChoseHome && awayWon) {
-        winnerId = bet.acceptor_id
-      } else if (creatorChoseAway && awayWon) {
-        winnerId = bet.creator_id
-      } else if (creatorChoseAway && homeWon) {
-        winnerId = bet.acceptor_id
-      } else if (isTie) {
-        if (!dryRun) {
-          const totalRefund = Number(bet.amount)
-          const { data: creatorWallet } = await supabase
-            .from("wallets")
-            .select("balance_fantasy")
-            .eq("user_id", bet.creator_id)
-            .single()
-
-          if (creatorWallet) {
-            await supabase
-              .from("wallets")
-              .update({ balance_fantasy: Number(creatorWallet.balance_fantasy) + totalRefund })
-              .eq("user_id", bet.creator_id)
-
-            await supabase.from("transactions").insert({
-              user_id: bet.creator_id,
-              token_type: "fantasy",
-              amount: totalRefund,
-              operation: "bet_tie_refund_auto",
-              reference_id: bet.id,
-            })
-          }
-
-          const { data: acceptorWallet } = await supabase
-            .from("wallets")
-            .select("balance_fantasy")
-            .eq("user_id", bet.acceptor_id)
-            .single()
-
-          if (acceptorWallet) {
-            await supabase
-              .from("wallets")
-              .update({ balance_fantasy: Number(acceptorWallet.balance_fantasy) + Number(bet.amount) })
-              .eq("user_id", bet.acceptor_id)
-
-            await supabase.from("transactions").insert({
-              user_id: bet.acceptor_id,
-              token_type: "fantasy",
-              amount: Number(bet.amount),
-              operation: "bet_tie_refund_auto",
-              reference_id: bet.id,
-            })
-          }
-        }
-        winnerId = "tie"
-      }
-
-      if (!creatorChoseHome && !creatorChoseAway) {
-        skipped += 1
-        results.push({
-          bet_id: bet.id,
-          status: "skipped",
-          reason: `creator_selection "${bet.creator_selection}" no coincide con equipos "${home_team}" vs "${away_team}" - fuzzy match failed`,
-        })
-        console.log(`[AutoResolve] SKIPPED: ${bet.id} - creator_selection didn't match`)
-        continue
+      } else if (creatorChoseHome) {
+        // Creator predicted home win: acceptor wins on draw or away win
+        winnerId = homeWon ? bet.creator_id : bet.acceptor_id
+      } else if (creatorChoseAway) {
+        // Creator predicted away win: acceptor wins on draw or home win
+        winnerId = awayWon ? bet.creator_id : bet.acceptor_id
       }
 
       if (!winnerId) {
@@ -234,40 +167,40 @@ export async function POST(request: NextRequest) {
           status: "would_resolve",
           winner_id: winnerId,
           final_score: `${home_score}-${away_score}`,
+          creator_selection: bet.creator_selection,
+          is_draw: isTie,
         })
         continue
       }
 
       const totalPrize = Number(bet.amount) * Number(bet.multiplier || 1) + Number(bet.amount)
 
-      if (winnerId !== "tie") {
-        const { data: winnerWallet } = await supabase
+      const { data: winnerWallet } = await supabase
+        .from("wallets")
+        .select("balance_fantasy")
+        .eq("user_id", winnerId)
+        .single()
+
+      if (winnerWallet) {
+        await supabase
           .from("wallets")
-          .select("balance_fantasy")
+          .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
           .eq("user_id", winnerId)
-          .single()
 
-        if (winnerWallet) {
-          await supabase
-            .from("wallets")
-            .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
-            .eq("user_id", winnerId)
-
-          await supabase.from("transactions").insert({
-            user_id: winnerId,
-            token_type: "fantasy",
-            amount: totalPrize,
-            operation: "bet_won_auto_resolved_disputed",
-            reference_id: bet.id,
-          })
-        }
+        await supabase.from("transactions").insert({
+          user_id: winnerId,
+          token_type: "fantasy",
+          amount: totalPrize,
+          operation: "bet_won_auto_resolved_disputed",
+          reference_id: bet.id,
+        })
       }
 
       await supabase
         .from("bets")
         .update({
           status: "resolved",
-          winner_id: winnerId === "tie" ? null : winnerId,
+          winner_id: winnerId,
           resolved_at: new Date().toISOString(),
         })
         .eq("id", bet.id)
@@ -277,13 +210,14 @@ export async function POST(request: NextRequest) {
         action: "auto_resolve_disputed_direct",
         previous_status: bet.status,
         new_status: "resolved",
-        decided_winner_id: winnerId === "tie" ? null : winnerId,
+        decided_winner_id: winnerId,
         reason: `Resolución automática basada en marcador final ${home_score}-${away_score}`,
         details: {
           final_score: `${home_score}-${away_score}`,
           creator_selection: bet.creator_selection,
           creator_chose_home: creatorChoseHome,
           creator_chose_away: creatorChoseAway,
+          creator_chose_draw: creatorChoseDraw,
         },
         decided_by: auth.userId || "system",
       })
@@ -305,7 +239,7 @@ export async function POST(request: NextRequest) {
       debug_info: {
         timestamp: new Date().toISOString(),
         bet_types_processed: "direct",
-        statuses_filtered: ["disputed", "taken"],
+        statuses_filtered: ["disputed"],
       },
     })
   } catch (error: any) {

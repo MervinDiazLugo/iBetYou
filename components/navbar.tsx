@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Wallet, User, LogOut, Menu, ChevronDown } from "lucide-react"
+import { Wallet, User, LogOut, Menu, ChevronDown, Coins } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -15,6 +15,7 @@ export function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
+  const [ibcBalance, setIbcBalance] = useState(0)
   const [menuNickname, setMenuNickname] = useState("")
   const userMenuRef = useRef<HTMLDivElement | null>(null)
   const supabase = createBrowserSupabaseClient()
@@ -33,18 +34,24 @@ export function Navbar() {
       headers.Authorization = `Bearer ${session.access_token}`
     }
 
-    const res = await fetch(`/api/wallet?user_id=${userId}`, {
-      headers
-    })
+    const [res, ibcRes] = await Promise.all([
+      fetch(`/api/wallet?user_id=${userId}`, { headers }),
+      fetch("/api/iby/wallet", { headers }),
+    ])
 
-    if (!res.ok) return
-    const data = await res.json()
-    setMenuNickname(data.user?.nickname || "")
-    if (data.wallet) {
-      setBalance({
-        fantasy: data.wallet.balance_fantasy,
-        real: data.wallet.balance_real,
-      })
+    if (res.ok) {
+      const data = await res.json()
+      setMenuNickname(data.user?.nickname || "")
+      if (data.wallet) {
+        setBalance({
+          fantasy: data.wallet.balance_fantasy,
+          real: data.wallet.balance_real,
+        })
+      }
+    }
+    if (ibcRes.ok) {
+      const d = await ibcRes.json()
+      setIbcBalance(Number(d.wallet?.balance || 0))
     }
   }
 
@@ -52,6 +59,7 @@ export function Navbar() {
     if (!user) {
       setMenuNickname("")
       setBalance({ fantasy: 0, real: 0 })
+      setIbcBalance(0)
       return
     }
 
@@ -160,13 +168,25 @@ export function Navbar() {
                         >
                           Balance de Jugadas
                         </Link>
+                        <Link
+                          href="/top-up"
+                          className="block px-3 py-2 rounded-md text-sm hover:bg-secondary"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          Recargas iBY
+                        </Link>
                       </div>
 
-                      <div className="border-t border-border p-3 text-sm">
+                      <div className="border-t border-border p-3 text-sm space-y-1.5">
                         <div className="flex items-center gap-2 text-primary font-medium">
                           <Wallet className="h-4 w-4" />
                           <span>${balance.fantasy.toFixed(2)}</span>
-                          <span className="text-xs text-muted-foreground">(Fantasy)</span>
+                          <span className="text-xs text-muted-foreground">(Fantasy Token)</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-yellow-500 font-medium">
+                          <Coins className="h-4 w-4" />
+                          <span>{ibcBalance.toFixed(2)}</span>
+                          <span className="text-xs text-muted-foreground">(iBY Coin)</span>
                         </div>
                       </div>
 
@@ -237,6 +257,9 @@ export function Navbar() {
                   </Link>
                   <Link href="/balance" className="px-4 py-2 hover:bg-secondary rounded">
                     Balance de Jugadas
+                  </Link>
+                  <Link href="/top-up" className="px-4 py-2 hover:bg-secondary rounded">
+                    Recargas iBY
                   </Link>
                 </>
               )}
