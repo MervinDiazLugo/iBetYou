@@ -5,27 +5,14 @@ import { requireBackofficeAdmin } from "@/lib/server-auth"
 function hasValidResolveSecret(request: NextRequest) {
   const expected = process.env.AUTO_RESOLVE_API_SECRET || process.env.CRON_SECRET
   if (!expected) return false
-
   const byHeader = request.headers.get("x-auto-resolve-secret")
   if (byHeader && byHeader === expected) return true
-
   const authHeader = request.headers.get("authorization")
   if (authHeader?.startsWith("Bearer ")) {
     const token = authHeader.slice(7)
     if (token === expected) return true
   }
-
   return false
-}
-
-function parseExactScore(value: string | null | undefined) {
-  const normalized = (value || "").trim()
-  const match = normalized.match(/^(\d+)\s*[-:]\s*(\d+)$/)
-  if (!match) return null
-  return {
-    home: Number(match[1]),
-    away: Number(match[2]),
-  }
 }
 
 function extractCreatorSelection(bet: {
@@ -33,27 +20,149 @@ function extractCreatorSelection(bet: {
   selection?: string | null
 }) {
   let selection = bet.creator_selection || ""
-
   if (bet.selection) {
     try {
       const parsed = JSON.parse(bet.selection)
       selection = parsed.selection || parsed.creator_selection || selection
-    } catch {
-      // Keep fallback value when selection payload is invalid JSON.
-    }
+    } catch { /* keep fallback */ }
   }
-
   return selection
 }
 
-type EventRow = {
-  id: number
-  status: string | null
-  home_score: number | null
-  away_score: number | null
-  home_team: string | null
-  away_team: string | null
+// ─── exact_score ─────────────────────────────────────────────────────────────
+
+function parseExactScore(value: string) {
+  const match = value.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/)
+  if (!match) return null
+  return { home: Number(match[1]), away: Number(match[2]) }
 }
+
+function resolveExactScore(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const parsed = parseExactScore(creatorSelection)
+  if (!parsed) return null
+  const match = event.home_score === parsed.home && event.away_score === parsed.away
+  return {
+    winnerId: match ? bet.creator_id : bet.acceptor_id,
+    reason: `exact_score: selección ${creatorSelection}, resultado ${event.home_score}-${event.away_score}`,
+  }
+}
+
+// ─── half_time ────────────────────────────────────────────────────────────────
+
+function fuzzyMatchTeam(sel: string, home: string, away: string) {
+  let choseHome = sel === home
+  let choseAway = sel === away
+
+  if (!choseHome && !choseAway) {
+    const homeWords = home.split(/[\s\-_.]/).filter((w) => w.length > 1)
+    const awayWords = away.split(/[\s\-_.]/).filter((w) => w.length > 1)
+    const selWords = sel.split(/[\s\-_.]/).filter((w) => w.length > 1)
+
+    for (const word of selWords) {
+      if (home.includes(word)) { choseHome = true; break }
+      if (away.includes(word)) { choseAway = true; break }
+    }
+    if (!choseHome && !choseAway) {
+      for (const word of homeWords) { if (sel.includes(word)) { choseHome = true; break } }
+      for (const word of awayWords) { if (sel.includes(word)) { choseAway = true; break } }
+    }
+  }
+
+  return { choseHome, choseAway }
+}
+
+function resolveHalfTime(
+  creatorSelection: string,
+  event: { home_team: string; away_team: string; metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const md = event.metadata?.match_details
+  const htHome = md?.halftime_home_score
+  const htAway = md?.halftime_away_score
+
+  if (htHome === null || htHome === undefined || htAway === null || htAway === undefined) return null
+
+  // Strip " HT" suffix from selection
+  const sel = creatorSelection.toLowerCase().trim().replace(/\s+ht$/i, "").trim()
+  const homeNorm = (event.home_team || "").toLowerCase().trim()
+  const awayNorm = (event.away_team || "").toLowerCase().trim()
+
+  const choseDraw = ["empate", "draw", "tie"].includes(sel)
+  const { choseHome, choseAway } = choseDraw ? { choseHome: false, choseAway: false } : fuzzyMatchTeam(sel, homeNorm, awayNorm)
+
+  if (!choseDraw && !choseHome && !choseAway) return null
+
+  const htHomeWon = htHome > htAway
+  const htAwayWon = htAway > htHome
+  const htDraw = htHome === htAway
+
+  let winnerId: string
+  if (choseDraw) {
+    winnerId = htDraw ? bet.creator_id : bet.acceptor_id
+  } else if (choseHome) {
+    winnerId = htHomeWon ? bet.creator_id : bet.acceptor_id
+  } else {
+    winnerId = htAwayWon ? bet.creator_id : bet.acceptor_id
+  }
+
+  return {
+    winnerId,
+    reason: `half_time: selección "${creatorSelection}", HT ${htHome}-${htAway}`,
+  }
+}
+
+// ─── first_scorer ─────────────────────────────────────────────────────────────
+
+function resolveFirstScorer(
+  creatorSelection: string,
+  event: { home_team: string; away_team: string; home_score: number; away_score: number; metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const totalGoals = (event.home_score || 0) + (event.away_score || 0)
+
+  // No goals → no first scorer possible → creator's prediction is wrong
+  if (totalGoals === 0) {
+    return {
+      winnerId: bet.acceptor_id,
+      reason: `first_scorer: partido terminó 0-0, no hubo primer anotador`,
+    }
+  }
+
+  const firstScorer = event.metadata?.match_details?.first_scorer
+  if (!firstScorer?.team) return null
+
+  const sel = creatorSelection.toLowerCase().trim()
+  const homeNorm = (event.home_team || "").toLowerCase().trim()
+  const awayNorm = (event.away_team || "").toLowerCase().trim()
+  const firstTeam = (firstScorer.team || "").toLowerCase().trim()
+
+  const { choseHome, choseAway } = fuzzyMatchTeam(sel, homeNorm, awayNorm)
+  if (!choseHome && !choseAway) return null
+
+  const firstTeamIsHome = homeNorm.includes(firstTeam) || firstTeam.includes(homeNorm) ||
+    fuzzyMatchTeam(firstTeam, homeNorm, awayNorm).choseHome
+  const firstTeamIsAway = !firstTeamIsHome
+
+  let winnerId: string
+  if (choseHome) {
+    winnerId = firstTeamIsHome ? bet.creator_id : bet.acceptor_id
+  } else {
+    winnerId = firstTeamIsAway ? bet.creator_id : bet.acceptor_id
+  }
+
+  return {
+    winnerId,
+    reason: `first_scorer: selección "${creatorSelection}", primer anotador ${firstScorer.player || "?"} (${firstScorer.team}) min.${firstScorer.minute ?? "?"}`,
+  }
+}
+
+// ─── Main handler ─────────────────────────────────────────────────────────────
+
+const RESOLVABLE_TYPES = ["exact_score", "half_time", "first_scorer"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -61,9 +170,7 @@ export async function POST(request: NextRequest) {
 
   if (!authorizedBySecret) {
     const auth = await requireBackofficeAdmin(request)
-    if (!auth.authorized) {
-      return auth.response
-    }
+    if (!auth.authorized) return auth.response
     decidedBy = auth.userId || "system"
   }
 
@@ -74,46 +181,38 @@ export async function POST(request: NextRequest) {
     const eventId = Number(body?.event_id)
     const hasEventFilter = Number.isFinite(eventId) && eventId > 0
     const dryRun = Boolean(body?.dry_run)
+    const betTypes: string[] = Array.isArray(body?.bet_types)
+      ? body.bet_types.filter((t: string) => RESOLVABLE_TYPES.includes(t))
+      : RESOLVABLE_TYPES
 
     let query = supabase
       .from("bets")
-      .select("id, event_id, creator_id, acceptor_id, amount, multiplier, status, type, bet_type, creator_selection, selection, event:events(id, status, home_score, away_score, home_team, away_team)")
-      .eq("bet_type", "exact_score")
+      .select(`
+        id, event_id, creator_id, acceptor_id, amount, multiplier,
+        status, bet_type, creator_selection, selection,
+        event:events(id, status, home_score, away_score, home_team, away_team, metadata)
+      `)
+      .in("bet_type", betTypes)
       .in("status", ["taken", "disputed"])
       .limit(2000)
 
-    if (hasEventFilter) {
-      query = query.eq("event_id", eventId)
-    }
+    if (hasEventFilter) query = query.eq("event_id", eventId)
 
     const { data: bets, error } = await query
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const results: Array<Record<string, unknown>> = []
-    let scanned = 0
-    let eligible = 0
-    let resolved = 0
-    let skipped = 0
-    let failed = 0
+    let scanned = 0, eligible = 0, resolved = 0, skipped = 0, failed = 0
 
     for (const bet of bets || []) {
       scanned += 1
-      const eventRow = (Array.isArray((bet as any).event)
-        ? (bet as any).event[0]
-        : (bet as any).event) as EventRow | null
+      const eventRow = (Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event) as any
 
-      if (!eventRow) {
-        skipped += 1
-        continue
-      }
+      if (!eventRow) { skipped += 1; continue }
 
       const isFinished = (eventRow.status || "").toLowerCase() === "finished"
       if (!isFinished || eventRow.home_score === null || eventRow.away_score === null) {
-        skipped += 1
-        continue
+        skipped += 1; continue
       }
 
       eligible += 1
@@ -121,44 +220,45 @@ export async function POST(request: NextRequest) {
         creator_selection: (bet as any).creator_selection,
         selection: (bet as any).selection,
       })
-      const parsedSelection = parseExactScore(creatorSelection)
 
-      if (!parsedSelection) {
+      const betType: string = (bet as any).bet_type
+      const betForResolver = {
+        creator_id: (bet as any).creator_id as string,
+        acceptor_id: (bet as any).acceptor_id as string,
+      }
+
+      let resolution: { winnerId: string; reason: string } | null = null
+
+      if (betType === "exact_score") {
+        resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "half_time") {
+        resolution = resolveHalfTime(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "first_scorer") {
+        resolution = resolveFirstScorer(creatorSelection, eventRow, betForResolver)
+      }
+
+      if (!resolution) {
         skipped += 1
         results.push({
           bet_id: (bet as any).id,
-          event_id: (bet as any).event_id,
+          bet_type: betType,
           status: "skipped",
-          reason: `creator_selection invalida: ${creatorSelection || "(vacía)"}`,
+          reason: `No se pudo determinar ganador para "${creatorSelection}"`,
         })
         continue
       }
 
-      const creatorMatch = eventRow.home_score === parsedSelection.home && eventRow.away_score === parsedSelection.away
-      const winnerId = creatorMatch ? (bet as any).creator_id : (bet as any).acceptor_id
-
-      if (!winnerId) {
-        failed += 1
-        results.push({
-          bet_id: (bet as any).id,
-          event_id: (bet as any).event_id,
-          status: "failed",
-          reason: "No se pudo determinar winner_id",
-        })
-        continue
-      }
-
-      const totalPrize = Number((bet as any).amount || 0) * Number((bet as any).multiplier || 0) + Number((bet as any).amount || 0)
+      const { winnerId, reason } = resolution
+      const totalPrize = Number((bet as any).amount || 0) * Number((bet as any).multiplier || 1) + Number((bet as any).amount || 0)
 
       if (dryRun) {
         resolved += 1
         results.push({
           bet_id: (bet as any).id,
-          event_id: (bet as any).event_id,
+          bet_type: betType,
           status: "would_resolve",
           winner_id: winnerId,
-          creator_selection: creatorSelection,
-          final_score: `${eventRow.home_score}-${eventRow.away_score}`,
+          reason,
           total_prize: totalPrize,
         })
         continue
@@ -166,11 +266,7 @@ export async function POST(request: NextRequest) {
 
       const { data: updatedBet, error: updateError } = await supabase
         .from("bets")
-        .update({
-          status: "resolved",
-          winner_id: winnerId,
-          resolved_at: new Date().toISOString(),
-        })
+        .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
         .eq("id", (bet as any).id)
         .in("status", ["taken", "disputed"])
         .is("resolved_at", null)
@@ -179,12 +275,7 @@ export async function POST(request: NextRequest) {
 
       if (updateError || !updatedBet) {
         failed += 1
-        results.push({
-          bet_id: (bet as any).id,
-          event_id: (bet as any).event_id,
-          status: "failed",
-          reason: updateError?.message || "No se pudo actualizar apuesta",
-        })
+        results.push({ bet_id: (bet as any).id, status: "failed", reason: updateError?.message || "No se pudo actualizar" })
         continue
       }
 
@@ -196,12 +287,7 @@ export async function POST(request: NextRequest) {
 
       if (!winnerWallet) {
         failed += 1
-        results.push({
-          bet_id: (bet as any).id,
-          event_id: (bet as any).event_id,
-          status: "failed",
-          reason: "Wallet del ganador no encontrada",
-        })
+        results.push({ bet_id: (bet as any).id, status: "failed", reason: "Wallet del ganador no encontrada" })
         continue
       }
 
@@ -214,24 +300,22 @@ export async function POST(request: NextRequest) {
         user_id: winnerId,
         token_type: "fantasy",
         amount: totalPrize,
-        operation: "bet_won_auto_resolved_bulk_exact_score",
+        operation: `bet_won_auto_resolved_${betType}`,
         reference_id: (bet as any).id,
       })
 
       await supabase.from("arbitration_decisions").insert({
         bet_id: (bet as any).id,
-        action: "auto_resolve_finished_exact_score",
+        action: `auto_resolve_finished_${betType}`,
         previous_status: (bet as any).status,
         new_status: "resolved",
         decided_winner_id: winnerId,
-        reason: `Resolucion automatica exact_score al finalizar evento (${eventRow.home_score}-${eventRow.away_score})`,
+        reason,
         details: {
+          bet_type: betType,
           creator_selection: creatorSelection,
           final_score: `${eventRow.home_score}-${eventRow.away_score}`,
           event_id: (bet as any).event_id,
-          event_home_team: eventRow.home_team,
-          event_away_team: eventRow.away_team,
-          mode: "bulk_exact_score_finished",
         },
         decided_by: decidedBy,
         source: "system",
@@ -240,11 +324,10 @@ export async function POST(request: NextRequest) {
       resolved += 1
       results.push({
         bet_id: (bet as any).id,
-        event_id: (bet as any).event_id,
+        bet_type: betType,
         status: "resolved",
         winner_id: winnerId,
-        creator_selection: creatorSelection,
-        final_score: `${eventRow.home_score}-${eventRow.away_score}`,
+        reason,
         total_prize: totalPrize,
       })
     }
@@ -252,6 +335,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       dry_run: dryRun,
+      bet_types: betTypes,
       scanned,
       eligible,
       resolved,
@@ -260,7 +344,7 @@ export async function POST(request: NextRequest) {
       results,
     })
   } catch (error: any) {
-    console.error("Bulk auto-resolve exact_score error:", error)
+    console.error("Auto-resolve finished error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
