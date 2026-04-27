@@ -238,6 +238,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const totalPrize = Number(bet.amount) * Number(bet.multiplier) + Number(bet.amount)
 
+    // Update bet first — if this fails, no money moves
+    const confirmUpdate = {
+      status: "resolved",
+      winner_id: winnerUserId,
+      resolved_at: new Date().toISOString(),
+      creator_claimed: isCreator ? true : bet.creator_claimed,
+      acceptor_claimed: isAcceptor ? true : bet.acceptor_claimed,
+    }
+
+    const { data: resolvedBet, error: resolveError } = await supabase
+      .from("bets")
+      .update(confirmUpdate)
+      .eq("id", betId)
+      .select("*")
+      .single()
+
+    if (resolveError || !resolvedBet) {
+      return NextResponse.json({ error: resolveError?.message || "No se pudo confirmar resultado" }, { status: 500 })
+    }
+
+    // Bet confirmed resolved — now pay winner
     const { data: winnerWallet } = await supabase
       .from("wallets")
       .select("balance_fantasy")
@@ -260,25 +281,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       operation: "bet_won",
       reference_id: betId,
     })
-
-    const confirmUpdate = {
-      status: "resolved",
-      winner_id: winnerUserId,
-      resolved_at: new Date().toISOString(),
-      creator_claimed: isCreator ? true : bet.creator_claimed,
-      acceptor_claimed: isAcceptor ? true : bet.acceptor_claimed,
-    }
-
-    const { data: resolvedBet, error: resolveError } = await supabase
-      .from("bets")
-      .update(confirmUpdate)
-      .eq("id", betId)
-      .select("*")
-      .single()
-
-    if (resolveError || !resolvedBet) {
-      return NextResponse.json({ error: resolveError?.message || "No se pudo confirmar resultado" }, { status: 500 })
-    }
 
     await logDecision(supabase, {
       bet_id: betId,

@@ -130,7 +130,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Create bet
+    // Deduct from wallet first — if this fails, no bet is created
+    const { error: walletUpdateError } = await supabase
+      .from("wallets")
+      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
+      .eq("user_id", user.id)
+
+    if (walletUpdateError) {
+      return NextResponse.json(
+        { error: "Failed to update wallet" },
+        { status: 400 }
+      )
+    }
+
+    // Create bet after confirmed deduction
     const isAsymmetric = betType === "exact_score"
 
     const { data: bet, error: betError } = await supabase
@@ -151,21 +164,13 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
+      // Rollback wallet deduction
+      await supabase
+        .from("wallets")
+        .update({ balance_fantasy: wallet.balance_fantasy })
+        .eq("user_id", user.id)
       return NextResponse.json(
         { error: `Failed to create bet: ${betError.message}` },
-        { status: 400 }
-      )
-    }
-
-    // Deduct from wallet
-    const { error: walletUpdateError } = await supabase
-      .from("wallets")
-      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
-      .eq("user_id", user.id)
-
-    if (walletUpdateError) {
-      return NextResponse.json(
-        { error: "Failed to update wallet" },
         { status: 400 }
       )
     }

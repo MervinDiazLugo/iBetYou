@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { createNotifications } from "@/lib/notifications"
 
 async function logDecision(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -77,6 +78,7 @@ export async function POST(request: NextRequest) {
     const results: Array<Record<string, unknown>> = []
     let resolved = 0
     let skipped = 0
+    let failed = 0
 
     for (const bet of bets || []) {
       const eventRow = Array.isArray((bet as any).event)
@@ -175,6 +177,19 @@ export async function POST(request: NextRequest) {
 
       const totalPrize = Number(bet.amount) * Number(bet.multiplier || 1) + Number(bet.amount)
 
+      // Update bet first — if this fails, no money moves
+      const { error: betUpdateError } = await supabase
+        .from("bets")
+        .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
+        .eq("id", bet.id)
+
+      if (betUpdateError) {
+        failed += 1
+        results.push({ bet_id: bet.id, status: "failed", reason: betUpdateError.message })
+        continue
+      }
+
+      // Bet confirmed — now pay winner
       const { data: winnerWallet } = await supabase
         .from("wallets")
         .select("balance_fantasy")
@@ -196,15 +211,6 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      await supabase
-        .from("bets")
-        .update({
-          status: "resolved",
-          winner_id: winnerId,
-          resolved_at: new Date().toISOString(),
-        })
-        .eq("id", bet.id)
-
       await logDecision(supabase, {
         bet_id: bet.id,
         action: "auto_resolve_disputed_direct",
@@ -222,6 +228,12 @@ export async function POST(request: NextRequest) {
         decided_by: auth.userId || "system",
       })
 
+      const loserId = winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
+      await createNotifications([
+        { userId: winnerId, type: "bet_resolved_win", title: "¡Ganaste la apuesta!", body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet.id },
+        { userId: loserId, type: "bet_resolved_loss", title: "Apuesta resuelta", body: "Tu apuesta fue resuelta. ¡Suerte la próxima!", betId: bet.id },
+      ], supabase)
+
       resolved += 1
       results.push({
         bet_id: bet.id,
@@ -235,6 +247,7 @@ export async function POST(request: NextRequest) {
       success: true,
       resolved,
       skipped,
+      failed,
       results,
       debug_info: {
         timestamp: new Date().toISOString(),

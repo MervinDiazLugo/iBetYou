@@ -180,28 +180,29 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
 
-    // Update the bet to taken
+    // Deduct from taker's wallet first — if this fails, bet stays open
+    const { error: walletError } = await supabase
+      .from("wallets")
+      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
+      .eq("user_id", effectiveUserId)
+
+    if (walletError) {
+      return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
+    }
+
+    // Mark bet as taken after confirmed deduction
     const { data: updatedBet, error: updateError } = await supabase
       .from("bets")
-      .update({
-        status: 'taken',
-        acceptor_id: effectiveUserId,
-      })
+      .update({ status: 'taken', acceptor_id: effectiveUserId })
       .eq("id", betId)
       .select()
       .single()
 
     if (updateError) {
+      // Rollback wallet deduction
+      await supabase.from("wallets").update({ balance_fantasy: wallet.balance_fantasy }).eq("user_id", effectiveUserId)
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
-
-    // Deduct from taker's wallet
-    await supabase
-      .from("wallets")
-      .update({
-        balance_fantasy: wallet.balance_fantasy - totalNeeded,
-      })
-      .eq("user_id", effectiveUserId)
 
     // Record transaction for taker
     await supabase.from("transactions").insert({

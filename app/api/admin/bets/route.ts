@@ -5,6 +5,7 @@ import { createNotifications } from "@/lib/notifications"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
+const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
 const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 const PENDING_TIMEOUT_MS = 30 * 60 * 1000
 
@@ -639,17 +640,29 @@ export async function POST(request: NextRequest) {
     const needsFirstScorerData = bet.bet_type === 'first_scorer'
       && !firstScorerTeam
 
+    function toInt(v: unknown): number | null {
+      if (v === null || v === undefined) return null
+      if (typeof v === 'object' && v !== null) {
+        const r = v as Record<string, unknown>
+        if (r.total !== undefined) return toInt(r.total)
+      }
+      const n = Number(v)
+      return Number.isFinite(n) ? Math.trunc(n) : null
+    }
+
     // Prefer our stored event result; only hit external API if required for the current bet type.
     if (needsFullScore || needsHalftimeScore) {
       scoreSource = 'external_api'
       let apiUrl = ''
-      
+
       if (sportPrefix === 'football') {
         apiUrl = `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
+      } else if (sportPrefix === 'basketball') {
+        apiUrl = `${API_BASKETBALL_URL}/games?id=${externalNumericId}`
       } else if (sportPrefix === 'baseball') {
         apiUrl = `${API_BASEBALL_URL}/games?id=${externalNumericId}`
       } else {
-        apiUrl = `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
+        return NextResponse.json({ error: `Deporte no soportado: ${sportPrefix}` }, { status: 400 })
       }
 
       const apiResponse = await fetch(apiUrl, {
@@ -668,16 +681,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'No fixture data found' }, { status: 404 })
       }
 
-      homeScore = fixture.goals?.home ?? fixture.scores?.home
-      awayScore = fixture.goals?.away ?? fixture.scores?.away
-      const halftimeHomeRaw = fixture.score?.halftime?.home ?? fixture.scores?.halftime?.home
-      const halftimeAwayRaw = fixture.score?.halftime?.away ?? fixture.scores?.halftime?.away
-      halftimeHomeScore = halftimeHomeRaw !== null && halftimeHomeRaw !== undefined && Number.isFinite(Number(halftimeHomeRaw))
-        ? Math.trunc(Number(halftimeHomeRaw))
-        : halftimeHomeScore
-      halftimeAwayScore = halftimeAwayRaw !== null && halftimeAwayRaw !== undefined && Number.isFinite(Number(halftimeAwayRaw))
-        ? Math.trunc(Number(halftimeAwayRaw))
-        : halftimeAwayScore
+      homeScore = toInt(fixture.goals?.home ?? fixture.scores?.home ?? fixture.score?.home)
+      awayScore = toInt(fixture.goals?.away ?? fixture.scores?.away ?? fixture.score?.away)
+      const halftimeHomeRaw = fixture.score?.halftime?.home ?? fixture.scores?.halftime?.home ?? null
+      const halftimeAwayRaw = fixture.score?.halftime?.away ?? fixture.scores?.halftime?.away ?? null
+      halftimeHomeScore = toInt(halftimeHomeRaw) ?? halftimeHomeScore
+      halftimeAwayScore = toInt(halftimeAwayRaw) ?? halftimeAwayScore
 
       const nextMetadata = {
         ...currentMetadata,
@@ -689,15 +698,13 @@ export async function POST(request: NextRequest) {
         },
       }
 
+      const rawStatus = fixture.fixture?.status?.short ?? fixture.status?.short ?? ''
+      const newEventStatus = ['FT', 'AOT', 'FIN'].includes(rawStatus) ? 'finished'
+        : rawStatus === 'NS' ? 'scheduled' : 'live'
+
       await supabase
         .from('events')
-        .update({ 
-          home_score: homeScore, 
-          away_score: awayScore,
-          status: fixture.fixture.status.short === 'FT' ? 'finished' : 
-                  fixture.fixture.status.short === 'NS' ? 'scheduled' : 'live',
-          metadata: nextMetadata,
-        })
+        .update({ home_score: homeScore, away_score: awayScore, status: newEventStatus, metadata: nextMetadata })
         .eq('id', event_id)
     }
 
@@ -753,522 +760,175 @@ export async function POST(request: NextRequest) {
       } catch { /* empty */ }
     }
 
-    let winner_id: string | null = null
-    let conflictReason: string | null = null
+    // ── Phase 1: determine outcome (pure logic, no wallet ops) ──────────────
+    type Outcome =
+      | { kind: 'winner'; winnerId: string }
+      | { kind: 'tie'; creatorRefund: number; acceptorRefund: number }
+      | { kind: 'split'; creatorRefund: number; acceptorRefund: number }
+      | { kind: 'conflict'; reason: string }
+
+    let outcome: Outcome
     let resolutionMethod = 'auto'
 
+    const creatorStake = Number(bet.amount)
+    const acceptorStake = bet.bet_type === 'exact_score'
+      ? Number(bet.amount) * Number(bet.multiplier)
+      : Number(bet.amount)
+
     if (bet.bet_type === 'direct') {
-      // En apuesta DIRECTA, comparar creator_selection con los equipos
-      const creatorSelectionNormalized = (creatorSelection || '').toLowerCase().trim()
-      const homeTeamNormalized = (event.home_team || '').toLowerCase().trim()
-      const awayTeamNormalized = (event.away_team || '').toLowerCase().trim()
-      
-      // Determinar qué equipo eligió el creador
-      const creatorChoseHome = creatorSelectionNormalized === homeTeamNormalized
-      const creatorChoseAway = creatorSelectionNormalized === awayTeamNormalized
-      const creatorChoseDraw = ['empate', 'draw', 'tie'].includes(creatorSelectionNormalized)
+      const selNorm = (creatorSelection || '').toLowerCase().trim()
+      const homeNorm = (event.home_team || '').toLowerCase().trim()
+      const awayNorm = (event.away_team || '').toLowerCase().trim()
+      const choseDraw = ['empate', 'draw', 'tie'].includes(selNorm)
+      const choseHome = !choseDraw && selNorm === homeNorm
+      const choseAway = !choseDraw && selNorm === awayNorm
 
-      if (!creatorChoseHome && !creatorChoseAway && !creatorChoseDraw) {
-        // creator_selection no coincide con ningún equipo
-        conflictReason = `creator_selection "${creatorSelection}" no coincide con equipos "${event.home_team}" vs "${event.away_team}"`
+      if (!choseDraw && !choseHome && !choseAway) {
+        outcome = { kind: 'conflict', reason: `creator_selection "${creatorSelection}" no coincide con equipos "${event.home_team}" vs "${event.away_team}"` }
       } else {
-        // Determinar ganador
-        const homeWon = homeScore > awayScore
-        const awayWon = awayScore > homeScore
-        const isTie = homeScore === awayScore
+        const homeWon = (homeScore as number) > (awayScore as number)
+        const awayWon = (awayScore as number) > (homeScore as number)
+        const isDraw = homeScore === awayScore
 
-        if (creatorChoseDraw) {
-          if (isTie) {
-            winner_id = bet.creator_id
-          } else {
-            winner_id = bet.acceptor_id
-          }
-        } else if (creatorChoseHome) {
-          // Creator aposta por HOME
-          if (homeWon) {
-            winner_id = bet.creator_id
-          } else if (awayWon) {
-            winner_id = bet.acceptor_id
-          } else {
-            // Empate
-            if (event.sport === 'baseball') {
-              conflictReason = 'Empate en béisbol - requiere revisión'
-            } else {
-              // Devolver dinero a ambos
-              const totalRefund = bet.amount
-              const { data: creatorWallet } = await supabase
-                .from('wallets')
-                .select('balance_fantasy')
-                .eq('user_id', bet.creator_id)
-                .single()
-              
-              if (creatorWallet) {
-                await supabase
-                  .from('wallets')
-                  .update({ balance_fantasy: creatorWallet.balance_fantasy + totalRefund })
-                  .eq('user_id', bet.creator_id)
-                
-                await supabase.from('transactions').insert({
-                  user_id: bet.creator_id,
-                  token_type: 'fantasy',
-                  amount: totalRefund,
-                  operation: 'bet_tie_refund',
-                  reference_id: bet_id,
-                })
-              }
-
-              const { data: acceptorWallet } = await supabase
-                .from('wallets')
-                .select('balance_fantasy')
-                .eq('user_id', bet.acceptor_id)
-                .single()
-              
-              if (acceptorWallet) {
-                const acceptorStake = bet.amount
-                await supabase
-                  .from('wallets')
-                  .update({ balance_fantasy: acceptorWallet.balance_fantasy + acceptorStake })
-                  .eq('user_id', bet.acceptor_id)
-                
-                await supabase.from('transactions').insert({
-                  user_id: bet.acceptor_id,
-                  token_type: 'fantasy',
-                  amount: acceptorStake,
-                  operation: 'bet_tie_refund',
-                  reference_id: bet_id,
-                })
-              }
-
-              winner_id = 'tie'
-            }
-          }
-        } else if (creatorChoseAway) {
-          // Creator apuesta por AWAY
-          if (awayWon) {
-            winner_id = bet.creator_id
-          } else if (homeWon) {
-            winner_id = bet.acceptor_id
-          } else {
-            // Empate
-            if (event.sport === 'baseball') {
-              conflictReason = 'Empate en béisbol - requiere revisión'
-            } else {
-              // Devolver dinero a ambos
-              const totalRefund = bet.amount
-              const { data: creatorWallet } = await supabase
-                .from('wallets')
-                .select('balance_fantasy')
-                .eq('user_id', bet.creator_id)
-                .single()
-              
-              if (creatorWallet) {
-                await supabase
-                  .from('wallets')
-                  .update({ balance_fantasy: creatorWallet.balance_fantasy + totalRefund })
-                  .eq('user_id', bet.creator_id)
-                
-                await supabase.from('transactions').insert({
-                  user_id: bet.creator_id,
-                  token_type: 'fantasy',
-                  amount: totalRefund,
-                  operation: 'bet_tie_refund',
-                  reference_id: bet_id,
-                })
-              }
-
-              const { data: acceptorWallet } = await supabase
-                .from('wallets')
-                .select('balance_fantasy')
-                .eq('user_id', bet.acceptor_id)
-                .single()
-              
-              if (acceptorWallet) {
-                const acceptorStake = bet.amount
-                await supabase
-                  .from('wallets')
-                  .update({ balance_fantasy: acceptorWallet.balance_fantasy + acceptorStake })
-                  .eq('user_id', bet.acceptor_id)
-                
-                await supabase.from('transactions').insert({
-                  user_id: bet.acceptor_id,
-                  token_type: 'fantasy',
-                  amount: acceptorStake,
-                  operation: 'bet_tie_refund',
-                  reference_id: bet_id,
-                })
-              }
-
-              winner_id = 'tie'
-            }
-          }
+        if (choseDraw) {
+          outcome = { kind: 'winner', winnerId: isDraw ? bet.creator_id : bet.acceptor_id }
+        } else if (choseHome) {
+          if (homeWon) outcome = { kind: 'winner', winnerId: bet.creator_id }
+          else if (awayWon) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+          else if (event.sport === 'baseball') outcome = { kind: 'conflict', reason: 'Empate en béisbol - requiere revisión' }
+          else outcome = { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
+        } else {
+          if (awayWon) outcome = { kind: 'winner', winnerId: bet.creator_id }
+          else if (homeWon) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+          else if (event.sport === 'baseball') outcome = { kind: 'conflict', reason: 'Empate en béisbol - requiere revisión' }
+          else outcome = { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
         }
       }
     } else if (bet.bet_type === 'exact_score') {
-      const creatorParts = creatorSelection?.split('-') || []
-      const creatorHome = parseInt(creatorParts[0]) || 0
-      const creatorAway = parseInt(creatorParts[1]) || 0
-
-      const creatorMatch = homeScore === creatorHome && awayScore === creatorAway
-
-      // For asymmetric bets (exact_score), acceptor bets AGAINST the creator's score
-      // For symmetric bets, acceptor has their own score selection
+      const [ch, ca] = (creatorSelection || '').split('-').map(Number)
+      const creatorMatch = homeScore === ch && awayScore === ca
       const isAsymmetric = bet.type === 'asymmetric'
-      
+
       if (isAsymmetric) {
-        // Asymmetric: creator chose a score, acceptor bet against it
-        // If creator matches, creator wins. Otherwise, acceptor wins (bet against creator)
-        if (creatorMatch) {
-          winner_id = bet.creator_id
-        } else {
-          // Creator didn't match - acceptor wins (they bet against the score)
-          winner_id = bet.acceptor_id
-        }
+        outcome = { kind: 'winner', winnerId: creatorMatch ? bet.creator_id : bet.acceptor_id }
       } else {
-        // Symmetric: both have specific score selections
-        const acceptorParts = acceptorSelection?.split('-') || []
-        const acceptorHome = parseInt(acceptorParts[0]) || 0
-        const acceptorAway = parseInt(acceptorParts[1]) || 0
-        const acceptorMatch = homeScore === acceptorHome && awayScore === acceptorAway
-
-        if (creatorMatch && !acceptorMatch) {
-          winner_id = bet.creator_id
-        } else if (acceptorMatch && !creatorMatch) {
-          winner_id = bet.acceptor_id
-        } else if (!creatorMatch && !acceptorMatch) {
-          // Nadie acertó: dinero devuelto o retenido por casa
-          if (!force_resolve) {
-            conflictReason = 'Ningún usuario acertó el score exacto'
-          } else {
-            // Admin force: dinero devuelto
-            resolutionMethod = 'admin_force'
-            const totalRefund = bet.amount
-            const { data: creatorWallet } = await supabase
-              .from('wallets')
-              .select('balance_fantasy')
-              .eq('user_id', bet.creator_id)
-              .single()
-            
-            if (creatorWallet) {
-              await supabase
-                .from('wallets')
-                .update({ balance_fantasy: creatorWallet.balance_fantasy + totalRefund })
-                .eq('user_id', bet.creator_id)
-              
-              await supabase.from('transactions').insert({
-                user_id: bet.creator_id,
-                token_type: 'fantasy',
-                amount: totalRefund,
-                operation: 'bet_refund_admin_decision',
-                reference_id: bet_id,
-              })
-            }
-
-            const { data: acceptorWallet } = await supabase
-              .from('wallets')
-              .select('balance_fantasy')
-              .eq('user_id', bet.acceptor_id)
-              .single()
-            
-            if (acceptorWallet) {
-              const acceptorStake = bet.amount * bet.multiplier
-              await supabase
-                .from('wallets')
-                .update({ balance_fantasy: acceptorWallet.balance_fantasy + acceptorStake })
-                .eq('user_id', bet.acceptor_id)
-              
-              await supabase.from('transactions').insert({
-                user_id: bet.acceptor_id,
-                token_type: 'fantasy',
-                amount: acceptorStake,
-                operation: 'bet_refund_admin_decision',
-                reference_id: bet_id,
-              })
-            }
-
-            winner_id = 'split'
-          }
-        } else {
-          // Ambos acertaron
-          if (!force_resolve) {
-            conflictReason = 'Ambos acertaron el score - requiere revisión'
-          } else {
-            resolutionMethod = 'admin_force'
-            // Dinero devuelto a ambos
-            const totalRefund = bet.amount
-            const { data: creatorWallet } = await supabase
-              .from('wallets')
-              .select('balance_fantasy')
-              .eq('user_id', bet.creator_id)
-              .single()
-            
-            if (creatorWallet) {
-              await supabase
-                .from('wallets')
-                .update({ balance_fantasy: creatorWallet.balance_fantasy + totalRefund })
-                .eq('user_id', bet.creator_id)
-              
-              await supabase.from('transactions').insert({
-                user_id: bet.creator_id,
-                token_type: 'fantasy',
-                amount: totalRefund,
-                operation: 'bet_refund_admin_decision',
-                reference_id: bet_id,
-              })
-            }
-
-            const { data: acceptorWallet } = await supabase
-              .from('wallets')
-              .select('balance_fantasy')
-              .eq('user_id', bet.acceptor_id)
-              .single()
-            
-            if (acceptorWallet) {
-              const acceptorStake = bet.amount * bet.multiplier
-              await supabase
-                .from('wallets')
-                .update({ balance_fantasy: acceptorWallet.balance_fantasy + acceptorStake })
-                .eq('user_id', bet.acceptor_id)
-              
-              await supabase.from('transactions').insert({
-                user_id: bet.acceptor_id,
-                token_type: 'fantasy',
-                amount: acceptorStake,
-                operation: 'bet_refund_admin_decision',
-                reference_id: bet_id,
-              })
-            }
-
-            winner_id = 'split'
-          }
-        }
+        const [ah, aa] = (acceptorSelection || '').split('-').map(Number)
+        const acceptorMatch = homeScore === ah && awayScore === aa
+        if (creatorMatch && !acceptorMatch) outcome = { kind: 'winner', winnerId: bet.creator_id }
+        else if (acceptorMatch && !creatorMatch) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+        else if (!force_resolve) outcome = { kind: 'conflict', reason: creatorMatch ? 'Ambos acertaron el score - requiere revisión' : 'Ningún usuario acertó el score exacto' }
+        else { resolutionMethod = 'admin_force'; outcome = { kind: 'split', creatorRefund: creatorStake, acceptorRefund: acceptorStake } }
       }
     } else if (bet.bet_type === 'half_time') {
       if (halftimeHomeScore === null || halftimeAwayScore === null) {
-        if (!force_resolve) {
-          conflictReason = 'Marcador de medio tiempo no disponible'
-        } else {
-          resolutionMethod = 'admin_force'
-          winner_id = null // Requiere decisión manual
-        }
+        outcome = force_resolve ? { kind: 'conflict', reason: 'Marcador de medio tiempo no disponible incluso con force_resolve' } : { kind: 'conflict', reason: 'Marcador de medio tiempo no disponible' }
       } else {
-        const creatorNormalized = normalizeSelectionValue(creatorSelection)
-        const acceptorNormalized = normalizeSelectionValue(acceptorSelection)
+        const expected = halftimeHomeScore > halftimeAwayScore
+          ? `${event.home_team.toLowerCase()} ht`
+          : halftimeAwayScore > halftimeHomeScore
+            ? `${event.away_team.toLowerCase()} ht`
+            : 'empate ht'
+        const creatorMatch = normalizeSelectionValue(creatorSelection) === expected
+        const acceptorExplicit = !!normalizeSelectionValue(acceptorSelection)
+        const acceptorMatch = acceptorExplicit && normalizeSelectionValue(acceptorSelection) === expected
 
-        let expectedSelection = ''
-        if (halftimeHomeScore > halftimeAwayScore) {
-          expectedSelection = `${event.home_team.toLowerCase()} ht`
-        } else if (halftimeAwayScore > halftimeHomeScore) {
-          expectedSelection = `${event.away_team.toLowerCase()} ht`
-        } else {
-          expectedSelection = 'empate ht'
-        }
-
-        const creatorMatch = creatorNormalized === expectedSelection
-        const acceptorHasExplicitSelection = !!acceptorNormalized
-        const acceptorMatch = acceptorHasExplicitSelection && acceptorNormalized === expectedSelection
-
-        if (creatorMatch && !acceptorMatch) {
-          winner_id = bet.creator_id
-        } else if (!creatorMatch && !acceptorHasExplicitSelection) {
-          // Acceptor bet "contra creador" — wins when creator loses
-          winner_id = bet.acceptor_id
-        } else if (acceptorMatch && !creatorMatch) {
-          winner_id = bet.acceptor_id
-        } else if (!creatorMatch && !acceptorMatch) {
-          if (!force_resolve) {
-            conflictReason = 'Ningún usuario acertó el resultado de medio tiempo'
-          } else {
-            resolutionMethod = 'admin_force'
-            winner_id = 'split'
-          }
-        } else {
-          if (!force_resolve) {
-            conflictReason = 'Ambos acertaron el resultado de medio tiempo - requiere revisión'
-          } else {
-            resolutionMethod = 'admin_force'
-            winner_id = 'split'
-          }
-        }
+        if (creatorMatch && !acceptorMatch) outcome = { kind: 'winner', winnerId: bet.creator_id }
+        else if (!creatorMatch && !acceptorExplicit) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+        else if (acceptorMatch && !creatorMatch) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+        else if (!force_resolve) outcome = { kind: 'conflict', reason: creatorMatch ? 'Ambos acertaron el medio tiempo - requiere revisión' : 'Ningún usuario acertó el medio tiempo' }
+        else { resolutionMethod = 'admin_force'; outcome = { kind: 'split', creatorRefund: creatorStake, acceptorRefund: acceptorStake } }
       }
     } else if (bet.bet_type === 'first_scorer') {
       if (!firstScorerTeam) {
-        if (!force_resolve) {
-          conflictReason = 'No se pudo determinar el primer anotador'
-        } else {
-          resolutionMethod = 'admin_force'
-          winner_id = null
-        }
+        outcome = { kind: 'conflict', reason: 'No se pudo determinar el primer anotador' }
       } else {
-        const creatorNormalized = normalizeSelectionValue(creatorSelection)
-        const acceptorNormalized = normalizeSelectionValue(acceptorSelection)
-        const firstTeamNormalized = normalizeSelectionValue(firstScorerTeam)
-        const firstPlayerNormalized = normalizeSelectionValue(firstScorerPlayer)
+        const firstTeamNorm = normalizeSelectionValue(firstScorerTeam)
+        const firstPlayerNorm = normalizeSelectionValue(firstScorerPlayer)
+        const matches = (sel: string) => !!sel && (sel === firstTeamNorm || (!!firstPlayerNorm && sel === firstPlayerNorm))
+        const creatorMatch = matches(normalizeSelectionValue(creatorSelection))
+        const acceptorExplicit = !!normalizeSelectionValue(acceptorSelection)
+        const acceptorMatch = acceptorExplicit && matches(normalizeSelectionValue(acceptorSelection))
 
-        const selectionMatchesFirstScorer = (selection: string) => {
-          if (!selection) return false
-          return selection === firstTeamNormalized || (!!firstPlayerNormalized && selection === firstPlayerNormalized)
-        }
-
-        const creatorMatch = selectionMatchesFirstScorer(creatorNormalized)
-        const acceptorHasExplicitSelection = !!acceptorNormalized
-        const acceptorMatch = acceptorHasExplicitSelection && selectionMatchesFirstScorer(acceptorNormalized)
-
-        if (creatorMatch && !acceptorMatch) {
-          winner_id = bet.creator_id
-        } else if (!creatorMatch && !acceptorHasExplicitSelection) {
-          // Acceptor bet "contra creador" — wins when creator loses
-          winner_id = bet.acceptor_id
-        } else if (acceptorMatch && !creatorMatch) {
-          winner_id = bet.acceptor_id
-        } else if (!creatorMatch && !acceptorMatch) {
-          if (!force_resolve) {
-            conflictReason = 'Ningún usuario acertó el primer anotador'
-          } else {
-            resolutionMethod = 'admin_force'
-            winner_id = 'split'
-          }
-        } else {
-          if (!force_resolve) {
-            conflictReason = 'Ambos acertaron el primer anotador - requiere revisión'
-          } else {
-            resolutionMethod = 'admin_force'
-            winner_id = 'split'
-          }
-        }
+        if (creatorMatch && !acceptorMatch) outcome = { kind: 'winner', winnerId: bet.creator_id }
+        else if (!creatorMatch && !acceptorExplicit) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+        else if (acceptorMatch && !creatorMatch) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+        else if (!force_resolve) outcome = { kind: 'conflict', reason: creatorMatch ? 'Ambos acertaron el primer anotador - requiere revisión' : 'Ningún usuario acertó el primer anotador' }
+        else { resolutionMethod = 'admin_force'; outcome = { kind: 'split', creatorRefund: creatorStake, acceptorRefund: acceptorStake } }
       }
     } else {
-      conflictReason = `Tipo de apuesta ${bet.bet_type} no soportado para auto-resolución`
+      outcome = { kind: 'conflict', reason: `Tipo de apuesta ${bet.bet_type} no soportado para auto-resolución` }
     }
 
-    // Si hay conflicto y no hay force_resolve, cambiar a DISPUTED (no contested)
-    if (conflictReason && !force_resolve) {
-      await supabase
-        .from('bets')
-        .update({ status: 'disputed' })
-        .eq('id', bet_id)
-
+    // ── Phase 2: handle conflict → mark disputed and return ─────────────────
+    if (outcome.kind === 'conflict') {
+      await supabase.from('bets').update({ status: 'disputed' }).eq('id', bet_id)
       await logArbitrationDecision(supabase, {
-        bet_id,
-        action: 'auto_resolve_disputed',
-        previous_status: previousStatus,
-        new_status: 'disputed',
-        reason: conflictReason,
-        details: {
-          homeScore,
-          awayScore,
-          halftimeHomeScore,
-          halftimeAwayScore,
-          firstScorerTeam,
-          firstScorerPlayer,
-          firstScorerMinute,
-          bet_type: bet.bet_type,
-        },
-        decided_by: decidedBy,
-        source: 'auto',
+        bet_id, action: 'auto_resolve_disputed',
+        previous_status: previousStatus, new_status: 'disputed',
+        reason: outcome.reason,
+        details: { homeScore, awayScore, halftimeHomeScore, halftimeAwayScore, firstScorerTeam, bet_type: bet.bet_type },
+        decided_by: decidedBy, source: 'auto',
       })
-
-      return NextResponse.json({ 
-        success: false, 
-        error: conflictReason,
-        homeScore,
-        awayScore,
-        score_source: scoreSource,
-        pending_approval: false,
-      })
+      return NextResponse.json({ success: false, error: outcome.reason, homeScore, awayScore, score_source: scoreSource, pending_approval: false })
     }
 
-    // RESOLVER AHORA (no pending_resolution)
-    if (!winner_id) {
-      return NextResponse.json({ 
-        error: 'No se pudo determinar ganador incluso con force_resolve', 
-        status: 400 
-      })
+    // ── Phase 3: update bet status FIRST ────────────────────────────────────
+    const winnerId = outcome.kind === 'winner' ? outcome.winnerId : null
+    const { error: betUpdateError } = await supabase
+      .from('bets')
+      .update({ status: 'resolved', winner_id: winnerId, resolved_at: new Date().toISOString() })
+      .eq('id', bet_id)
+
+    if (betUpdateError) {
+      return NextResponse.json({ error: betUpdateError.message }, { status: 500 })
     }
 
-    // Aplicar la resolución
-    const totalPrize = winner_id !== 'tie' && winner_id !== 'split' 
-      ? bet.amount * bet.multiplier + bet.amount 
-      : 0
-    
-    if (totalPrize > 0 && winner_id !== 'tie' && winner_id !== 'split') {
-      const { data: winnerWallet } = await supabase
-        .from('wallets')
-        .select('balance_fantasy')
-        .eq('user_id', winner_id)
-        .single()
-      
+    // ── Phase 4: execute financial ops after confirmed bet update ────────────
+    const totalPrize = outcome.kind === 'winner' ? creatorStake + acceptorStake : 0
+
+    if (outcome.kind === 'winner') {
+      const { data: winnerWallet } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', outcome.winnerId).single()
       if (winnerWallet) {
-        await supabase
-          .from('wallets')
-          .update({ balance_fantasy: winnerWallet.balance_fantasy + totalPrize })
-          .eq('user_id', winner_id)
-        
-        await supabase.from('transactions').insert({
-          user_id: winner_id,
-          token_type: 'fantasy',
-          amount: totalPrize,
-          operation: 'bet_won_auto_resolved',
-          reference_id: bet_id,
-        })
+        await supabase.from('wallets').update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize }).eq('user_id', outcome.winnerId)
+        await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: 'fantasy', amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
+      }
+    } else {
+      // tie or split — refund each party their original stake
+      const { data: cw } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', bet.creator_id).single()
+      if (cw) {
+        await supabase.from('wallets').update({ balance_fantasy: Number(cw.balance_fantasy) + outcome.creatorRefund }).eq('user_id', bet.creator_id)
+        await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: 'fantasy', amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+      }
+      const { data: aw } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', bet.acceptor_id).single()
+      if (aw) {
+        await supabase.from('wallets').update({ balance_fantasy: Number(aw.balance_fantasy) + outcome.acceptorRefund }).eq('user_id', bet.acceptor_id)
+        await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: 'fantasy', amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
       }
     }
 
-    await supabase
-      .from('bets')
-      .update({ 
-        status: 'resolved',
-        winner_id: winner_id,
-        resolved_at: new Date().toISOString()
-      })
-      .eq('id', bet_id)
-
+    // ── Phase 5: audit log + notifications ──────────────────────────────────
     await logArbitrationDecision(supabase, {
-      bet_id,
-      action: 'auto_resolve_completed',
-      previous_status: previousStatus,
-      new_status: 'resolved',
-      decided_winner_id: winner_id,
-      reason: resolutionMethod === 'admin_force' 
-        ? `Resolucion forzada por administrador: ${conflictReason || 'decision manual'}`
-        : 'Auto-resuelto instantaneamente',
-      details: {
-        homeScore,
-        awayScore,
-        halftimeHomeScore,
-        halftimeAwayScore,
-        firstScorerTeam,
-        firstScorerPlayer,
-        firstScorerMinute,
-        bet_type: bet.bet_type,
-        resolution_method: resolutionMethod,
-        total_prize: totalPrize,
-      },
-      decided_by: decidedBy,
-      source: 'auto',
+      bet_id, action: 'auto_resolve_completed',
+      previous_status: previousStatus, new_status: 'resolved',
+      decided_winner_id: winnerId,
+      reason: resolutionMethod === 'admin_force' ? `Resolucion forzada por administrador` : `Auto-resuelto: ${outcome.kind}`,
+      details: { homeScore, awayScore, halftimeHomeScore, halftimeAwayScore, firstScorerTeam, bet_type: bet.bet_type, resolution_method: resolutionMethod, outcome: outcome.kind, total_prize: totalPrize },
+      decided_by: decidedBy, source: 'auto',
     })
 
-    await supabase
-      .from('events')
-      .update({ home_score: homeScore, away_score: awayScore })
-      .eq('id', event_id)
-
-    if (winner_id && winner_id !== 'tie' && winner_id !== 'split') {
-      const loserId = winner_id === bet.creator_id ? bet.acceptor_id : bet.creator_id
+    if (outcome.kind === 'winner') {
+      const loserId = outcome.winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       await createNotifications([
-        { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
+        { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
         { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
       ], supabase)
     }
 
     return NextResponse.json({
-      success: true,
-      pending_approval: false,
-      homeScore,
-      awayScore,
-      score_source: scoreSource,
-      winner_id,
-      bet_id,
-      message: `Apuesta resuelta inmediatamente: Ganador = ${winner_id}`
+      success: true, pending_approval: false,
+      homeScore, awayScore, score_source: scoreSource,
+      winner_id: winnerId, outcome: outcome.kind, bet_id,
+      message: outcome.kind === 'winner' ? `Apuesta resuelta: Ganador = ${winnerId}` : `Apuesta resuelta: ${outcome.kind}`,
     })
 
   } catch (error: unknown) {
