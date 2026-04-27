@@ -217,12 +217,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // When the bet is taken, the creator's potential liability is covered, but no immediate balance change.
     // The actual payout will happen when the bet is resolved.
 
-    // Notify creator that someone took their bet
+    // Notify creator that someone took their bet (include taker's nickname)
+    const { data: takerProfile } = await supabase
+      .from("profiles")
+      .select("nickname")
+      .eq("id", effectiveUserId)
+      .single()
+    const takerName = takerProfile?.nickname || "Un usuario"
+
     await createNotification({
       userId: bet.creator_id,
       type: "bet_taken",
       title: "¡Tu apuesta fue tomada!",
-      body: `Alguien tomó tu apuesta sobre ${eventRow?.home_team} vs ${eventRow?.away_team}`,
+      body: `${takerName} tomó tu apuesta sobre ${eventRow?.home_team} vs ${eventRow?.away_team}`,
       betId: betId,
     })
 
