@@ -368,7 +368,7 @@ export async function PATCH(request: NextRequest) {
           await createNotifications([
             { userId: winnerUserId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue aprobada. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: id },
             { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: id },
-          ])
+          ], supabase)
         }
 
         results.push({ id, success: true })
@@ -383,6 +383,7 @@ export async function PATCH(request: NextRequest) {
 
     let updateData: Record<string, unknown> = {}
     let operation = ""
+    let resolveContext: { totalPrize: number; loserId: string } | null = null
 
     switch (action) {
       case 'resolve': {
@@ -400,24 +401,8 @@ export async function PATCH(request: NextRequest) {
         }
 
         const totalPrize = Number(betToResolve.amount) * Number(betToResolve.multiplier) + Number(betToResolve.amount)
-        const { data: winnerWallet } = await supabase
-          .from('wallets').select('balance_fantasy').eq('user_id', winner_id).single()
-
-        if (winnerWallet) {
-          await supabase.from('wallets')
-            .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
-            .eq('user_id', winner_id)
-          await supabase.from('transactions').insert({
-            user_id: winner_id, token_type: 'fantasy', amount: totalPrize,
-            operation: 'bet_won', reference_id: bet_id,
-          })
-        }
-
         const loserId = winner_id === betToResolve.creator_id ? betToResolve.acceptor_id : betToResolve.creator_id
-        await createNotifications([
-          { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta manualmente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
-          { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
-        ])
+        resolveContext = { totalPrize, loserId }
 
         updateData = { status: 'resolved', winner_id, resolved_at: new Date().toISOString() }
         operation = "resolve"
@@ -536,6 +521,26 @@ export async function PATCH(request: NextRequest) {
     })
 
     if (action === 'resolve' && winner_id && currentBet) {
+      // Payout and notifications after confirmed update
+      if (resolveContext) {
+        const { totalPrize, loserId } = resolveContext
+        const { data: winnerWallet } = await supabase
+          .from('wallets').select('balance_fantasy').eq('user_id', winner_id).single()
+        if (winnerWallet) {
+          await supabase.from('wallets')
+            .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
+            .eq('user_id', winner_id)
+          await supabase.from('transactions').insert({
+            user_id: winner_id, token_type: 'fantasy', amount: totalPrize,
+            operation: 'bet_won', reference_id: bet_id,
+          })
+        }
+        await createNotifications([
+          { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta manualmente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
+          { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
+        ], supabase)
+      }
+
       const claimantId = currentBet.creator_claimed && !currentBet.acceptor_claimed
         ? currentBet.creator_id
         : currentBet.acceptor_claimed && !currentBet.creator_claimed
@@ -1252,7 +1257,7 @@ export async function POST(request: NextRequest) {
       await createNotifications([
         { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
         { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
-      ])
+      ], supabase)
     }
 
     return NextResponse.json({

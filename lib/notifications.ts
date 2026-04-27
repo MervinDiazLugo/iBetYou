@@ -1,4 +1,5 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
+import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type NotificationType =
   | "bet_taken"
@@ -15,9 +16,11 @@ interface NotificationInput {
   betId?: string | null
 }
 
-export async function createNotification(n: NotificationInput) {
+type AdminClient = ReturnType<typeof createAdminSupabaseClient>
+
+export async function createNotification(n: NotificationInput, client?: AdminClient) {
   try {
-    const supabase = createAdminSupabaseClient()
+    const supabase = client ?? createAdminSupabaseClient()
     await supabase.from("notifications").insert({
       user_id: n.userId,
       type: n.type,
@@ -30,10 +33,10 @@ export async function createNotification(n: NotificationInput) {
   }
 }
 
-export async function createNotifications(notifications: NotificationInput[]) {
+export async function createNotifications(notifications: NotificationInput[], client?: AdminClient) {
   if (notifications.length === 0) return
   try {
-    const supabase = createAdminSupabaseClient()
+    const supabase = client ?? createAdminSupabaseClient()
     await supabase.from("notifications").insert(
       notifications.map((n) => ({
         user_id: n.userId,
