@@ -70,60 +70,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Wallet not found' }, { status: 404 })
     }
 
-    let newBalance = wallet.balance_fantasy
-    let newRealBalance = wallet.balance_real
+    let updateQuery = supabase.from('wallets').update({} as Record<string, number>).eq('user_id', user_id)
 
     if (action === 'add') {
       if (token_type === 'fantasy') {
-        newBalance = wallet.balance_fantasy + amount
+        updateQuery = supabase.from('wallets')
+          .update({ balance_fantasy: wallet.balance_fantasy + amount })
+          .eq('user_id', user_id)
       } else if (token_type === 'real') {
-        newRealBalance = wallet.balance_real + amount
+        updateQuery = supabase.from('wallets')
+          .update({ balance_real: wallet.balance_real + amount })
+          .eq('user_id', user_id)
+      } else {
+        return NextResponse.json({ error: 'Invalid token_type' }, { status: 400 })
       }
     } else if (action === 'subtract') {
       if (token_type === 'fantasy') {
         if (wallet.balance_fantasy < amount) {
           return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
         }
-        newBalance = wallet.balance_fantasy - amount
+        // Optimistic lock: only update if balance hasn't changed since we read it
+        updateQuery = supabase.from('wallets')
+          .update({ balance_fantasy: wallet.balance_fantasy - amount })
+          .eq('user_id', user_id)
+          .eq('balance_fantasy', wallet.balance_fantasy)
       } else if (token_type === 'real') {
         if (wallet.balance_real < amount) {
           return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
         }
-        newRealBalance = wallet.balance_real - amount
+        updateQuery = supabase.from('wallets')
+          .update({ balance_real: wallet.balance_real - amount })
+          .eq('user_id', user_id)
+          .eq('balance_real', wallet.balance_real)
+      } else {
+        return NextResponse.json({ error: 'Invalid token_type' }, { status: 400 })
       }
     } else {
       return NextResponse.json({ error: 'Invalid action. Use add or subtract' }, { status: 400 })
     }
 
-    // Update wallet
-    const { data: updatedWallet, error: updateError } = await supabase
-      .from('wallets')
-      .update({
-        balance_fantasy: newBalance,
-        balance_real: newRealBalance
-      })
-      .eq('user_id', user_id)
-      .select()
-      .single()
+    const { data: updatedWallet, error: updateError } = await (updateQuery as any).select().single()
 
     if (updateError) {
+      if (updateError.code === 'PGRST116') {
+        return NextResponse.json({ error: 'Balance changed concurrently, please retry' }, { status: 409 })
+      }
       return NextResponse.json({ error: updateError.message }, { status: 500 })
     }
 
-    // Record transaction
-    const transaction = await supabase.from('transactions').insert({
+    const { error: txError } = await supabase.from('transactions').insert({
       user_id,
       token_type,
       amount: action === 'add' ? amount : -amount,
       operation: action === 'add' ? 'admin_deposit' : 'admin_withdrawal',
-      notes: notes || `Admin ${action === 'add' ? 'deposit' : 'withdrawal'}`
+      notes: notes || `Admin ${action === 'add' ? 'deposit' : 'withdrawal'}`,
     })
 
-    return NextResponse.json({ 
-      success: true, 
-      wallet: updatedWallet,
-      transaction
-    })
+    if (txError) {
+      console.error('Admin wallet transaction record failed:', txError, { user_id, action, amount })
+    }
+
+    return NextResponse.json({ success: true, wallet: updatedWallet })
   } catch (error: any) {
     console.error('Admin wallet error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

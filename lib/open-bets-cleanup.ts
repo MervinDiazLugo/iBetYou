@@ -59,20 +59,23 @@ export async function cleanupExpiredOpenBets(
       .single()
 
     if (creatorWallet) {
-      await supabase
+      const { error: walletErr } = await supabase
         .from("wallets")
         .update({ balance_fantasy: Number(creatorWallet.balance_fantasy || 0) + creatorRefund })
         .eq("user_id", updatedBet.creator_id)
 
-      await supabase.from("transactions").insert({
-        user_id: updatedBet.creator_id,
-        token_type: "fantasy",
-        amount: creatorRefund,
-        operation: "bet_cancelled_refund",
-        reference_id: updatedBet.id,
-      })
-
-      refunded += 1
+      if (!walletErr) {
+        await supabase.from("transactions").insert({
+          user_id: updatedBet.creator_id,
+          token_type: "fantasy",
+          amount: creatorRefund,
+          operation: "bet_cancelled_refund",
+          reference_id: updatedBet.id,
+        })
+        refunded += 1
+      } else {
+        console.error("Failed to refund wallet on bet expiry:", walletErr, { betId: updatedBet.id })
+      }
     }
 
     await supabase.from("arbitration_decisions").insert({

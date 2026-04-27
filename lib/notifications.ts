@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
 
 export type NotificationType =
+  | "bet_created"
   | "bet_taken"
   | "result_reported"
   | "bet_resolved_win"

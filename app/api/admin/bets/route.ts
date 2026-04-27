@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
+import { calculateTotalPrize } from "@/lib/bet-resolution"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -165,6 +166,7 @@ export async function GET(request: NextRequest) {
   
   const status = searchParams.get('status')
   const limit = Math.min(parseInt(searchParams.get('limit') || '100') || 100, 500)
+  const offset = Math.max(parseInt(searchParams.get('offset') || '0') || 0, 0)
 
   try {
     let query = supabase.from('bets').select(`
@@ -182,7 +184,7 @@ export async function GET(request: NextRequest) {
     }
     // Si status === 'all', no aplicar filtro
     
-    query = query.order('updated_at', { ascending: false }).limit(limit)
+    query = query.order('updated_at', { ascending: false }).range(offset, offset + limit - 1)
     
     const { data, error } = await query
     
@@ -320,7 +322,7 @@ export async function PATCH(request: NextRequest) {
           continue
         }
         
-        const totalPrize = bet.amount * bet.multiplier + bet.amount
+        const totalPrize = calculateTotalPrize(bet.amount, bet.multiplier)
 
         // Update bet first — if this fails, no money moves
         const { error: betResolveError } = await supabase
@@ -416,7 +418,7 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'winner_id debe ser el creador o aceptante de la apuesta' }, { status: 400 })
         }
 
-        const totalPrize = Number(betToResolve.amount) * Number(betToResolve.multiplier) + Number(betToResolve.amount)
+        const totalPrize = calculateTotalPrize(betToResolve.amount, betToResolve.multiplier)
         const loserId = winner_id === betToResolve.creator_id ? betToResolve.acceptor_id : betToResolve.creator_id
         resolveContext = { totalPrize, loserId }
 
@@ -425,7 +427,6 @@ export async function PATCH(request: NextRequest) {
         break
       }
       case 'cancel': {
-        // Fetch bet details before cancelling to process refunds
         const { data: betToCancel, error: fetchErr } = await supabase
           .from('bets')
           .select('id, creator_id, acceptor_id, amount, multiplier, fee_amount, type, bet_type, status')
@@ -436,73 +437,92 @@ export async function PATCH(request: NextRequest) {
           return NextResponse.json({ error: 'Bet not found' }, { status: 404 })
         }
 
-        const cancelledStatuses = ['cancelled', 'resolved']
-        if (cancelledStatuses.includes(betToCancel.status)) {
+        if (['cancelled', 'resolved'].includes(betToCancel.status)) {
           return NextResponse.json({ error: 'Bet is already resolved or cancelled' }, { status: 400 })
         }
 
-        // Refund creator: they paid base amount + fee when creating
-        const creatorRefund = betToCancel.amount + (betToCancel.fee_amount || 0)
+        // Update bet status first — if this fails, no money moves
+        const { error: cancelBetError } = await supabase
+          .from('bets')
+          .update({ status: 'cancelled' })
+          .eq('id', bet_id)
+          .not('status', 'in', '("cancelled","resolved")')
+
+        if (cancelBetError) {
+          return NextResponse.json({ error: cancelBetError.message }, { status: 500 })
+        }
+
+        // Refund creator
+        const creatorRefund = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
         const { data: creatorWallet } = await supabase
-          .from('wallets')
-          .select('balance_fantasy')
-          .eq('user_id', betToCancel.creator_id)
-          .single()
+          .from('wallets').select('balance_fantasy').eq('user_id', betToCancel.creator_id).single()
 
         if (creatorWallet) {
-          await supabase
-            .from('wallets')
-            .update({ balance_fantasy: creatorWallet.balance_fantasy + creatorRefund })
+          await supabase.from('wallets')
+            .update({ balance_fantasy: Number(creatorWallet.balance_fantasy) + creatorRefund })
             .eq('user_id', betToCancel.creator_id)
-
           await supabase.from('transactions').insert({
-            user_id: betToCancel.creator_id,
-            token_type: 'fantasy',
-            amount: creatorRefund,
-            operation: 'bet_cancelled_refund',
-            reference_id: bet_id,
+            user_id: betToCancel.creator_id, token_type: 'fantasy', amount: creatorRefund,
+            operation: 'bet_cancelled_refund', reference_id: bet_id,
           })
         }
 
         // Refund acceptor if the bet was already taken
         if (betToCancel.acceptor_id) {
           const acceptorStake = betToCancel.bet_type === 'exact_score'
-            ? betToCancel.amount * betToCancel.multiplier
-            : betToCancel.amount
-          const acceptorRefund = acceptorStake + (acceptorStake * 0.03)
+            ? Number(betToCancel.amount) * Number(betToCancel.multiplier)
+            : Number(betToCancel.amount)
+          const acceptorRefund = acceptorStake + acceptorStake * 0.03
 
           const { data: acceptorWallet } = await supabase
-            .from('wallets')
-            .select('balance_fantasy')
-            .eq('user_id', betToCancel.acceptor_id)
-            .single()
+            .from('wallets').select('balance_fantasy').eq('user_id', betToCancel.acceptor_id).single()
 
           if (acceptorWallet) {
-            await supabase
-              .from('wallets')
-              .update({ balance_fantasy: acceptorWallet.balance_fantasy + acceptorRefund })
+            await supabase.from('wallets')
+              .update({ balance_fantasy: Number(acceptorWallet.balance_fantasy) + acceptorRefund })
               .eq('user_id', betToCancel.acceptor_id)
-
             await supabase.from('transactions').insert({
-              user_id: betToCancel.acceptor_id,
-              token_type: 'fantasy',
-              amount: acceptorRefund,
-              operation: 'bet_cancelled_refund',
-              reference_id: bet_id,
+              user_id: betToCancel.acceptor_id, token_type: 'fantasy', amount: acceptorRefund,
+              operation: 'bet_cancelled_refund', reference_id: bet_id,
             })
           }
         }
 
-        updateData = { status: 'cancelled' }
-        operation = "cancel"
-        break
+        await logArbitrationDecision(supabase, {
+          bet_id, action: 'cancel',
+          previous_status: betToCancel.status, new_status: 'cancelled',
+          reason: reason || null, details: { approved: approved ?? null },
+          decided_by: decidedBy, source: 'manual',
+        })
+
+        const notifTargets = [
+          { userId: betToCancel.creator_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'Tu apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id },
+          ...(betToCancel.acceptor_id ? [{ userId: betToCancel.acceptor_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'La apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id }] : []),
+        ]
+        await createNotifications(notifTargets, supabase)
+
+        const { data: cancelledBet } = await supabase.from('bets').select().eq('id', bet_id).single()
+        return NextResponse.json({ success: true, bet: cancelledBet, operation: 'cancel' })
       }
-      case 'dispute':
-        updateData = {
-          status: 'disputed',
+      case 'dispute': {
+        const { data: betToDispute, error: disputeFetchErr } = await supabase
+          .from('bets')
+          .select('id, status')
+          .eq('id', bet_id)
+          .single()
+
+        if (disputeFetchErr || !betToDispute) {
+          return NextResponse.json({ error: 'Bet not found' }, { status: 404 })
         }
+
+        if (['resolved', 'cancelled'].includes(betToDispute.status)) {
+          return NextResponse.json({ error: 'No se puede disputar una apuesta ya resuelta o cancelada' }, { status: 400 })
+        }
+
+        updateData = { status: 'disputed' }
         operation = "dispute"
         break
+      }
       default:
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
@@ -513,14 +533,19 @@ export async function PATCH(request: NextRequest) {
       .eq('id', bet_id)
       .single()
 
+    // Optimistic lock: don't overwrite a bet that was concurrently cancelled or resolved
     const { data: bet, error: betError } = await supabase
       .from("bets")
       .update(updateData)
       .eq("id", bet_id)
+      .not("status", "in", '("cancelled","resolved")')
       .select()
       .single()
 
     if (betError) {
+      if (betError.code === "PGRST116") {
+        return NextResponse.json({ error: "La apuesta ya fue resuelta o cancelada por otra operación" }, { status: 409 })
+      }
       return NextResponse.json({ error: betError.message }, { status: 500 })
     }
 
@@ -888,14 +913,21 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Phase 3: update bet status FIRST ────────────────────────────────────
+    // .in("status") guard prevents double-resolution if resolved concurrently
     const winnerId = outcome.kind === 'winner' ? outcome.winnerId : null
-    const { error: betUpdateError } = await supabase
+    const { data: resolvedBetResult, error: betUpdateError } = await supabase
       .from('bets')
       .update({ status: 'resolved', winner_id: winnerId, resolved_at: new Date().toISOString() })
       .eq('id', bet_id)
+      .in('status', ['taken', 'disputed'])
+      .select('id')
+      .single()
 
-    if (betUpdateError) {
-      return NextResponse.json({ error: betUpdateError.message }, { status: 500 })
+    if (betUpdateError || !resolvedBetResult) {
+      if (betUpdateError?.code === 'PGRST116') {
+        return NextResponse.json({ error: 'La apuesta ya fue resuelta o cancelada' }, { status: 409 })
+      }
+      return NextResponse.json({ error: betUpdateError?.message || 'No se pudo actualizar la apuesta' }, { status: 500 })
     }
 
     // ── Phase 4: execute financial ops after confirmed bet update ────────────
@@ -904,20 +936,38 @@ export async function POST(request: NextRequest) {
     if (outcome.kind === 'winner') {
       const { data: winnerWallet } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', outcome.winnerId).single()
       if (winnerWallet) {
-        await supabase.from('wallets').update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize }).eq('user_id', outcome.winnerId)
-        await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: 'fantasy', amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
+        const { error: walletErr } = await supabase.from('wallets')
+          .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
+          .eq('user_id', outcome.winnerId)
+        if (!walletErr) {
+          await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: 'fantasy', amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
+        } else {
+          console.error('Winner wallet update failed (bet already resolved):', walletErr, { betId: bet_id, winnerId: outcome.winnerId })
+        }
       }
     } else {
       // tie or split — refund each party their original stake
       const { data: cw } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', bet.creator_id).single()
       if (cw) {
-        await supabase.from('wallets').update({ balance_fantasy: Number(cw.balance_fantasy) + outcome.creatorRefund }).eq('user_id', bet.creator_id)
-        await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: 'fantasy', amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        const { error: cwErr } = await supabase.from('wallets')
+          .update({ balance_fantasy: Number(cw.balance_fantasy) + outcome.creatorRefund })
+          .eq('user_id', bet.creator_id)
+        if (!cwErr) {
+          await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: 'fantasy', amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        } else {
+          console.error('Creator refund failed (bet already resolved):', cwErr, { betId: bet_id })
+        }
       }
       const { data: aw } = await supabase.from('wallets').select('balance_fantasy').eq('user_id', bet.acceptor_id).single()
       if (aw) {
-        await supabase.from('wallets').update({ balance_fantasy: Number(aw.balance_fantasy) + outcome.acceptorRefund }).eq('user_id', bet.acceptor_id)
-        await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: 'fantasy', amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        const { error: awErr } = await supabase.from('wallets')
+          .update({ balance_fantasy: Number(aw.balance_fantasy) + outcome.acceptorRefund })
+          .eq('user_id', bet.acceptor_id)
+        if (!awErr) {
+          await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: 'fantasy', amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        } else {
+          console.error('Acceptor refund failed (bet already resolved):', awErr, { betId: bet_id })
+        }
       }
     }
 

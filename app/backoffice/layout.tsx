@@ -13,7 +13,8 @@ import {
   Menu,
   X,
   Users,
-  BarChart2
+  BarChart2,
+  ClipboardList
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -25,6 +26,7 @@ const navigation = [
   { name: "Recargas iBY", href: "/backoffice/top-up", icon: Wallet },
   { name: "Usuarios", href: "/backoffice/users", icon: Users },
   { name: "Financials", href: "/backoffice/financials", icon: BarChart2 },
+  { name: "Auditoría", href: "/backoffice/audit", icon: ClipboardList },
 ]
 
 export default function BackofficeLayout({

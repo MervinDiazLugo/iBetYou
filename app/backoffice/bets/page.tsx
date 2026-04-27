@@ -891,6 +891,7 @@ export default function BackofficeBets() {
             const hasFinalScore = bet.event.home_score !== undefined && bet.event.home_score !== null && bet.event.away_score !== undefined && bet.event.away_score !== null
             const readyForModeration = bet.status === 'taken' && bet.event.status === 'finished' && hasFinalScore
             const isPendingApproval = bet.status === 'pending_resolution' || bet.status === 'pending_resolution_creator' || bet.status === 'pending_resolution_acceptor'
+            const eventScheduled = bet.event.status === 'scheduled'
             const halftimeHome = bet.event.metadata?.match_details?.halftime_home_score
             const halftimeAway = bet.event.metadata?.match_details?.halftime_away_score
             const hasHalftime = halftimeHome !== undefined && halftimeHome !== null && halftimeAway !== undefined && halftimeAway !== null
@@ -1036,7 +1037,8 @@ export default function BackofficeBets() {
                             size="sm"
                             variant="default"
                             onClick={() => autoResolveBet(bet.id, bet.event_id)}
-                            disabled={autoResolving === bet.id}
+                            disabled={autoResolving === bet.id || eventScheduled}
+                            title={eventScheduled ? 'El evento aún no ha comenzado' : undefined}
                           >
                             {autoResolving === bet.id ? 'Consultando...' : '🤖 Auto-resolver'}
                           </Button>
@@ -1044,6 +1046,8 @@ export default function BackofficeBets() {
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedBet(bet)}
+                            disabled={eventScheduled}
+                            title={eventScheduled ? 'El evento aún no ha comenzado' : undefined}
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
                             Resolver
@@ -1064,7 +1068,8 @@ export default function BackofficeBets() {
                             size="sm"
                             variant="default"
                             onClick={() => autoResolveBet(bet.id, bet.event_id)}
-                            disabled={autoResolving === bet.id}
+                            disabled={autoResolving === bet.id || eventScheduled}
+                            title={eventScheduled ? 'El evento aún no ha comenzado' : undefined}
                           >
                             {autoResolving === bet.id ? 'Consultando...' : '🤖 Auto-resolver'}
                           </Button>
@@ -1072,6 +1077,8 @@ export default function BackofficeBets() {
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedBet(bet)}
+                            disabled={eventScheduled}
+                            title={eventScheduled ? 'El evento aún no ha comenzado' : undefined}
                           >
                             <CheckCircle className="h-4 w-4 mr-1" />
                             Resolver

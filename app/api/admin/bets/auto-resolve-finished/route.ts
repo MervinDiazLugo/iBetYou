@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
+import { calculateTotalPrize } from "@/lib/bet-resolution"
 
 function hasValidResolveSecret(request: NextRequest) {
   const expected = process.env.AUTO_RESOLVE_API_SECRET || process.env.CRON_SECRET
@@ -287,7 +288,7 @@ export async function POST(request: NextRequest) {
       }
 
       const { winnerId, reason } = resolution
-      const totalPrize = Number((bet as any).amount || 0) * Number((bet as any).multiplier || 1) + Number((bet as any).amount || 0)
+      const totalPrize = calculateTotalPrize((bet as any).amount || 0, (bet as any).multiplier || 1)
 
       if (dryRun) {
         resolved += 1

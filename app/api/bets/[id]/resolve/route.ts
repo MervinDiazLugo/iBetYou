@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
-import { supportsPeerResolution } from "@/lib/bet-resolution"
+import { supportsPeerResolution, calculateTotalPrize } from "@/lib/bet-resolution"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 
@@ -200,14 +200,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         status: "disputed",
       }
 
+      // .in(status) acts as an optimistic lock: prevents overwriting if admin resolved/cancelled concurrently
       const { data: disputedBet, error: disputeError } = await supabase
         .from("bets")
         .update(rejectUpdate)
         .eq("id", betId)
+        .in("status", ["pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor"])
         .select("*")
         .single()
 
       if (disputeError || !disputedBet) {
+        if (disputeError?.code === "PGRST116") {
+          return NextResponse.json({ error: "La apuesta ya fue resuelta o cancelada" }, { status: 409 })
+        }
         return NextResponse.json({ error: disputeError?.message || "No se pudo escalar a arbitraje" }, { status: 500 })
       }
 
@@ -242,7 +247,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "No se pudo determinar el ganador para confirmar" }, { status: 400 })
     }
 
-    const totalPrize = Number(bet.amount) * Number(bet.multiplier) + Number(bet.amount)
+    const totalPrize = calculateTotalPrize(bet.amount, bet.multiplier)
 
     // Update bet first — if this fails, no money moves
     const confirmUpdate = {
@@ -253,14 +258,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       acceptor_claimed: isAcceptor ? true : bet.acceptor_claimed,
     }
 
+    // .in(status) acts as an optimistic lock: prevents double-payout if admin resolved concurrently
     const { data: resolvedBet, error: resolveError } = await supabase
       .from("bets")
       .update(confirmUpdate)
       .eq("id", betId)
+      .in("status", ["pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor"])
       .select("*")
       .single()
 
     if (resolveError || !resolvedBet) {
+      if (resolveError?.code === "PGRST116") {
+        return NextResponse.json({ error: "La apuesta ya fue resuelta o cancelada" }, { status: 409 })
+      }
       return NextResponse.json({ error: resolveError?.message || "No se pudo confirmar resultado" }, { status: 500 })
     }
 

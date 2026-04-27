@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
+import { createNotification } from "@/lib/notifications"
 
 export async function POST(request: NextRequest) {
   try {
@@ -197,8 +198,15 @@ export async function POST(request: NextRequest) {
 
     if (transactionError) {
       console.error("Transaction recording error:", transactionError)
-      // Don't fail the request if transaction recording fails
     }
+
+    await createNotification({
+      userId: user.id,
+      type: "bet_created",
+      title: "Apuesta creada",
+      body: `Tu apuesta de ${amount} Fantasy Tokens fue publicada exitosamente.`,
+      betId: bet.id,
+    }, supabase)
 
     return NextResponse.json({
       success: true,

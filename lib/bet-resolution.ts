@@ -1,3 +1,12 @@
+/**
+ * Total payout to the winner: their stake + the opponent's stake.
+ * For symmetric bets (multiplier=1): 2 * amount.
+ * For exact_score bets: amount * multiplier + amount.
+ */
+export function calculateTotalPrize(amount: number | string, multiplier: number | string): number {
+  return Number(amount) * Number(multiplier) + Number(amount)
+}
+
 const PEER_RESOLUTION_BY_TYPE: Record<string, boolean> = {
   direct: true,
   exact_score: true,

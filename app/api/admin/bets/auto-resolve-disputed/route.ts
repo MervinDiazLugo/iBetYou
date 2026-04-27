@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
+import { calculateTotalPrize } from "@/lib/bet-resolution"
 
 async function logDecision(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -175,13 +176,14 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const totalPrize = Number(bet.amount) * Number(bet.multiplier || 1) + Number(bet.amount)
+      const totalPrize = calculateTotalPrize(bet.amount, bet.multiplier || 1)
 
-      // Update bet first — if this fails, no money moves
+      // Update bet first — .in("status") guard prevents double-resolution if resolved concurrently
       const { error: betUpdateError } = await supabase
         .from("bets")
         .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
         .eq("id", bet.id)
+        .in("status", ["disputed"])
 
       if (betUpdateError) {
         failed += 1

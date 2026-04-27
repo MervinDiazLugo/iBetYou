@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
+import { createNotification } from "@/lib/notifications"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -228,6 +229,14 @@ export async function POST(request: NextRequest) {
       operation: 'bet_created',
       reference_id: bet.id,
     })
+
+    await createNotification({
+      userId: user_id,
+      type: "bet_created",
+      title: "Apuesta creada",
+      body: `Tu apuesta de ${amount} Fantasy Tokens fue publicada exitosamente.`,
+      betId: bet.id,
+    }, supabase)
 
     return NextResponse.json({ success: true, bet })
   } catch (error) {
