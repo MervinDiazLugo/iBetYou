@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
-
-const ACCEPT_WINDOW_MINUTES = 10
+import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -109,7 +108,7 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = createAdminSupabaseClient()
-  
+
   try {
     const body = await request.json()
     const { user_id, event_id, bet_type, creator_selection, amount, multiplier } = body
@@ -117,6 +116,10 @@ export async function POST(request: NextRequest) {
 
     if (!user_id || user_id !== authenticatedUserId) {
       return NextResponse.json({ error: 'Unauthorized user scope' }, { status: 403 })
+    }
+
+    if (!event_id || !bet_type || !creator_selection || !amount) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const { data: eventRow, error: eventError } = await supabase
@@ -133,33 +136,70 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este tipo de apuesta solo esta disponible para futbol' }, { status: 400 })
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, is_banned, role, betting_blocked_until')
+      .eq('id', user_id)
+      .single()
+
+    if (profileError && !profileError.message?.includes('betting_blocked_until')) {
+      return NextResponse.json({ error: 'Failed to validate user profile' }, { status: 500 })
+    }
+
+    if (profile?.is_banned) {
+      return NextResponse.json({ error: 'User is banned from betting' }, { status: 403 })
+    }
+
+    if (profile?.role === 'backoffice_admin') {
+      return NextResponse.json({ error: 'Los usuarios de backoffice no pueden crear apuestas' }, { status: 403 })
+    }
+
+    if (profile?.betting_blocked_until) {
+      const blockedUntil = new Date(profile.betting_blocked_until)
+      if (blockedUntil > new Date()) {
+        return NextResponse.json({
+          error: `No puedes apostar hasta ${blockedUntil.toLocaleString('es-ES')}`,
+          blocked_until: profile.betting_blocked_until,
+        }, { status: 403 })
+      }
+    }
+
     const isAsymmetric = bet_type === 'exact_score'
-    const finalMultiplier = isAsymmetric ? (multiplier || 1) : 1
-
-    // Calculate fee
+    const parsedMultiplier = Number(multiplier) || 1
+    if (isAsymmetric && (parsedMultiplier < 1 || parsedMultiplier > 100)) {
+      return NextResponse.json({ error: 'El multiplicador debe estar entre 1 y 100' }, { status: 400 })
+    }
+    const finalMultiplier = isAsymmetric ? parsedMultiplier : 1
     const fee = amount * 0.03
+    const totalNeeded = amount + fee
 
-    // Get wallet
     const { data: wallet } = await supabase
-      .from("wallets")
-      .select("balance_fantasy, fantasy_total_accumulated")
-      .eq("user_id", user_id)
+      .from('wallets')
+      .select('balance_fantasy')
+      .eq('user_id', user_id)
       .single()
 
     if (!wallet) {
       return NextResponse.json({ error: 'Wallet not found' }, { status: 404 })
     }
 
-    // Creator always reserves base amount plus fee
-    const totalNeeded = amount + fee
-    
     if (wallet.balance_fantasy < totalNeeded) {
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
 
-    // Create bet
+    // Deduct from wallet first — if this fails, no bet is created
+    const { error: walletError } = await supabase
+      .from('wallets')
+      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
+      .eq('user_id', user_id)
+
+    if (walletError) {
+      return NextResponse.json({ error: 'Failed to update wallet' }, { status: 500 })
+    }
+
+    // Create bet after confirmed deduction
     const { data: bet, error: betError } = await supabase
-      .from("bets")
+      .from('bets')
       .insert({
         event_id,
         creator_id: user_id,
@@ -176,23 +216,16 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
+      // Rollback wallet deduction
+      await supabase.from('wallets').update({ balance_fantasy: wallet.balance_fantasy }).eq('user_id', user_id)
       return NextResponse.json({ error: betError.message }, { status: 500 })
     }
 
-    // Update wallet
-    await supabase
-      .from("wallets")
-      .update({
-        balance_fantasy: wallet.balance_fantasy - totalNeeded,
-      })
-      .eq("user_id", user_id)
-
-    // Record transaction
-    await supabase.from("transactions").insert({
+    await supabase.from('transactions').insert({
       user_id,
-      token_type: "fantasy",
+      token_type: 'fantasy',
       amount: -totalNeeded,
-      operation: "bet_created",
+      operation: 'bet_created',
       reference_id: bet.id,
     })
 

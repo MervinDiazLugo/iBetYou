@@ -164,7 +164,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   
   const status = searchParams.get('status')
-  const limit = parseInt(searchParams.get('limit') || '100')
+  const limit = Math.min(parseInt(searchParams.get('limit') || '100') || 100, 500)
 
   try {
     let query = supabase.from('bets').select(`
@@ -321,36 +321,46 @@ export async function PATCH(request: NextRequest) {
         }
         
         const totalPrize = bet.amount * bet.multiplier + bet.amount
-        
+
+        // Update bet first — if this fails, no money moves
+        const { error: betResolveError } = await supabase
+          .from('bets')
+          .update({
+            status: 'resolved',
+            resolved_at: new Date().toISOString(),
+            winner_id: winnerUserId,
+          })
+          .eq('id', id)
+
+        if (betResolveError) {
+          results.push({ id, success: false, error: betResolveError.message })
+          continue
+        }
+
         const { data: winnerWallet } = await supabase
           .from('wallets')
           .select('balance_fantasy')
           .eq('user_id', winnerUserId)
           .single()
-        
+
         if (winnerWallet) {
-          await supabase
+          const { error: walletErr } = await supabase
             .from('wallets')
             .update({ balance_fantasy: winnerWallet.balance_fantasy + totalPrize })
             .eq('user_id', winnerUserId)
-          
-          await supabase.from('transactions').insert({
-            user_id: winnerUserId,
-            token_type: 'fantasy',
-            amount: totalPrize,
-            operation: 'bet_won',
-            reference_id: bet.id
-          })
-        }
 
-        await supabase
-          .from('bets')
-          .update({ 
-            status: 'resolved', 
-            resolved_at: new Date().toISOString(),
-            winner_id: winnerUserId 
-          })
-          .eq('id', id)
+          if (!walletErr) {
+            await supabase.from('transactions').insert({
+              user_id: winnerUserId,
+              token_type: 'fantasy',
+              amount: totalPrize,
+              operation: 'bet_won',
+              reference_id: bet.id,
+            })
+          } else {
+            console.error('approve_pending wallet update failed:', { betId: id, winnerUserId })
+          }
+        }
 
         await logArbitrationDecision(supabase, {
           bet_id: id,
@@ -399,6 +409,11 @@ export async function PATCH(request: NextRequest) {
 
         if (!betToResolve || betToResolve.status === 'resolved' || betToResolve.status === 'cancelled') {
           return NextResponse.json({ error: 'Bet cannot be resolved' }, { status: 400 })
+        }
+
+        const validWinners = [betToResolve.creator_id, betToResolve.acceptor_id].filter(Boolean)
+        if (!validWinners.includes(winner_id)) {
+          return NextResponse.json({ error: 'winner_id debe ser el creador o aceptante de la apuesta' }, { status: 400 })
         }
 
         const totalPrize = Number(betToResolve.amount) * Number(betToResolve.multiplier) + Number(betToResolve.amount)

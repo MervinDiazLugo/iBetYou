@@ -1,6 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
-
-const ACCEPT_WINDOW_MINUTES = 10
+import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
+import { createNotification } from "@/lib/notifications"
 
 export async function cleanupExpiredOpenBets(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -88,6 +88,14 @@ export async function cleanupExpiredOpenBets(
       decided_by: decidedBy,
       source: "system",
     })
+
+    await createNotification({
+      userId: updatedBet.creator_id,
+      type: "bet_cancelled",
+      title: "Tu apuesta expiró",
+      body: "Nadie tomó tu apuesta a tiempo. Te devolvimos tu saldo.",
+      betId: updatedBet.id,
+    }, supabase)
   }
 
   return {

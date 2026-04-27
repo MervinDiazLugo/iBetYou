@@ -1,5 +1,4 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
-import type { SupabaseClient } from "@supabase/supabase-js"
 
 export type NotificationType =
   | "bet_taken"
@@ -7,6 +6,7 @@ export type NotificationType =
   | "bet_resolved_win"
   | "bet_resolved_loss"
   | "bet_disputed"
+  | "bet_cancelled"
 
 interface NotificationInput {
   userId: string

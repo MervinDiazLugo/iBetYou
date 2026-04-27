@@ -8,7 +8,11 @@
       "Bash(curl -s 'https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/bets?select=id,creator_selection,acceptor_selection,selection,bet_type&status=in.\\(disputed,taken,resolved\\)&limit=10' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg')",
       "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(f'ID: {b[\\\\\"id\\\\\"][:8]} | creator_sel: \\\\\"{b[\\\\\"creator_selection\\\\\"]}\\\\\" | acceptor_sel: \\\\\"{b[\\\\\"acceptor_selection\\\\\"]}\\\\\"'\\) for b in data]\")",
       "Bash(curl -s 'https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/bets?select=id,creator_selection,acceptor_selection,bet_type&status=in.\\(disputed,taken,resolved\\)&limit=8' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg')",
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(npm install *)",
+      "Bash(claude plugin *)",
+      "Bash(node -e ' *)",
+      "Bash(npx next *)"
     ]
   }
 }

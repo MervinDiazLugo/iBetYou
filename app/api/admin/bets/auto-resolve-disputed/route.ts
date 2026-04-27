@@ -197,10 +197,14 @@ export async function POST(request: NextRequest) {
         .single()
 
       if (winnerWallet) {
-        await supabase
+        const { error: walletPayError } = await supabase
           .from("wallets")
           .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
           .eq("user_id", winnerId)
+
+        if (walletPayError) {
+          console.error("Wallet payout error (bet already resolved):", walletPayError, { betId: bet.id, winnerId, totalPrize })
+        }
 
         await supabase.from("transactions").insert({
           user_id: winnerId,

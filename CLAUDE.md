@@ -34,18 +34,21 @@ app/
 
 app/api/
   admin/events/route.ts           ← CRUD admin de eventos (GET, POST, PATCH, DELETE)
-  admin/bets/route.ts             ← Moderación de apuestas
-  admin/bets/auto-resolve-*       ← Auto-resolución de apuestas disputadas/finalizadas
+  admin/events/results/route.ts   ← PATCH sync score de un evento desde api-sports.io
+  admin/bets/route.ts             ← Moderación de apuestas (GET, PATCH, POST auto-resolve)
+  admin/bets/auto-resolve-disputed/route.ts ← POST resolución automática de apuestas en disputa
+  admin/bets/auto-resolve-finished/route.ts ← POST resolución automática de apuestas finalizadas
   admin/metrics/route.ts          ← Métricas del dashboard backoffice
   admin/users/route.ts            ← CRUD usuarios
   admin/wallets/route.ts          ← Gestión wallets
   bets/route.ts                   ← GET marketplace de apuestas
   bets/create/route.ts            ← POST crear apuesta
   bets/[id]/route.ts              ← GET/PATCH una apuesta (tomar, cancelar)
-  bets/[id]/resolve/route.ts      ← POST resolver apuesta (creator/acceptor reportan resultado)
+  bets/[id]/resolve/route.ts      ← PATCH resolver apuesta (creator/acceptor reportan resultado)
   events/route.ts                 ← GET eventos de api-sports.io (backoffice, usa node:https)
   events/list/route.ts            ← GET eventos guardados en DB (público, para el marketplace)
   cron/sync-events/route.ts       ← GET cron diario 5AM UTC (sincroniza próximos 7 días)
+  cron/sync-scores/route.ts       ← GET cron cada 2h (actualiza scores de eventos live/recientes)
   my-bets/route.ts                ← GET apuestas del usuario autenticado
   user/balance/route.ts           ← GET historial de ganancias/pérdidas del usuario
   wallet/route.ts                 ← GET balance de wallet
@@ -117,6 +120,55 @@ types/index.ts                    ← Interfaces: Event, Bet, User, Wallet, Tran
 | balance_fantasy | numeric | Saldo de juego (fichas) |
 | balance_real | numeric | Saldo real |
 | fantasy_total_accumulated | numeric | |
+
+### `notifications`
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| user_id | uuid | FK → profiles |
+| type | text | Ver tipos abajo |
+| title | text | Título corto |
+| body | text | Descripción |
+| bet_id | uuid | FK → bets, nullable |
+| read | boolean | DEFAULT false |
+| created_at | timestamptz | |
+
+**Tipos de notificación:** `bet_taken`, `result_reported`, `bet_resolved_win`, `bet_resolved_loss`, `bet_disputed`, `bet_cancelled`
+
+> **Realtime requerido:** esta tabla necesita Realtime habilitado en Supabase (Publication `supabase_realtime`) para que el badge de la campana se actualice en vivo sin polling.
+
+### `arbitration_decisions`
+| Columna | Tipo | Notas |
+|---|---|---|
+| id | uuid | PK |
+| bet_id | uuid | FK → bets |
+| action | text | Ver tabla de acciones abajo |
+| previous_status | text | Estado de la apuesta antes |
+| new_status | text | Estado de la apuesta después |
+| decided_winner_id | uuid | nullable |
+| reason | text | Descripción legible |
+| details | jsonb | Datos extra del contexto |
+| decided_by | text | UUID del usuario o `'system'` |
+| source | text | Siempre `'system'` (campo reservado) |
+| created_at | timestamptz | |
+
+#### Acciones registradas (`action`)
+
+| `action` | Fuente | Cuándo se escribe |
+|---|---|---|
+| `participant_claim` | `bets/[id]/resolve` | claim_win o claim_lose |
+| `participant_reject_to_dispute` | `bets/[id]/resolve` | reject → disputed |
+| `participant_confirm` | `bets/[id]/resolve` | confirm → resolved |
+| `pending_timeout_to_dispute` | `admin/bets GET` | pending > 30 min → disputed |
+| `false_claim_penalty` | `admin/bets PATCH` | falsa reclamación detectada |
+| `resolve` | `admin/bets PATCH` | resolución manual por admin |
+| `cancel` | `admin/bets PATCH` | cancelación por admin |
+| `dispute` | `admin/bets PATCH` | admin envía a disputa |
+| `approve_pending` | `admin/bets PATCH` | admin aprueba resolución pendiente |
+| `auto_resolve_completed` | `admin/bets POST` | botón auto-resolver del backoffice |
+| `auto_resolve_disputed` | `admin/bets POST` | conflicto detectado → disputed |
+| `auto_resolve_finished_{type}` | `auto-resolve-finished` | cron/sync resuelve apuesta finalizada |
+| `auto_resolve_disputed_direct` | `auto-resolve-disputed` | apuesta directa disputada resuelta |
 
 ---
 
@@ -231,15 +283,51 @@ showToast('Mensaje', 'success' | 'error')
 | API routes (server) — operaciones admin | `createAdminSupabaseClient()` | Service role, bypassa RLS |
 | API routes — verificar token de usuario | `createServerSupabaseClient()` | Solo para auth.getUser() |
 
+### 7. Ordenamiento de pagos (payment ordering invariant)
+Siempre actualizar el estado de la apuesta en DB **antes** de mover dinero. Si la actualización
+de la apuesta falla, no se mueve dinero. Si ya se dedujo y la operación siguiente falla, hacer rollback.
+
+```
+// Patrón correcto
+1. Actualizar bets.status → si falla, return error (no se mueve dinero)
+2. Creditar/debitar wallets
+3. Insertar en transactions
+```
+
+Esto aplica en: `bets/create`, `bets/[id]` (take), `bets/[id]/resolve` (confirm),
+`admin/bets/auto-resolve-disputed`, `admin/bets POST` (auto-resolve).
+
+### 8. Notificaciones con `lib/notifications.ts`
+```ts
+import { createNotification, createNotifications } from "@/lib/notifications"
+
+// Una notificación
+await createNotification({ userId, type, title, body, betId })
+
+// Varias de una vez (acepta client opcional para reusar conexión)
+await createNotifications([
+  { userId: winnerId, type: "bet_resolved_win", title: "...", body: "...", betId },
+  { userId: loserId,  type: "bet_resolved_loss", title: "...", body: "...", betId },
+], supabase) // ← pasar el client admin existente para evitar instanciar uno nuevo
+```
+
+Tipos válidos: `bet_taken` | `result_reported` | `bet_resolved_win` | `bet_resolved_loss` | `bet_disputed` | `bet_cancelled`
+
 ---
 
 ## Cron jobs
 
-`vercel.json` configura:
+### Vercel Cron (`vercel.json`)
 - **`/api/cron/sync-events`** — todos los días a las 5 AM UTC
   - Descarga próximos 7 días de fútbol, basketball y béisbol de api-sports.io
   - Solo inserta eventos nuevos (no toca `featured` ni otros campos de eventos existentes)
   - Autenticación: `Authorization: Bearer {CRON_SECRET}`
+
+### cron-job.org (externo, no en Vercel)
+- **`/api/cron/sync-scores`** — cada 2 horas
+  - Actualiza `home_score`, `away_score`, `status`, `metadata` de eventos live o recién finalizados
+  - Autenticación: `Authorization: Bearer {CRON_SECRET}`
+  - Dispara auto-resolución de apuestas cuyo evento quedó `finished`
 
 ---
 
@@ -270,6 +358,36 @@ NEXT_PUBLIC_API_KEY
 - **Badges de estado** usan variantes de shadcn/ui: `default`, `secondary`, `outline`, `destructive`
 - **Formateo de moneda**: siempre `formatCurrency(amount)` de `@/lib/utils`
 - **No agregar comentarios** que expliquen QUÉ hace el código — solo WHY si no es obvio
+
+---
+
+## Requisitos de infraestructura Supabase
+
+### Realtime
+Las siguientes tablas deben estar habilitadas en la publicación `supabase_realtime`
+(Supabase Dashboard → Database → Replication):
+
+| Tabla | Por qué |
+|---|---|
+| `notifications` | Badge de campana en tiempo real (sin polling) |
+
+Habilitar desde SQL:
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
+```
+
+### Row Level Security (RLS)
+Las operaciones de negocio usan `createAdminSupabaseClient()` (service role) que bypassa RLS.
+El cliente del browser (`createBrowserSupabaseClient()`) sí respeta RLS — asegurarse de que
+las políticas permitan a cada usuario leer solo sus propias `notifications`, `wallets`, etc.
+
+### Índices recomendados
+```sql
+CREATE INDEX IF NOT EXISTS idx_bets_status ON bets(status);
+CREATE INDEX IF NOT EXISTS idx_bets_event_id ON bets(event_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_arbitration_bet_id ON arbitration_decisions(bet_id);
+```
 
 ---
 

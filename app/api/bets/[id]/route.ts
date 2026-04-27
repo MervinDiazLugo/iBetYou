@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotification } from "@/lib/notifications"
-
-const ACCEPT_WINDOW_MINUTES = 10
+import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string; }> }) {
   const authenticatedUserId = await getAuthenticatedUserId(request)
@@ -190,18 +189,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
     }
 
-    // Mark bet as taken after confirmed deduction
+    // Mark bet as taken — .eq("status", "open") acts as optimistic lock:
+    // if another request already took this bet, 0 rows are matched and .single() returns PGRST116.
     const { data: updatedBet, error: updateError } = await supabase
       .from("bets")
       .update({ status: 'taken', acceptor_id: effectiveUserId })
       .eq("id", betId)
+      .eq("status", "open")
       .select()
       .single()
 
-    if (updateError) {
+    if (updateError || !updatedBet) {
       // Rollback wallet deduction
       await supabase.from("wallets").update({ balance_fantasy: wallet.balance_fantasy }).eq("user_id", effectiveUserId)
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
+      if (updateError?.code === "PGRST116") {
+        return NextResponse.json({ error: 'Esta apuesta ya fue tomada por otro usuario' }, { status: 409 })
+      }
+      return NextResponse.json({ error: updateError?.message || 'No se pudo tomar la apuesta' }, { status: 500 })
     }
 
     // Record transaction for taker

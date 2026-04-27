@@ -141,14 +141,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         acceptor_claimed: isAcceptor,
       }
 
+      // .eq("status", "taken") acts as an optimistic lock: if the bet was already
+      // claimed by the other participant simultaneously, 0 rows match and we get PGRST116.
       const { data: updatedBet, error: updateError } = await supabase
         .from("bets")
         .update(updateData)
         .eq("id", betId)
+        .eq("status", "taken")
         .select("*")
         .single()
 
       if (updateError || !updatedBet) {
+        if (updateError?.code === "PGRST116") {
+          return NextResponse.json({ error: "La apuesta ya fue reportada o su estado cambió" }, { status: 409 })
+        }
         return NextResponse.json({ error: updateError?.message || "No se pudo registrar el reporte" }, { status: 500 })
       }
 
@@ -174,7 +180,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             ? "Tu rival dice que ganó. Confirmá o disputá el resultado."
             : "Tu rival dice que perdió. Confirmá o disputá el resultado.",
           betId,
-        }])
+        }], supabase)
       }
 
       return NextResponse.json({ success: true, bet: updatedBet })
@@ -221,7 +227,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         { userId: bet.creator_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId },
         ...(bet.acceptor_id ? [{ userId: bet.acceptor_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId }] : []),
       ]
-      await createNotifications(disputeNotifs)
+      await createNotifications(disputeNotifs, supabase)
 
       return NextResponse.json({ success: true, bet: disputedBet })
     }
@@ -269,10 +275,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "No se encontro billetera del ganador" }, { status: 404 })
     }
 
-    await supabase
+    const { error: walletPayError } = await supabase
       .from("wallets")
       .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
       .eq("user_id", winnerUserId)
+
+    if (walletPayError) {
+      console.error("Wallet payout error (bet already resolved):", walletPayError, { betId, winnerUserId, totalPrize })
+    }
 
     await supabase.from("transactions").insert({
       user_id: winnerUserId,
@@ -299,7 +309,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       { userId: winnerUserId, type: "bet_resolved_win" as const, title: "¡Ganaste la apuesta!", body: `Ganaste $${totalPrize.toFixed(2)} Fantasy Tokens.`, betId },
       ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Apuesta resuelta", body: "Perdiste esta apuesta. ¡Suerte la próxima!", betId }] : []),
     ]
-    await createNotifications(resolveNotifs)
+    await createNotifications(resolveNotifs, supabase)
 
     return NextResponse.json({ success: true, bet: resolvedBet })
   } catch (error: unknown) {

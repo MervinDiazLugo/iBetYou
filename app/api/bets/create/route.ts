@@ -3,7 +3,9 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, eventId, betType, selection, amount, multiplier, fee } = await request.json()
+    const { userId, eventId, betType, selection, amount, multiplier } = await request.json()
+    // Fee is always recalculated server-side — never trust the client-provided value
+    const fee = amount * 0.03
     const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
 
     const authHeader = request.headers.get("authorization")
@@ -33,6 +35,13 @@ export async function POST(request: NextRequest) {
         { error: "Missing required fields" },
         { status: 400 }
       )
+    }
+
+    if (betType === "exact_score" && multiplier !== undefined) {
+      const parsedMultiplier = Number(multiplier)
+      if (!Number.isFinite(parsedMultiplier) || parsedMultiplier < 1 || parsedMultiplier > 100) {
+        return NextResponse.json({ error: "El multiplicador debe estar entre 1 y 100" }, { status: 400 })
+      }
     }
 
     if (userId !== user.id) {

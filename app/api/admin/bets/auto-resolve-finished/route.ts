@@ -329,10 +329,14 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      await supabase
+      const { error: walletPayError } = await supabase
         .from("wallets")
         .update({ balance_fantasy: Number(winnerWallet.balance_fantasy || 0) + totalPrize })
         .eq("user_id", winnerId)
+
+      if (walletPayError) {
+        console.error("Wallet payout error (bet already resolved):", walletPayError, { betId: (bet as any).id, winnerId, totalPrize })
+      }
 
       await supabase.from("transactions").insert({
         user_id: winnerId,
@@ -364,7 +368,7 @@ export async function POST(request: NextRequest) {
       await createNotifications([
         { userId: winnerId, type: "bet_resolved_win", title: "¡Ganaste la apuesta!", body: `Tu apuesta fue resuelta automáticamente. Ganaste $${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: (bet as any).id },
         { userId: loserId, type: "bet_resolved_loss", title: "Apuesta resuelta", body: "Tu apuesta fue resuelta automáticamente. ¡Suerte la próxima!", betId: (bet as any).id },
-      ])
+      ], supabase)
 
       resolved += 1
       results.push({
