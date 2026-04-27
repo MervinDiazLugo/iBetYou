@@ -64,13 +64,20 @@ function HomeContent() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [cloneBetId, setCloneBetId] = useState<string | null>(null)
   const { showToast } = useToast()
-  const [events, setEvents] = useState<Event[]>([])
   const [selectedEventForBet, setSelectedEventForBet] = useState<Event | null>(null)
-  const [eventsVisibleBySport, setEventsVisibleBySport] = useState<Record<string, number>>({
-    football: 10,
-    basketball: 10,
-    baseball: 10,
+  const [debouncedSearch, setDebouncedSearch] = useState("")
+  const [betsVisible, setBetsVisible] = useState(20)
+  const [eventsPagination, setEventsPagination] = useState<Record<string, {
+    data: Event[]
+    hasMore: boolean
+    loading: boolean
+    offset: number
+  }>>({
+    football: { data: [], hasMore: false, loading: true, offset: 0 },
+    basketball: { data: [], hasMore: false, loading: true, offset: 0 },
+    baseball: { data: [], hasMore: false, loading: true, offset: 0 },
   })
+  const eventsPaginationRef = useRef(eventsPagination)
   const [loadingBets, setLoadingBets] = useState(false)
   const [marketMode, setMarketMode] = useState<"take" | "create">("take")
   const [selectedBetType, setSelectedBetType] = useState("all")
@@ -245,13 +252,61 @@ function HomeContent() {
     }
   }, [])
 
-  // Load available events on mount (all sports, filter client-side)
+  // Keep ref in sync with state so loadMoreEvents never reads stale offset
+  useEffect(() => { eventsPaginationRef.current = eventsPagination }, [eventsPagination])
+
+  // Debounce search input before hitting the events API
   useEffect(() => {
-    fetch('/api/events/list')
-      .then(r => r.json())
-      .then(data => setEvents(Array.isArray(data) ? data : []))
-      .catch(() => setEvents([]))
-  }, [])
+    const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Load events per sport from API — reset and refetch when search changes
+  useEffect(() => {
+    const SPORTS_LIST = ["football", "basketball", "baseball"] as const
+    const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ""
+
+    setEventsPagination({
+      football: { data: [], hasMore: false, loading: true, offset: 0 },
+      basketball: { data: [], hasMore: false, loading: true, offset: 0 },
+      baseball: { data: [], hasMore: false, loading: true, offset: 0 },
+    })
+
+    SPORTS_LIST.forEach(async (sport) => {
+      try {
+        const res = await fetch(`/api/events/list?sport=${sport}&paginated=1&limit=12${searchParam}`)
+        const data = await res.json()
+        setEventsPagination((prev) => ({
+          ...prev,
+          [sport]: { data: data.events || [], hasMore: data.hasMore || false, loading: false, offset: 12 },
+        }))
+      } catch {
+        setEventsPagination((prev) => ({ ...prev, [sport]: { ...prev[sport], loading: false } }))
+      }
+    })
+  }, [debouncedSearch])
+
+  async function loadMoreEvents(sport: string) {
+    const current = eventsPaginationRef.current[sport]
+    if (!current || current.loading || !current.hasMore) return
+    setEventsPagination((prev) => ({ ...prev, [sport]: { ...prev[sport], loading: true } }))
+    const searchParam = debouncedSearch ? `&search=${encodeURIComponent(debouncedSearch)}` : ""
+    try {
+      const res = await fetch(`/api/events/list?sport=${sport}&paginated=1&limit=12&offset=${current.offset}${searchParam}`)
+      const data = await res.json()
+      setEventsPagination((prev) => ({
+        ...prev,
+        [sport]: {
+          data: [...prev[sport].data, ...(data.events || [])],
+          hasMore: data.hasMore || false,
+          loading: false,
+          offset: prev[sport].offset + 12,
+        },
+      }))
+    } catch {
+      setEventsPagination((prev) => ({ ...prev, [sport]: { ...prev[sport], loading: false } }))
+    }
+  }
 
   // Realtime: update event scores/status when cron syncs them
   useEffect(() => {
@@ -261,9 +316,18 @@ function HomeContent() {
         'postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'events' },
         (payload) => {
-          setEvents(prev =>
-            prev.map(e => e.id === (payload.new as any).id ? { ...e, ...(payload.new as any) } : e)
-          )
+          const updated = payload.new as any
+          setEventsPagination((prev) => {
+            const sport = updated.sport as string
+            if (!prev[sport]) return prev
+            return {
+              ...prev,
+              [sport]: {
+                ...prev[sport],
+                data: prev[sport].data.map((e) => e.id === updated.id ? { ...e, ...updated } : e),
+              },
+            }
+          })
         }
       )
       .subscribe()
@@ -335,27 +399,16 @@ function HomeContent() {
     return matchesMarketplaceFilters(bet)
   })
 
-  const filteredEvents = events.filter(event => {
-    const matchesSport = selectedSport === 'all' || (event.sport as string) === selectedSport
-    const matchesSearch = !searchTerm ||
-      event.home_team.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      event.away_team.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchesSport && matchesSearch
-  })
-
+  // Events are already fetched per-sport and search-filtered by the API
   const eventsBySport = {
-    football: filteredEvents.filter((event) => event.sport === "football"),
-    basketball: filteredEvents.filter((event) => event.sport === "basketball"),
-    baseball: filteredEvents.filter((event) => event.sport === "baseball"),
+    football: (selectedSport === "all" || selectedSport === "football") ? (eventsPagination.football?.data || []) : [],
+    basketball: (selectedSport === "all" || selectedSport === "basketball") ? (eventsPagination.basketball?.data || []) : [],
+    baseball: (selectedSport === "all" || selectedSport === "baseball") ? (eventsPagination.baseball?.data || []) : [],
   }
+  const filteredEvents = [...eventsBySport.football, ...eventsBySport.basketball, ...eventsBySport.baseball]
 
-  useEffect(() => {
-    setEventsVisibleBySport({
-      football: 10,
-      basketball: 10,
-      baseball: 10,
-    })
-  }, [selectedSport, searchTerm])
+  // Reset bets pagination when filters change
+  useEffect(() => { setBetsVisible(20) }, [selectedSport, selectedBetType, selectedAmountRange, searchTerm, sortBy])
 
   const activeSecondaryFiltersCount =
     (selectedBetType !== "all" ? 1 : 0) +
@@ -709,9 +762,9 @@ function HomeContent() {
                 const sportEvents = eventsBySport[sportId as keyof typeof eventsBySport] || []
                 if (sportEvents.length === 0) return null
 
-                const visibleCount = eventsVisibleBySport[sportId] || 10
-                const visibleEvents = sportEvents.slice(0, visibleCount)
-                const hasMore = visibleCount < sportEvents.length
+                const visibleEvents = sportEvents
+                const hasMore = eventsPagination[sportId]?.hasMore || false
+                const sportLoading = eventsPagination[sportId]?.loading || false
 
                 return (
                   <div key={`event-group-${sportId}`}>
@@ -734,6 +787,9 @@ function HomeContent() {
                     </button>
 
                     {!collapsedSports[sportId] && <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {sportLoading && visibleEvents.length === 0 && [...Array(6)].map((_, i) => (
+                        <div key={`skel-${sportId}-${i}`} className="rounded-lg border border-border animate-pulse h-28 bg-muted/30" />
+                      ))}
                       {visibleEvents.map((event) => (
                         <Card
                           key={event.id}
@@ -797,18 +853,14 @@ function HomeContent() {
                       ))}
                     </div>}
 
-                    {!collapsedSports[sportId] && hasMore && (
+                    {!collapsedSports[sportId] && (hasMore || sportLoading) && (
                       <div className="mt-3 flex justify-center">
                         <Button
                           variant="outline"
-                          onClick={() => {
-                            setEventsVisibleBySport((prev) => ({
-                              ...prev,
-                              [sportId]: (prev[sportId] || 10) + 10,
-                            }))
-                          }}
+                          disabled={sportLoading}
+                          onClick={() => loadMoreEvents(sportId)}
                         >
-                          Mostrar más {getSportLabel(sportId).toLowerCase()}
+                          {sportLoading ? "Cargando..." : `Mostrar más ${getSportLabel(sportId).toLowerCase()}`}
                         </Button>
                       </div>
                     )}
@@ -860,8 +912,9 @@ function HomeContent() {
                 </Link>
               </div>
             ) : (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {sortedBets.map((bet) => {
+                {sortedBets.slice(0, betsVisible).map((bet) => {
                   const betTypeLabels: Record<string, string> = {
                     direct: "Directa",
                     exact_score: "Score Exacto",
@@ -978,6 +1031,14 @@ function HomeContent() {
                   </Card>
                 )})}
               </div>
+              {sortedBets.length > betsVisible && (
+                <div className="mt-6 flex justify-center">
+                  <Button variant="outline" onClick={() => setBetsVisible((prev) => prev + 20)}>
+                    Cargar más apuestas ({sortedBets.length - betsVisible} restantes)
+                  </Button>
+                </div>
+              )}
+              </>
             )}
           </>
         )}
