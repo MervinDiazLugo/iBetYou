@@ -266,10 +266,24 @@ export async function PATCH(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
 
   try {
-    const { id, featured } = await request.json()
+    const body = await request.json()
+    const { id, featured, reset_scores } = body
 
-    if (!id || typeof featured !== "boolean") {
-      return NextResponse.json({ error: "id and featured (boolean) are required" }, { status: 400 })
+    if (!id) {
+      return NextResponse.json({ error: "id is required" }, { status: 400 })
+    }
+
+    if (reset_scores) {
+      const { error } = await supabase
+        .from("events")
+        .update({ status: "scheduled", home_score: null, away_score: null, metadata: null })
+        .eq("id", id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, action: "reset_scores" })
+    }
+
+    if (typeof featured !== "boolean") {
+      return NextResponse.json({ error: "featured (boolean) or reset_scores (boolean) is required" }, { status: 400 })
     }
 
     const { error } = await supabase.from("events").update({ featured }).eq("id", id)

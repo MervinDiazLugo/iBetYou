@@ -116,6 +116,41 @@ function resolveHalfTime(
   }
 }
 
+// ─── direct ───────────────────────────────────────────────────────────────────
+
+function resolveDirect(
+  creatorSelection: string,
+  event: { home_team: string; away_team: string; home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const sel = creatorSelection.toLowerCase().trim()
+  const homeNorm = (event.home_team || "").toLowerCase().trim()
+  const awayNorm = (event.away_team || "").toLowerCase().trim()
+
+  const choseDraw = ["empate", "draw", "tie"].includes(sel)
+  const { choseHome, choseAway } = choseDraw ? { choseHome: false, choseAway: false } : fuzzyMatchTeam(sel, homeNorm, awayNorm)
+
+  if (!choseDraw && !choseHome && !choseAway) return null
+
+  const homeWon = event.home_score > event.away_score
+  const awayWon = event.away_score > event.home_score
+  const isDraw = event.home_score === event.away_score
+
+  let winnerId: string
+  if (choseDraw) {
+    winnerId = isDraw ? bet.creator_id : bet.acceptor_id
+  } else if (choseHome) {
+    winnerId = homeWon ? bet.creator_id : bet.acceptor_id
+  } else {
+    winnerId = awayWon ? bet.creator_id : bet.acceptor_id
+  }
+
+  return {
+    winnerId,
+    reason: `direct: selección "${creatorSelection}", resultado ${event.home_score}-${event.away_score}`,
+  }
+}
+
 // ─── first_scorer ─────────────────────────────────────────────────────────────
 
 function resolveFirstScorer(
@@ -163,7 +198,7 @@ function resolveFirstScorer(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["exact_score", "half_time", "first_scorer"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "half_time", "first_scorer"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -230,7 +265,9 @@ export async function POST(request: NextRequest) {
 
       let resolution: { winnerId: string; reason: string } | null = null
 
-      if (betType === "exact_score") {
+      if (betType === "direct") {
+        resolution = resolveDirect(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "exact_score") {
         resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
       } else if (betType === "half_time") {
         resolution = resolveHalfTime(creatorSelection, eventRow, betForResolver)
