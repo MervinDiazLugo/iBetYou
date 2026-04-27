@@ -6,6 +6,7 @@ import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
+const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
 const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 const FORCE_FINISH_AFTER_MS = 4 * 60 * 60 * 1000
 
@@ -61,11 +62,15 @@ function getApiUrl(externalId: string) {
     return `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
   }
 
+  if (sportPrefix === "basketball") {
+    return `${API_BASKETBALL_URL}/games?id=${externalNumericId}`
+  }
+
   if (sportPrefix === "baseball") {
     return `${API_BASEBALL_URL}/games?id=${externalNumericId}`
   }
 
-  return `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
+  return null
 }
 
 function normalizeEventStatus(fixture: any, sport: string): "scheduled" | "live" | "finished" {
@@ -265,7 +270,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid external_id format" }, { status: 400 })
     }
 
-    const apiKey = event.sport === "baseball" ? API_BASEBALL_KEY : API_FOOTBALL_KEY
+    const apiKey = API_FOOTBALL_KEY
     if (!apiKey) {
       return NextResponse.json({ error: `API key no configurada para ${event.sport}` }, { status: 500 })
     }
