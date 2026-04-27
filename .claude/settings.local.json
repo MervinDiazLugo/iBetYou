@@ -12,7 +12,8 @@
       "Bash(npm install *)",
       "Bash(claude plugin *)",
       "Bash(node -e ' *)",
-      "Bash(npx next *)"
+      "Bash(npx next *)",
+      "Bash(find d:/Documents/Documentos/p2pBets/app -name \"*.ts\" -type f -exec grep -l \"select.*balance_fantasy\\\\|select.*balance_real\" {} \\\\;)"
     ]
   }
 }
