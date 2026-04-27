@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { supportsPeerResolution } from "@/lib/bet-resolution"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
+import { createNotifications } from "@/lib/notifications"
 
 type ResolveAction = "claim_win" | "claim_lose" | "confirm" | "reject"
 const LEGACY_PENDING_CREATOR = "pending_resolution_creator"
@@ -162,6 +163,20 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         decided_by: effectiveUserId,
       })
 
+      // Notify the other participant that a result was reported
+      const otherId = isCreator ? bet.acceptor_id : bet.creator_id
+      if (otherId) {
+        await createNotifications([{
+          userId: otherId,
+          type: "result_reported",
+          title: "Tu rival reportó el resultado",
+          body: action === "claim_win"
+            ? "Tu rival dice que ganó. Confirmá o disputá el resultado."
+            : "Tu rival dice que perdió. Confirmá o disputá el resultado.",
+          betId,
+        }])
+      }
+
       return NextResponse.json({ success: true, bet: updatedBet })
     }
 
@@ -200,6 +215,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         details: { rejected_by: effectiveUserId, bet_type: bet.bet_type },
         decided_by: effectiveUserId,
       })
+
+      // Notify both parties that the bet is now disputed
+      const disputeNotifs = [
+        { userId: bet.creator_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId },
+        ...(bet.acceptor_id ? [{ userId: bet.acceptor_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId }] : []),
+      ]
+      await createNotifications(disputeNotifs)
 
       return NextResponse.json({ success: true, bet: disputedBet })
     }
@@ -268,6 +290,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       details: { confirmed_by: effectiveUserId, totalPrize, bet_type: bet.bet_type },
       decided_by: effectiveUserId,
     })
+
+    // Notify winner and loser
+    const loserId = winnerUserId === bet.creator_id ? bet.acceptor_id : bet.creator_id
+    const resolveNotifs = [
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: "¡Ganaste la apuesta!", body: `Ganaste $${totalPrize.toFixed(2)} Fantasy Tokens.`, betId },
+      ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Apuesta resuelta", body: "Perdiste esta apuesta. ¡Suerte la próxima!", betId }] : []),
+    ]
+    await createNotifications(resolveNotifs)
 
     return NextResponse.json({ success: true, bet: resolvedBet })
   } catch (error: unknown) {

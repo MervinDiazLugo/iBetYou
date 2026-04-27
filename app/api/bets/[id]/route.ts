@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
+import { createNotification } from "@/lib/notifications"
 
 const ACCEPT_WINDOW_MINUTES = 10
 
@@ -215,6 +216,15 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // The creator already had their balance deducted when they created the bet.
     // When the bet is taken, the creator's potential liability is covered, but no immediate balance change.
     // The actual payout will happen when the bet is resolved.
+
+    // Notify creator that someone took their bet
+    await createNotification({
+      userId: bet.creator_id,
+      type: "bet_taken",
+      title: "¡Tu apuesta fue tomada!",
+      body: `Alguien tomó tu apuesta sobre ${eventRow?.home_team} vs ${eventRow?.away_team}`,
+      betId: betId,
+    })
 
     return NextResponse.json({ success: true, bet: updatedBet })
   } catch (error: any) {

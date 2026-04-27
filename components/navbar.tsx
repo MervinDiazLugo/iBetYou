@@ -6,6 +6,7 @@ import { Wallet, User, LogOut, Menu, ChevronDown, Coins } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { NotificationBell } from "@/components/notification-bell"
 
 export function Navbar() {
   const createBetCtaClass = "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md !bg-[#16a34a] !text-white text-sm font-semibold shadow-md transition-all duration-200 hover:!bg-[#22c55e] hover:scale-105 hover:shadow-[0_0_18px_rgba(34,197,94,0.45)] hover:shadow-lg active:scale-95"
@@ -17,6 +18,7 @@ export function Navbar() {
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
   const [ibcBalance, setIbcBalance] = useState(0)
   const [menuNickname, setMenuNickname] = useState("")
+  const [sessionToken, setSessionToken] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
   const supabase = createBrowserSupabaseClient()
 
@@ -32,6 +34,7 @@ export function Navbar() {
 
     if (session?.access_token) {
       headers.Authorization = `Bearer ${session.access_token}`
+      setSessionToken(session.access_token)
     }
 
     const [res, ibcRes] = await Promise.all([
@@ -126,6 +129,9 @@ export function Navbar() {
 
           {/* User Section */}
           <div className="flex items-center gap-4">
+            {!authLoading && user && (
+              <NotificationBell userId={user.id} sessionToken={sessionToken} />
+            )}
             {!authLoading && user ? (
               <>
                 <div className="relative" ref={userMenuRef}>
