@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { createNotifications } from "@/lib/notifications"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -357,15 +358,19 @@ export async function PATCH(request: NextRequest) {
           new_status: 'resolved',
           decided_winner_id: winnerUserId,
           reason: reason || 'Aprobacion manual de resolucion pendiente',
-          details: {
-            amount: bet.amount,
-            multiplier: bet.multiplier,
-            totalPrize,
-          },
+          details: { amount: bet.amount, multiplier: bet.multiplier, totalPrize },
           decided_by: decidedBy,
           source: 'manual',
         })
-        
+
+        const loserId = winnerUserId === bet.creator_id ? bet.acceptor_id : bet.creator_id
+        if (loserId) {
+          await createNotifications([
+            { userId: winnerUserId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue aprobada. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: id },
+            { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: id },
+          ])
+        }
+
         results.push({ id, success: true })
       }
       
@@ -380,17 +385,44 @@ export async function PATCH(request: NextRequest) {
     let operation = ""
 
     switch (action) {
-      case 'resolve':
+      case 'resolve': {
         if (!winner_id) {
           return NextResponse.json({ error: 'winner_id is required to resolve' }, { status: 400 })
         }
-        updateData = {
-          status: 'resolved',
-          winner_id,
-          resolved_at: new Date().toISOString()
+        const { data: betToResolve } = await supabase
+          .from('bets')
+          .select('id, creator_id, acceptor_id, amount, multiplier, status')
+          .eq('id', bet_id)
+          .single()
+
+        if (!betToResolve || betToResolve.status === 'resolved' || betToResolve.status === 'cancelled') {
+          return NextResponse.json({ error: 'Bet cannot be resolved' }, { status: 400 })
         }
+
+        const totalPrize = Number(betToResolve.amount) * Number(betToResolve.multiplier) + Number(betToResolve.amount)
+        const { data: winnerWallet } = await supabase
+          .from('wallets').select('balance_fantasy').eq('user_id', winner_id).single()
+
+        if (winnerWallet) {
+          await supabase.from('wallets')
+            .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
+            .eq('user_id', winner_id)
+          await supabase.from('transactions').insert({
+            user_id: winner_id, token_type: 'fantasy', amount: totalPrize,
+            operation: 'bet_won', reference_id: bet_id,
+          })
+        }
+
+        const loserId = winner_id === betToResolve.creator_id ? betToResolve.acceptor_id : betToResolve.creator_id
+        await createNotifications([
+          { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta manualmente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
+          { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
+        ])
+
+        updateData = { status: 'resolved', winner_id, resolved_at: new Date().toISOString() }
         operation = "resolve"
         break
+      }
       case 'cancel': {
         // Fetch bet details before cancelling to process refunds
         const { data: betToCancel, error: fetchErr } = await supabase
@@ -1212,16 +1244,21 @@ export async function POST(request: NextRequest) {
 
     await supabase
       .from('events')
-      .update({
-        home_score: homeScore,
-        away_score: awayScore
-      })
+      .update({ home_score: homeScore, away_score: awayScore })
       .eq('id', event_id)
 
-    return NextResponse.json({ 
-      success: true, 
+    if (winner_id && winner_id !== 'tie' && winner_id !== 'split') {
+      const loserId = winner_id === bet.creator_id ? bet.acceptor_id : bet.creator_id
+      await createNotifications([
+        { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
+        { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
+      ])
+    }
+
+    return NextResponse.json({
+      success: true,
       pending_approval: false,
-      homeScore, 
+      homeScore,
       awayScore,
       score_source: scoreSource,
       winner_id,
