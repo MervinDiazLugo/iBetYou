@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useToast } from "@/components/toast"
@@ -65,6 +65,7 @@ export function useMyBets() {
   const [bets, setBets] = useState<BetWithDetails[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
+  const sessionTokenRef = useRef<string | null>(null)
 
   useEffect(() => {
     let isMounted = true
@@ -89,6 +90,7 @@ export function useMyBets() {
 
         if (session?.access_token) {
           authHeaders.Authorization = `Bearer ${session.access_token}`
+          sessionTokenRef.current = session.access_token
         }
 
         const walletRes = await fetch(`/api/wallet?user_id=${authUser.id}`, {
@@ -138,6 +140,38 @@ export function useMyBets() {
       isMounted = false
     }
   }, [router])
+
+  // Realtime: re-fetch when any of the user's bets changes (e.g., auto-resolved)
+  useEffect(() => {
+    if (!user?.id) return
+
+    const supabase = createBrowserSupabaseClient()
+
+    async function refetchBets() {
+      const headers: HeadersInit = {}
+      if (sessionTokenRef.current) headers.Authorization = `Bearer ${sessionTokenRef.current}`
+      const res = await fetch(`/api/my-bets?user_id=${user!.id}`, { headers }).catch(() => null)
+      if (res?.ok) {
+        const data = await res.json()
+        setBets(data.bets || [])
+      }
+    }
+
+    const ch1 = supabase
+      .channel(`my-bets-creator-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bets', filter: `creator_id=eq.${user.id}` }, refetchBets)
+      .subscribe()
+
+    const ch2 = supabase
+      .channel(`my-bets-acceptor-${user.id}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bets', filter: `acceptor_id=eq.${user.id}` }, refetchBets)
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(ch1)
+      supabase.removeChannel(ch2)
+    }
+  }, [user?.id])
 
   return { user, balance, bets, loading, error }
 }

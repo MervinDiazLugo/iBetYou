@@ -253,6 +253,24 @@ function HomeContent() {
       .catch(() => setEvents([]))
   }, [])
 
+  // Realtime: update event scores/status when cron syncs them
+  useEffect(() => {
+    const channel = supabase
+      .channel('events-live-scores')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'events' },
+        (payload) => {
+          setEvents(prev =>
+            prev.map(e => e.id === (payload.new as any).id ? { ...e, ...(payload.new as any) } : e)
+          )
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [supabase])
+
   // Re-fetch marketplace bets when sport filter changes (skip initial render)
   useEffect(() => {
     if (!initialLoadDoneRef.current) return
