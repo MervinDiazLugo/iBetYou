@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
@@ -9,6 +10,26 @@ const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.ap
 const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
 const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 const FORCE_FINISH_AFTER_MS = 4 * 60 * 60 * 1000
+
+function fetchApiSports(url: string, apiKey: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const { hostname, pathname, search } = new URL(url)
+    const req = https.request(
+      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": apiKey } },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (c) => chunks.push(c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
+          catch (e) { reject(e) }
+        })
+      }
+    )
+    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
+    req.on("error", reject)
+    req.end()
+  })
+}
 
 type EventWithBets = {
   id: number
@@ -275,16 +296,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `API key no configurada para ${event.sport}` }, { status: 500 })
     }
 
-    const apiResponse = await fetch(apiUrl, {
-      headers: { "x-apisports-key": apiKey },
-      next: { revalidate: 0 },
-    })
-
-    if (!apiResponse.ok) {
-      return NextResponse.json({ error: "Failed to fetch external API" }, { status: 500 })
-    }
-
-    const apiData = await apiResponse.json()
+    const apiData = await fetchApiSports(apiUrl, apiKey)
     const fixture = apiData.response?.[0]
 
     if (!fixture) {
@@ -317,16 +329,8 @@ export async function POST(request: NextRequest) {
       const fixtureId = getFootballFixtureId(event.external_id)
       if (fixtureId) {
         try {
-          const eventsUrl = `${API_FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`
-          const eventsResponse = await fetch(eventsUrl, {
-            headers: { "x-apisports-key": apiKey },
-            next: { revalidate: 0 },
-          })
-
-          if (eventsResponse.ok) {
-            const eventsPayload = await eventsResponse.json()
-            firstScorer = extractFirstScorer(eventsPayload)
-          }
+          const eventsPayload = await fetchApiSports(`${API_FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`, apiKey)
+          firstScorer = extractFirstScorer(eventsPayload)
         } catch (eventsError) {
           console.error("Failed to fetch football fixture events:", eventsError)
         }
