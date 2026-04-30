@@ -90,13 +90,17 @@ export default function AuditPage() {
     setError(null)
     try {
       const params = new URLSearchParams({ limit: String(LIMIT), offset: String(currentOffset) })
-      if (filters.from) params.set("from", filters.from)
-      if (filters.to) params.set("to", filters.to)
+      // Convert date strings (YYYY-MM-DD) to ISO timestamps for the API
+      if (filters.from) params.set("from", `${filters.from}T00:00:00.000Z`)
+      if (filters.to) params.set("to", `${filters.to}T23:59:59.999Z`)
       if (filters.operation) params.set("operation", filters.operation)
-      if (filters.user_id) params.set("user_id", filters.user_id)
+      if (filters.user_id) params.set("user_id", filters.user_id.trim())
 
       const res = await authFetch(`/api/admin/audit?${params}`)
-      if (!res.ok) throw new Error("Error cargando datos de auditoría")
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || `Error ${res.status}`)
+      }
       const json = await res.json()
       setData(json)
     } catch (e: any) {
@@ -266,31 +270,31 @@ export default function AuditPage() {
           <CardTitle className="text-base">Filtros de búsqueda</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSearch} className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Desde</label>
+          <form onSubmit={handleSearch} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Desde</label>
               <Input
-                type="datetime-local"
+                type="date"
                 value={filters.from}
                 onChange={e => setFilters(f => ({ ...f, from: e.target.value }))}
-                className="h-8 text-sm"
+                className="h-9 text-sm"
               />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Hasta</label>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Hasta</label>
               <Input
-                type="datetime-local"
+                type="date"
                 value={filters.to}
                 onChange={e => setFilters(f => ({ ...f, to: e.target.value }))}
-                className="h-8 text-sm"
+                className="h-9 text-sm"
               />
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Operación</label>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">Operación</label>
               <select
                 value={filters.operation}
                 onChange={e => setFilters(f => ({ ...f, operation: e.target.value }))}
-                className="h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               >
                 <option value="">Todas</option>
                 {Object.entries(OPERATION_LABELS).map(([val, label]) => (
@@ -298,17 +302,17 @@ export default function AuditPage() {
                 ))}
               </select>
             </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 block">User ID</label>
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground">User ID</label>
               <div className="flex gap-2">
                 <Input
                   placeholder="UUID del usuario"
                   value={filters.user_id}
                   onChange={e => setFilters(f => ({ ...f, user_id: e.target.value }))}
-                  className="h-8 text-sm"
+                  className="h-9 text-sm"
                 />
-                <Button type="submit" size="sm" className="h-8 px-3" disabled={loading}>
-                  <Search className="h-3 w-3" />
+                <Button type="submit" size="sm" className="h-9 px-3" disabled={loading}>
+                  <Search className="h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -317,10 +321,8 @@ export default function AuditPage() {
             <Button
               variant="ghost"
               size="sm"
-              className="mt-2 text-xs h-7"
-              onClick={() => {
-                setFilters({ from: "", to: "", operation: "", user_id: "" })
-              }}
+              className="mt-3 text-xs h-7 text-muted-foreground hover:text-foreground"
+              onClick={() => setFilters({ from: "", to: "", operation: "", user_id: "" })}
             >
               Limpiar filtros
             </Button>
