@@ -12,34 +12,24 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
   const { searchParams } = new URL(request.url)
   const sport = searchParams.get("sport") || "all"
+  const page = Math.max(0, parseInt(searchParams.get("page") || "0"))
+  const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50")))
 
   try {
-    // Paginate through all rows (Supabase caps at 1000 per request by default)
-    // Apply filters BEFORE .range() so pagination counts filtered rows correctly
-    const PAGE_SIZE = 1000
-    let allData: Record<string, unknown>[] = []
-    let from = 0
+    let query = supabase
+      .from("events")
+      .select("id, sport, league, country, home_team, away_team, home_logo, away_logo, start_time, status, external_id, featured, home_score, away_score, metadata", { count: "exact" })
+      .order("start_time", { ascending: true })
+      .range(page * limit, page * limit + limit - 1)
 
-    while (true) {
-      let query = supabase
-        .from("events")
-        .select("*")
-        .order("start_time", { ascending: true })
-
-      if (sport !== "all") {
-        query = query.eq("sport", sport)
-      }
-
-      const { data, error } = await query.range(from, from + PAGE_SIZE - 1)
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-      if (!data || data.length === 0) break
-
-      allData = allData.concat(data)
-      if (data.length < PAGE_SIZE) break
-      from += PAGE_SIZE
+    if (sport !== "all") {
+      query = query.eq("sport", sport)
     }
 
-    return NextResponse.json({ events: allData })
+    const { data, error, count } = await query
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    return NextResponse.json({ events: data || [], total: count ?? 0, page, limit })
   } catch (error: unknown) {
     console.error("Admin events GET error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
@@ -267,7 +257,7 @@ export async function PATCH(request: NextRequest) {
 
   try {
     const body = await request.json()
-    const { id, featured, reset_scores } = body
+    const { id, featured, reset_scores, set_score } = body
 
     if (!id) {
       return NextResponse.json({ error: "id is required" }, { status: 400 })
@@ -282,8 +272,31 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ success: true, action: "reset_scores" })
     }
 
+    if (set_score) {
+      const homeScore = Number(set_score.home_score)
+      const awayScore = Number(set_score.away_score)
+      const status = set_score.status || "finished"
+
+      if (!Number.isFinite(homeScore) || !Number.isFinite(awayScore) || homeScore < 0 || awayScore < 0) {
+        return NextResponse.json({ error: "home_score y away_score deben ser números válidos" }, { status: 400 })
+      }
+      if (!["scheduled", "live", "finished"].includes(status)) {
+        return NextResponse.json({ error: "status inválido" }, { status: 400 })
+      }
+
+      const { data: updatedEvent, error } = await supabase
+        .from("events")
+        .update({ home_score: homeScore, away_score: awayScore, status })
+        .eq("id", id)
+        .select("id, home_team, away_team, home_score, away_score, status")
+        .single()
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, event: updatedEvent, action: "set_score" })
+    }
+
     if (typeof featured !== "boolean") {
-      return NextResponse.json({ error: "featured (boolean) or reset_scores (boolean) is required" }, { status: 400 })
+      return NextResponse.json({ error: "featured (boolean), reset_scores, o set_score son requeridos" }, { status: 400 })
     }
 
     const { error } = await supabase.from("events").update({ featured }).eq("id", id)

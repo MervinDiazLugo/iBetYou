@@ -15,7 +15,8 @@ import {
   Clock,
   Check,
   Trash2,
-  Star
+  Star,
+  Pencil
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useToast } from "@/components/toast"
@@ -56,6 +57,8 @@ interface SavedEvent {
   start_time: string
   status: string
   external_id: string | null
+  home_score?: number | null
+  away_score?: number | null
   featured?: boolean
   metadata?: {
     venue?: { name?: string; city?: string }
@@ -81,7 +84,14 @@ export default function BackofficeEvents() {
   const [savedExternalIds, setSavedExternalIds] = useState<Set<string>>(new Set())
   const [showCreate, setShowCreate] = useState(false)
   const [countryFilter, setCountryFilter] = useState<string>("")
+  const [eventsPage, setEventsPage] = useState(0)
+  const [eventsTotal, setEventsTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const EVENTS_PAGE_SIZE = 50
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
+  const [scoreDialog, setScoreDialog] = useState<{ eventId: number; homeTeam: string; awayTeam: string } | null>(null)
+  const [scoreForm, setScoreForm] = useState({ home_score: "", away_score: "", status: "finished" })
+  const [savingScore, setSavingScore] = useState(false)
   const [newEvent, setNewEvent] = useState({
     sport: 'football',
     league: '',
@@ -172,7 +182,7 @@ export default function BackofficeEvents() {
       )
       setExternalEvents(sorted)
       
-      await fetchSavedEvents()
+      await fetchSavedEvents(0)
     } catch (err) {
       console.error('Error fetching external events:', err)
       setExternalEvents([])
@@ -181,21 +191,29 @@ export default function BackofficeEvents() {
     }
   }
 
-  async function fetchSavedEvents() {
-    setLoadingSaved(true)
+  async function fetchSavedEvents(page = 0) {
+    if (page === 0) setLoadingSaved(true)
+    else setLoadingMore(true)
     try {
-      const res = await authFetch(`/api/admin/events?sport=all`)
+      const res = await authFetch(`/api/admin/events?sport=${sport === 'all' ? 'all' : sport}&page=${page}&limit=${EVENTS_PAGE_SIZE}`)
       if (!res.ok) {
         const err = await res.json()
         showToast(err.error || 'Error al cargar eventos', 'error')
         return
       }
       const data = await res.json()
-      const events = data.events || []
-      setSavedEvents(events)
+      const events: SavedEvent[] = data.events || []
+      setEventsTotal(data.total ?? 0)
+      setEventsPage(page)
+
+      if (page === 0) {
+        setSavedEvents(events)
+      } else {
+        setSavedEvents(prev => [...prev, ...events])
+      }
 
       const ids = new Set<string>()
-      events.forEach((e: SavedEvent) => {
+      ;(page === 0 ? events : [...savedEvents, ...events]).forEach((e: SavedEvent) => {
         if (e.external_id) ids.add(e.external_id)
       })
       setSavedExternalIds(ids)
@@ -204,14 +222,15 @@ export default function BackofficeEvents() {
       showToast('Error al cargar eventos', 'error')
     } finally {
       setLoadingSaved(false)
+      setLoadingMore(false)
     }
   }
 
   useEffect(() => {
     if (view === 'saved') {
-      fetchSavedEvents()
+      fetchSavedEvents(0)
     }
-  }, [view])
+  }, [view, sport])
 
   // Handle event_id URL param — highlight and scroll to that event after load
   useEffect(() => {
@@ -295,7 +314,7 @@ export default function BackofficeEvents() {
       if (res.ok) {
         showToast(`Se guardaron ${eventsToSave.length} eventos`, 'success')
         setSelectedEvents(new Set())
-        fetchSavedEvents()
+        fetchSavedEvents(0)
         fetchExternalEvents()
       } else {
         showToast(data.error || 'Error al guardar', 'error')
@@ -325,7 +344,7 @@ export default function BackofficeEvents() {
       })
       
       if (res.ok) {
-        fetchSavedEvents()
+        fetchSavedEvents(0)
       }
     } catch (err) {
       console.error('Error deleting:', err)
@@ -347,6 +366,41 @@ export default function BackofficeEvents() {
       }
     } catch {
       showToast('Error al actualizar evento', 'error')
+    }
+  }
+
+  async function handleSetScore() {
+    if (!scoreDialog) return
+    setSavingScore(true)
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: scoreDialog.eventId,
+          set_score: {
+            home_score: scoreForm.home_score,
+            away_score: scoreForm.away_score,
+            status: scoreForm.status,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        showToast('Score actualizado', 'success')
+        setScoreDialog(null)
+        setSavedEvents(prev => prev.map(e =>
+          e.id === scoreDialog.eventId
+            ? { ...e, home_score: Number(scoreForm.home_score), away_score: Number(scoreForm.away_score), status: scoreForm.status }
+            : e
+        ))
+      } else {
+        showToast(data.error || 'Error al actualizar score', 'error')
+      }
+    } catch {
+      showToast('Error al actualizar score', 'error')
+    } finally {
+      setSavingScore(false)
     }
   }
 
@@ -374,7 +428,7 @@ export default function BackofficeEvents() {
           `${data.deleted} eventos eliminados · ${data.protected} conservados (tienen apuestas)`,
           'success'
         )
-        fetchSavedEvents()
+        fetchSavedEvents(0)
       } else {
         showToast(data.error || 'Error al limpiar', 'error')
       }
@@ -405,7 +459,7 @@ export default function BackofficeEvents() {
       const data = await res.json()
       if (res.ok) {
         showToast(`${data.deleted} eventos eliminados · ${data.protected} conservados (tienen apuestas)`, 'success')
-        fetchSavedEvents()
+        fetchSavedEvents(0)
       } else {
         showToast(data.error || 'Error al limpiar', 'error')
       }
@@ -438,7 +492,7 @@ export default function BackofficeEvents() {
           showToast('No se encontraron duplicados', 'success')
         } else {
           showToast(`${data.removed} duplicados eliminados (${data.groups} grupos)`, 'success')
-          fetchSavedEvents()
+          fetchSavedEvents(0)
         }
       } else {
         showToast(data.error || 'Error al deduplicar', 'error')
@@ -477,7 +531,7 @@ export default function BackofficeEvents() {
           start_time: '',
           country: ''
         })
-        fetchSavedEvents()
+        fetchSavedEvents(0)
       } else {
         showToast(data.error || 'Error al crear evento', 'error')
       }
@@ -598,19 +652,34 @@ export default function BackofficeEvents() {
             <div className="font-bold text-sm">{event.away_team}</div>
           </div>
         </div>
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-xs text-muted-foreground truncate max-w-[200px]">
-            {event.metadata?.venue?.name ? `📍 ${event.metadata.venue.name}${event.metadata.venue.city ? `, ${event.metadata.venue.city}` : ''}` : ''}
+        {(event.home_score !== null && event.home_score !== undefined) && (
+          <div className="text-center font-bold text-lg mb-1">
+            {event.home_score} - {event.away_score}
           </div>
-          <div className="flex flex-col items-end flex-shrink-0">
-            <span className="text-xs text-muted-foreground">#{event.id}</span>
-            {event.external_id && (
-              <span className="text-xs text-muted-foreground/60">{event.external_id}</span>
-            )}
+        )}
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-xs text-muted-foreground truncate max-w-[140px]">
+            {event.metadata?.venue?.name ? `📍 ${event.metadata.venue.name}` : ''}
           </div>
           <Badge variant="secondary" className="text-xs flex-shrink-0">
             {event.status}
           </Badge>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-primary flex-shrink-0"
+            onClick={() => {
+              setScoreForm({
+                home_score: event.home_score?.toString() ?? "",
+                away_score: event.away_score?.toString() ?? "",
+                status: event.status,
+              })
+              setScoreDialog({ eventId: event.id, homeTeam: event.home_team, awayTeam: event.away_team })
+            }}
+            title="Editar score"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
           <Button
             variant="ghost"
             size="sm"
@@ -671,7 +740,7 @@ export default function BackofficeEvents() {
         </Button>
         <Button
           variant={view === 'saved' ? 'default' : 'ghost'}
-          onClick={() => { fetchSavedEvents(); setView('saved') }}
+          onClick={() => { setView('saved') }}
         >
           <Check className="h-4 w-4 mr-2" />
           Eventos Guardados
@@ -971,6 +1040,18 @@ export default function BackofficeEvents() {
                   </div>
                 </details>
               </section>
+
+              {savedEvents.length < eventsTotal && (
+                <div className="text-center pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => fetchSavedEvents(eventsPage + 1)}
+                    disabled={loadingMore}
+                  >
+                    {loadingMore ? 'Cargando...' : `Cargar más (${savedEvents.length} de ${eventsTotal})`}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -1032,6 +1113,62 @@ export default function BackofficeEvents() {
                 </Button>
                 <Button className="flex-1" onClick={handleCreate}>
                   Crear
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Score edit modal */}
+      {scoreDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <Card className="w-full max-w-sm mx-4">
+            <CardHeader>
+              <CardTitle className="text-base">Editar score</CardTitle>
+              <p className="text-sm text-muted-foreground">{scoreDialog.homeTeam} vs {scoreDialog.awayTeam}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">{scoreDialog.homeTeam}</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={scoreForm.home_score}
+                    onChange={(e) => setScoreForm(f => ({ ...f, home_score: e.target.value }))}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">{scoreDialog.awayTeam}</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={scoreForm.away_score}
+                    onChange={(e) => setScoreForm(f => ({ ...f, away_score: e.target.value }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Estado</label>
+                <select
+                  value={scoreForm.status}
+                  onChange={(e) => setScoreForm(f => ({ ...f, status: e.target.value }))}
+                  className="w-full px-3 py-2 border rounded-md bg-background text-sm"
+                >
+                  <option value="finished">Finalizado</option>
+                  <option value="live">En curso</option>
+                  <option value="scheduled">Programado</option>
+                </select>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" className="flex-1" onClick={() => setScoreDialog(null)}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1" onClick={handleSetScore} disabled={savingScore}>
+                  {savingScore ? 'Guardando...' : 'Guardar'}
                 </Button>
               </div>
             </CardContent>
