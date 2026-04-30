@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         operation,
         reference_id,
         created_at,
-        profile:profiles!user_id(nickname, email)
+        profile:profiles!user_id(nickname)
       `, { count: "exact" })
       .order("created_at", { ascending: false })
 
