@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
       token_type,
       amount: action === 'add' ? amount : -amount,
       operation: action === 'add' ? 'admin_deposit' : 'admin_withdrawal',
-      notes: notes || `Admin ${action === 'add' ? 'deposit' : 'withdrawal'}`,
+      reference_id: null,
     })
 
     if (txError) {
