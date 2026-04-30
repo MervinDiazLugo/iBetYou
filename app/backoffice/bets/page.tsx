@@ -247,14 +247,18 @@ export default function BackofficeBets() {
 
       let syncedCount = 0
       let failedCount = 0
+      let skippedCount = 0
       let cancelledCount = 0
 
       for (const eventItem of eventsToSync) {
+        if (!eventItem.external_id) {
+          skippedCount += 1
+          continue
+        }
+
         const syncRes = await authFetch('/api/admin/events/results', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ event_id: eventItem.id })
         })
 
@@ -262,6 +266,9 @@ export default function BackofficeBets() {
         if (syncRes.ok) {
           syncedCount += 1
           cancelledCount += Number(syncData.cleanup?.cancelled || 0)
+        } else if (syncRes.status === 404) {
+          // Fixture not found in external API — not a fatal error
+          skippedCount += 1
         } else {
           failedCount += 1
         }
@@ -309,10 +316,14 @@ export default function BackofficeBets() {
       await fetchBets({ silent: true })
 
       if (syncedCount > 0) {
-        const failedSuffix = failedCount > 0 ? ` · Fallidos: ${failedCount}` : ''
-        showToast(`Eventos sincronizados: ${syncedCount}${failedSuffix}`, failedCount > 0 ? 'info' : 'success')
+        const parts = [`Sincronizados: ${syncedCount}`]
+        if (skippedCount > 0) parts.push(`sin datos API: ${skippedCount}`)
+        if (failedCount > 0) parts.push(`fallidos: ${failedCount}`)
+        showToast(parts.join(' · '), failedCount > 0 ? 'info' : 'success')
       } else if (eventsToSync.length === 0) {
         showToast('No hay eventos con apuestas para sincronizar', 'info')
+      } else if (skippedCount > 0 && failedCount === 0) {
+        showToast(`${skippedCount} evento(s) no tienen datos en la API externa — actualizá el score manualmente`, 'info')
       } else {
         showToast('No se pudo sincronizar ningún evento', 'error')
       }
@@ -503,7 +514,11 @@ export default function BackofficeBets() {
 
       const data = await res.json()
       if (!res.ok) {
-        showToast(data.error || 'Error al consultar marcador del evento', 'error')
+        if (res.status === 404) {
+          showToast('No hay datos para este evento en la API externa — actualizá el score manualmente desde Backoffice → Events', 'info')
+        } else {
+          showToast(data.error || 'Error al consultar marcador del evento', 'error')
+        }
         return
       }
 
