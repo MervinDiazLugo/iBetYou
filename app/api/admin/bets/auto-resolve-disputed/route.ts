@@ -206,15 +206,15 @@ export async function POST(request: NextRequest) {
 
         if (walletPayError) {
           console.error("Wallet payout error (bet already resolved):", walletPayError, { betId: bet.id, winnerId, totalPrize })
+        } else {
+          await supabase.from("transactions").insert({
+            user_id: winnerId,
+            token_type: "fantasy",
+            amount: totalPrize,
+            operation: "bet_won_auto_resolved_disputed",
+            reference_id: bet.id,
+          })
         }
-
-        await supabase.from("transactions").insert({
-          user_id: winnerId,
-          token_type: "fantasy",
-          amount: totalPrize,
-          operation: "bet_won_auto_resolved_disputed",
-          reference_id: bet.id,
-        })
       }
 
       await logDecision(supabase, {

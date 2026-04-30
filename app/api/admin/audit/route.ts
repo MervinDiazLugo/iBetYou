@@ -141,7 +141,8 @@ export async function GET(request: NextRequest) {
       if (b.status === "open") {
         acc.open += creatorAmt + fee
       } else {
-        acc.active += creatorAmt + acceptorStake + fee
+        const acceptorFee = acceptorStake * 0.03
+        acc.active += creatorAmt + fee + acceptorStake + acceptorFee
       }
       return acc
     }, { open: 0, active: 0 })

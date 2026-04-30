@@ -179,13 +179,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
 
-    // Deduct from taker's wallet first — if this fails, bet stays open
+    // Deduct from taker's wallet — optimistic lock prevents stale rollback on race condition
     const { error: walletError } = await supabase
       .from("wallets")
       .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
       .eq("user_id", effectiveUserId)
+      .eq("balance_fantasy", wallet.balance_fantasy)
 
     if (walletError) {
+      if (walletError.code === "PGRST116") {
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
       return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
     }
 
