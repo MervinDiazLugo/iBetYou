@@ -14,13 +14,25 @@ export async function GET(request: NextRequest) {
   const sport = searchParams.get("sport") || "all"
   const page = Math.max(0, parseInt(searchParams.get("page") || "0"))
   const limit = Math.min(200, Math.max(1, parseInt(searchParams.get("limit") || "50")))
+  const direction = searchParams.get("direction") || "all"
+
+  const todayStart = new Date()
+  todayStart.setUTCHours(0, 0, 0, 0)
+  const todayStartISO = todayStart.toISOString()
 
   try {
     let query = supabase
       .from("events")
       .select("id, sport, league, country, home_team, away_team, home_logo, away_logo, start_time, status, external_id, featured, home_score, away_score, metadata", { count: "exact" })
-      .order("start_time", { ascending: true })
       .range(page * limit, page * limit + limit - 1)
+
+    if (direction === "upcoming") {
+      query = query.gte("start_time", todayStartISO).order("start_time", { ascending: true })
+    } else if (direction === "past") {
+      query = query.lt("start_time", todayStartISO).order("start_time", { ascending: false })
+    } else {
+      query = query.order("start_time", { ascending: true })
+    }
 
     if (sport !== "all") {
       query = query.eq("sport", sport)

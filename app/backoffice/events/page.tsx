@@ -88,6 +88,12 @@ export default function BackofficeEvents() {
   const [countryFilter, setCountryFilter] = useState<string>("")
   const [eventsPage, setEventsPage] = useState(0)
   const [eventsTotal, setEventsTotal] = useState(0)
+  const [pastEvents, setPastEvents] = useState<SavedEvent[]>([])
+  const [pastPage, setPastPage] = useState(0)
+  const [pastTotal, setPastTotal] = useState(0)
+  const [loadingPast, setLoadingPast] = useState(false)
+  const [loadingMorePast, setLoadingMorePast] = useState(false)
+  const [pastLoaded, setPastLoaded] = useState(false)
   const EVENTS_PAGE_SIZE = 50
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [scoreDialog, setScoreDialog] = useState<{ eventId: number; homeTeam: string; awayTeam: string } | null>(null)
@@ -210,7 +216,7 @@ export default function BackofficeEvents() {
     if (page === 0) setLoadingSaved(true)
     else setLoadingMore(true)
     try {
-      const res = await authFetch(`/api/admin/events?sport=${sport === 'all' ? 'all' : sport}&page=${page}&limit=${EVENTS_PAGE_SIZE}`)
+      const res = await authFetch(`/api/admin/events?sport=${sport === 'all' ? 'all' : sport}&page=${page}&limit=${EVENTS_PAGE_SIZE}&direction=upcoming`)
       if (!res.ok) {
         const err = await res.json()
         showToast(err.error || 'Error al cargar eventos', 'error')
@@ -226,12 +232,6 @@ export default function BackofficeEvents() {
       } else {
         setSavedEvents(prev => [...prev, ...events])
       }
-
-      const ids = new Set<string>()
-      ;(page === 0 ? events : [...savedEvents, ...events]).forEach((e: SavedEvent) => {
-        if (e.external_id) ids.add(e.external_id)
-      })
-      setSavedExternalIds(ids)
     } catch (err) {
       console.error('Error fetching saved events:', err)
       showToast('Error al cargar eventos', 'error')
@@ -241,9 +241,50 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function fetchPastEvents(page = 0) {
+    if (page === 0) setLoadingPast(true)
+    else setLoadingMorePast(true)
+    try {
+      const res = await authFetch(`/api/admin/events?sport=${sport === 'all' ? 'all' : sport}&page=${page}&limit=${EVENTS_PAGE_SIZE}&direction=past`)
+      if (!res.ok) {
+        const err = await res.json()
+        showToast(err.error || 'Error al cargar eventos pasados', 'error')
+        return
+      }
+      const data = await res.json()
+      const events: SavedEvent[] = data.events || []
+      setPastTotal(data.total ?? 0)
+      setPastPage(page)
+      setPastLoaded(true)
+
+      if (page === 0) {
+        setPastEvents(events)
+      } else {
+        setPastEvents(prev => [...prev, ...events])
+      }
+    } catch (err) {
+      console.error('Error fetching past events:', err)
+      showToast('Error al cargar eventos pasados', 'error')
+    } finally {
+      setLoadingPast(false)
+      setLoadingMorePast(false)
+    }
+  }
+
+  useEffect(() => {
+    const ids = new Set<string>()
+    savedEvents.forEach(e => { if (e.external_id) ids.add(e.external_id) })
+    pastEvents.forEach(e => { if (e.external_id) ids.add(e.external_id) })
+    setSavedExternalIds(ids)
+  }, [savedEvents, pastEvents])
+
   useEffect(() => {
     if (view === 'saved') {
       fetchSavedEvents(0)
+      setPastEvents([])
+      setPastTotal(0)
+      setPastPage(0)
+      setPastLoaded(false)
     }
   }, [view, sport])
 
@@ -585,10 +626,8 @@ export default function BackofficeEvents() {
   })
 
   const now = new Date()
-  const startOfToday = new Date(now)
-  startOfToday.setHours(0, 0, 0, 0)
-  const endOfToday = new Date(startOfToday)
-  endOfToday.setHours(23, 59, 59, 999)
+  const startOfTodayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+  const endOfTodayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999))
 
   const orderedSavedEvents = [...filteredSavedEvents].sort((a, b) => {
     return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
@@ -596,17 +635,23 @@ export default function BackofficeEvents() {
 
   const todaysSavedEvents = orderedSavedEvents.filter((event) => {
     const eventDate = new Date(event.start_time)
-    return eventDate >= startOfToday && eventDate <= endOfToday
+    return eventDate >= startOfTodayUTC && eventDate <= endOfTodayUTC
   })
 
   const upcomingSavedEvents = orderedSavedEvents.filter((event) => {
     const eventDate = new Date(event.start_time)
-    return eventDate > endOfToday
+    return eventDate > endOfTodayUTC
   })
 
-  const pastSavedEvents = [...orderedSavedEvents]
-    .filter((event) => new Date(event.start_time) < startOfToday)
-    .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
+  const filteredPastEvents = pastEvents.filter((event) => {
+    if (!filter) return true
+    const search = filter.toLowerCase()
+    return (
+      event.home_team.toLowerCase().includes(search) ||
+      event.away_team.toLowerCase().includes(search) ||
+      event.league.toLowerCase().includes(search)
+    )
+  })
 
   const getSportIcon = (sport: string) => {
     switch (sport) {
@@ -1041,26 +1086,8 @@ export default function BackofficeEvents() {
                 </section>
               )}
 
-              <section>
-                <details className="rounded-lg border bg-card px-4 py-3">
-                  <summary className="cursor-pointer list-none flex items-center justify-between">
-                    <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</span>
-                    <Badge variant="secondary">{pastSavedEvents.length}</Badge>
-                  </summary>
-                  <div className="mt-4">
-                    {pastSavedEvents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No hay eventos pasados con este filtro.</p>
-                    ) : (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {pastSavedEvents.map(renderSavedEventCard)}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              </section>
-
               {loadingMore && (
-                <div className="text-center py-4 text-sm text-muted-foreground">Cargando...</div>
+                <div className="text-center py-4 text-sm text-muted-foreground">Cargando próximos eventos...</div>
               )}
               {!loadingMore && savedEvents.length < eventsTotal && (
                 <Button
@@ -1068,12 +1095,52 @@ export default function BackofficeEvents() {
                   className="w-full"
                   onClick={() => fetchSavedEvents(eventsPage + 1)}
                 >
-                  Cargar más ({eventsTotal - savedEvents.length} restantes)
+                  Cargar más próximos ({eventsTotal - savedEvents.length} restantes)
                 </Button>
               )}
-              {!loadingMore && savedEvents.length >= eventsTotal && eventsTotal > 0 && (
-                <p className="text-center text-xs text-muted-foreground py-2">{eventsTotal} eventos en total</p>
-              )}
+
+              <section>
+                <details
+                  className="rounded-lg border bg-card px-4 py-3"
+                  onToggle={(e) => {
+                    if ((e.target as HTMLDetailsElement).open && !pastLoaded) {
+                      fetchPastEvents(0)
+                    }
+                  }}
+                >
+                  <summary className="cursor-pointer list-none flex items-center justify-between">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</span>
+                    <Badge variant="secondary">{pastLoaded ? pastTotal : '—'}</Badge>
+                  </summary>
+                  <div className="mt-4">
+                    {loadingPast ? (
+                      <div className="text-center py-6 text-sm text-muted-foreground">Cargando eventos pasados...</div>
+                    ) : !pastLoaded ? (
+                      <p className="text-sm text-muted-foreground">Desplegá para ver eventos pasados.</p>
+                    ) : filteredPastEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No hay eventos pasados con este filtro.</p>
+                    ) : (
+                      <>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          {filteredPastEvents.map(renderSavedEventCard)}
+                        </div>
+                        {loadingMorePast && (
+                          <div className="text-center py-4 text-sm text-muted-foreground">Cargando...</div>
+                        )}
+                        {!loadingMorePast && pastEvents.length < pastTotal && (
+                          <Button
+                            variant="outline"
+                            className="w-full mt-4"
+                            onClick={() => fetchPastEvents(pastPage + 1)}
+                          >
+                            Cargar más pasados ({pastTotal - pastEvents.length} restantes)
+                          </Button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </details>
+              </section>
             </div>
           )}
         </>
