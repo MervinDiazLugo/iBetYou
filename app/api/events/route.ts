@@ -94,10 +94,10 @@ export async function GET(request: NextRequest) {
 
       try {
         const data = await fetchApiSports(url, sportApiKey)
-        if (data.response && Array.isArray(data.response)) {
-          allEvents = [...allEvents, ...data.response]
-        } else if (data.errors && Object.keys(data.errors).length > 0) {
+        if (data.errors && Object.keys(data.errors).length > 0) {
           failedDates.push({ date, reason: JSON.stringify(data.errors) })
+        } else if (data.response && Array.isArray(data.response)) {
+          allEvents = [...allEvents, ...data.response]
         }
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "Unknown error"

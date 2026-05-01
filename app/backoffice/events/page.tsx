@@ -138,7 +138,10 @@ export default function BackofficeEvents() {
 
       if (!res.ok) {
         const errData = await res.json()
-        const detail = errData.details?.[0]?.reason ? ` — ${errData.details[0].reason}` : ''
+        const rawReason = errData.details?.[0]?.reason ?? ''
+        let parsedReason = rawReason
+        try { const p = JSON.parse(rawReason); parsedReason = Object.values(p).join(' ') } catch {}
+        const detail = parsedReason ? ` — ${parsedReason}` : ''
         const msg = (errData.error || 'Error al consultar la API') + detail
         setExternalError(msg)
         setExternalEvents([])
