@@ -27,8 +27,6 @@ function fetchApiSports(url: string, apiKey: string): Promise<any> {
 }
 
 const API_KEY = process.env.API_FOOTBALL_KEY
-const API_BASKETBALL_KEY = process.env.API_BASKETBALL_KEY || process.env.API_FOOTBALL_KEY
-const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
 const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
@@ -48,9 +46,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Se requieren parámetros from y to (YYYY-MM-DD)' }, { status: 400 })
   }
 
-  const sportApiKey = sport === "baseball" ? API_BASEBALL_KEY : sport === "basketball" ? API_BASKETBALL_KEY : API_KEY
+  const sportApiKey = API_KEY
   if (!sportApiKey) {
-    return NextResponse.json({ error: `API key no configurada para ${sport}` }, { status: 500 })
+    return NextResponse.json({ error: "API key no configurada (API_FOOTBALL_KEY)" }, { status: 500 })
   }
 
   try {
