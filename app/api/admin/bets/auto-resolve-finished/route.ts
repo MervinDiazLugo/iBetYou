@@ -1,8 +1,33 @@
 import { NextRequest, NextResponse } from "next/server"
+import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
+
+const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
+const API_KEY = process.env.API_FOOTBALL_KEY
+
+function fetchApiSports(url: string): Promise<any> {
+  if (!API_KEY) return Promise.reject(new Error("API_FOOTBALL_KEY not set"))
+  return new Promise((resolve, reject) => {
+    const { hostname, pathname, search } = new URL(url)
+    const req = https.request(
+      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": API_KEY } },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (c) => chunks.push(c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
+          catch (e) { reject(e) }
+        })
+      }
+    )
+    req.setTimeout(8000, () => { req.destroy(new Error("timeout")) })
+    req.on("error", reject)
+    req.end()
+  })
+}
 
 function hasValidResolveSecret(request: NextRequest) {
   const expected = process.env.AUTO_RESOLVE_API_SECRET || process.env.CRON_SECRET
@@ -227,7 +252,7 @@ export async function POST(request: NextRequest) {
       .select(`
         id, event_id, creator_id, acceptor_id, amount, multiplier,
         status, bet_type, creator_selection, selection,
-        event:events(id, status, home_score, away_score, home_team, away_team, metadata)
+        event:events(id, external_id, status, home_score, away_score, home_team, away_team, metadata)
       `)
       .in("bet_type", betTypes)
       .in("status", ["taken", "disputed"])
@@ -273,6 +298,28 @@ export async function POST(request: NextRequest) {
       } else if (betType === "half_time") {
         resolution = resolveHalfTime(creatorSelection, eventRow, betForResolver)
       } else if (betType === "first_scorer") {
+        // Fetch first_scorer metadata on-demand if missing (e.g. admin manually set status=finished)
+        const hasFirstScorerMeta = !!eventRow.metadata?.match_details?.first_scorer?.team
+        const externalId: string = eventRow.external_id || ""
+        if (!hasFirstScorerMeta && externalId.startsWith("football_") && (eventRow.home_score + eventRow.away_score) > 0) {
+          try {
+            const fixtureId = externalId.replace("football_", "")
+            const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`)
+            const fixtureEvents: any[] = data.response || []
+            const firstGoal = fixtureEvents.find((e: any) => e.type === "Goal" && e.detail !== "Missed Penalty")
+            if (firstGoal) {
+              const md = eventRow.metadata || {}
+              const matchDetails = { ...(md.match_details || {}), first_scorer: {
+                player: firstGoal.player?.name || null,
+                team: firstGoal.team?.name || null,
+                minute: firstGoal.time?.elapsed ?? null,
+              }}
+              const updatedMetadata = { ...md, match_details: matchDetails }
+              await supabase.from("events").update({ metadata: updatedMetadata }).eq("id", eventRow.id)
+              eventRow.metadata = updatedMetadata
+            }
+          } catch (_) { /* proceed without first_scorer, will skip */ }
+        }
         resolution = resolveFirstScorer(creatorSelection, eventRow, betForResolver)
       }
 
