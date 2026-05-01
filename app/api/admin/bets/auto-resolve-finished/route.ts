@@ -296,6 +296,26 @@ export async function POST(request: NextRequest) {
       } else if (betType === "exact_score") {
         resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
       } else if (betType === "half_time") {
+        // Fetch halftime scores on-demand if missing (e.g. admin manually set status=finished)
+        const md = eventRow.metadata?.match_details
+        const htMissing = md?.halftime_home_score === null || md?.halftime_home_score === undefined
+        const externalIdHT: string = eventRow.external_id || ""
+        if (htMissing && externalIdHT.startsWith("football_")) {
+          try {
+            const fixtureId = externalIdHT.replace("football_", "")
+            const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
+            const fixture = data.response?.[0]
+            const htHome = fixture?.score?.halftime?.home
+            const htAway = fixture?.score?.halftime?.away
+            if (htHome !== null && htHome !== undefined && htAway !== null && htAway !== undefined) {
+              const meta = eventRow.metadata || {}
+              const matchDetails = { ...(meta.match_details || {}), halftime_home_score: htHome, halftime_away_score: htAway }
+              const updatedMetadata = { ...meta, match_details: matchDetails }
+              await supabase.from("events").update({ metadata: updatedMetadata }).eq("id", eventRow.id)
+              eventRow.metadata = updatedMetadata
+            }
+          } catch (_) { /* proceed without halftime, will skip */ }
+        }
         resolution = resolveHalfTime(creatorSelection, eventRow, betForResolver)
       } else if (betType === "first_scorer") {
         // Fetch first_scorer metadata on-demand if missing (e.g. admin manually set status=finished)
