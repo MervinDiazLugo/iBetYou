@@ -113,15 +113,23 @@ export default function BackofficeEvents() {
     return fetch(input, { ...init, headers })
   }
 
+  const fetchAbortRef = useRef<AbortController | null>(null)
+
   async function fetchExternalEvents() {
+    // Cancel any in-flight request
+    fetchAbortRef.current?.abort()
+    const controller = new AbortController()
+    fetchAbortRef.current = controller
+
     setLoading(true)
     setSelectedEvents(new Set())
-    // 'all' is only valid for saved events; external API requires a specific sport
     const effectiveSport = sport === 'all' ? 'football' : sport
     if (sport === 'all') setSport('football')
     try {
       const res = await authFetch(`/api/events?sport=${effectiveSport}&from=${dateFrom}&to=${dateTo}`)
-      
+
+      if (controller.signal.aborted) return
+
       if (!res.ok) {
         const error = await res.json()
         const detail = error.details?.[0]?.reason ? ` (${error.details[0].reason})` : ''
@@ -129,13 +137,12 @@ export default function BackofficeEvents() {
         setExternalEvents([])
         return
       }
-      
+
       const data = await res.json()
-      
-      // Normalize the data based on sport (different API response structures)
+      if (controller.signal.aborted) return
+
       const normalizedEvents = (Array.isArray(data) ? data : []).map((event: any) => {
-        if (sport === 'basketball') {
-          // Basketball: direct structure, venue is a string, country is a top-level object
+        if (effectiveSport === 'basketball') {
           return {
             fixture: {
               id: event.id,
@@ -154,8 +161,7 @@ export default function BackofficeEvents() {
             scores: event.scores,
           }
         }
-        if (sport === 'baseball') {
-          // Baseball: direct structure, venue is an object
+        if (effectiveSport === 'baseball') {
           return {
             fixture: {
               id: event.id,
@@ -174,21 +180,20 @@ export default function BackofficeEvents() {
             scores: event.scores,
           }
         }
-        // Football: nested fixture object
         return event
       })
-      
-      const sorted = normalizedEvents.sort((a: any, b: any) => 
+
+      const sorted = normalizedEvents.sort((a: any, b: any) =>
         new Date(a.fixture?.date || '').getTime() - new Date(b.fixture?.date || '').getTime()
       )
       setExternalEvents(sorted)
-      
-      await fetchSavedEvents(0)
-    } catch (err) {
+      fetchSavedEvents(0)
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return
       console.error('Error fetching external events:', err)
       setExternalEvents([])
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) setLoading(false)
     }
   }
 
@@ -1041,17 +1046,23 @@ export default function BackofficeEvents() {
                 </section>
               )}
 
-              {pastSavedEvents.length > 0 && (
-                <section>
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</h3>
+              <section>
+                <details className="rounded-lg border bg-card px-4 py-3">
+                  <summary className="cursor-pointer list-none flex items-center justify-between">
+                    <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</span>
                     <Badge variant="secondary">{pastSavedEvents.length}</Badge>
+                  </summary>
+                  <div className="mt-4">
+                    {pastSavedEvents.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No hay eventos pasados con este filtro.</p>
+                    ) : (
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                        {pastSavedEvents.map(renderSavedEventCard)}
+                      </div>
+                    )}
                   </div>
-                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                    {pastSavedEvents.map(renderSavedEventCard)}
-                  </div>
-                </section>
-              )}
+                </details>
+              </section>
 
               {/* Infinite scroll sentinel */}
               <div ref={sentinelRef} className="h-4" />
