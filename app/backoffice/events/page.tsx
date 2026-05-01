@@ -86,6 +86,7 @@ export default function BackofficeEvents() {
   const [savedExternalIds, setSavedExternalIds] = useState<Set<string>>(new Set())
   const [showCreate, setShowCreate] = useState(false)
   const [countryFilter, setCountryFilter] = useState<string>("")
+  const [savedCountryFilter, setSavedCountryFilter] = useState<string>("")
   const [eventsPage, setEventsPage] = useState(0)
   const [eventsTotal, setEventsTotal] = useState(0)
   const [pastEvents, setPastEvents] = useState<SavedEvent[]>([])
@@ -615,10 +616,8 @@ export default function BackofficeEvents() {
   })
 
   const filteredSavedEvents = savedEvents.filter(event => {
-    // Filter by sport
     if (sport !== 'all' && event.sport !== sport) return false
-    
-    // Filter by search term
+    if (savedCountryFilter && event.country !== savedCountryFilter) return false
     if (!filter) return true
     const search = filter.toLowerCase()
     return (
@@ -647,6 +646,7 @@ export default function BackofficeEvents() {
   })
 
   const filteredPastEvents = pastEvents.filter((event) => {
+    if (savedCountryFilter && event.country !== savedCountryFilter) return false
     if (!filter) return true
     const search = filter.toLowerCase()
     return (
@@ -655,6 +655,8 @@ export default function BackofficeEvents() {
       event.league.toLowerCase().includes(search)
     )
   })
+
+  const savedCountries = [...new Set([...savedEvents, ...pastEvents].map(e => e.country).filter(Boolean))].sort((a, b) => a.localeCompare(b))
 
   const getSportIcon = (sport: string) => {
     switch (sport) {
@@ -1044,6 +1046,18 @@ export default function BackofficeEvents() {
                   <option value="basketball">🏀 Básquet</option>
                   <option value="baseball">⚾ Béisbol</option>
                 </select>
+                {savedCountries.length > 0 && (
+                  <select
+                    value={savedCountryFilter}
+                    onChange={(e) => setSavedCountryFilter(e.target.value)}
+                    className="px-3 py-2 border rounded-md bg-background"
+                  >
+                    <option value="">Todos los países</option>
+                    {savedCountries.map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </CardContent>
           </Card>
