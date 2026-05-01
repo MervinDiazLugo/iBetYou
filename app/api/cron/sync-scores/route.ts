@@ -270,13 +270,114 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, resolvedEvents, apiCalls, apiErrors })
+  // 7. Find already-finished events with pending first_scorer/half_time bets missing metadata
+  const { data: pendingMetaBets } = await supabase
+    .from("bets")
+    .select(`
+      bet_type,
+      event:events!event_id(id, external_id, sport, status, metadata, home_score, away_score)
+    `)
+    .in("status", ["taken", "disputed"])
+    .in("bet_type", ["first_scorer", "half_time"])
+
+  type NeedsMetaEntry = {
+    id: number; external_id: string; sport: string; metadata: any
+    home_score: number; away_score: number
+    needsFirstScorer: boolean; needsHalfTime: boolean
+  }
+  const needsMetaMap = new Map<number, NeedsMetaEntry>()
+
+  for (const bet of pendingMetaBets || []) {
+    const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
+    if (!event || event.status !== "finished") continue
+
+    const betType = (bet as any).bet_type
+    const md = event.metadata?.match_details
+    const missingFirstScorer = betType === "first_scorer" && !md?.first_scorer?.team
+    const missingHalfTime = betType === "half_time" && (md?.halftime_home_score === null || md?.halftime_home_score === undefined)
+
+    if (!missingFirstScorer && !missingHalfTime) continue
+
+    const existing = needsMetaMap.get(event.id)
+    needsMetaMap.set(event.id, {
+      ...event,
+      needsFirstScorer: !!(existing?.needsFirstScorer || missingFirstScorer),
+      needsHalfTime: !!(existing?.needsHalfTime || missingHalfTime),
+    })
+  }
+
+  const metaFixedEvents: number[] = []
+
+  for (const ev of needsMetaMap.values()) {
+    if (!ev.external_id?.startsWith("football_")) continue
+
+    const fixtureId = ev.external_id.replace("football_", "")
+    try {
+      const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+      const md = eventRow?.metadata || {}
+      const matchDetails = { ...(md.match_details || {}) }
+      let metadataUpdated = false
+
+      if (ev.needsHalfTime) {
+        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
+        apiCalls++
+        const fixture = data.response?.[0]
+        const htHome = fixture?.score?.halftime?.home
+        const htAway = fixture?.score?.halftime?.away
+        if (htHome !== null && htHome !== undefined) {
+          matchDetails.halftime_home_score = htHome
+          matchDetails.halftime_away_score = htAway
+          metadataUpdated = true
+        }
+      }
+
+      if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
+        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`)
+        apiCalls++
+        const fixtureEvents: any[] = data.response || []
+        const firstGoal = fixtureEvents.find((e: any) => e.type === "Goal" && e.detail !== "Missed Penalty")
+        if (firstGoal) {
+          matchDetails.first_scorer = {
+            player: firstGoal.player?.name || null,
+            team: firstGoal.team?.name || null,
+            minute: firstGoal.time?.elapsed ?? null,
+          }
+          metadataUpdated = true
+        }
+      }
+
+      if (metadataUpdated) {
+        await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
+        metaFixedEvents.push(ev.id)
+      }
+    } catch (e: any) {
+      apiErrors.push(`meta-fix/${ev.external_id}: ${e.message}`)
+    }
+  }
+
+  // Trigger auto-resolve for events that got their metadata fixed
+  for (const eventId of metaFixedEvents) {
+    try {
+      const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${CRON_SECRET}` },
+        body: JSON.stringify({ event_id: eventId }),
+      })
+      if (res.ok) resolvedEvents.push(eventId)
+      else apiErrors.push(`auto-resolve/meta-fix/event_${eventId}: HTTP ${res.status}`)
+    } catch (e: any) {
+      apiErrors.push(`auto-resolve/meta-fix/event_${eventId}: ${e.message}`)
+    }
+  }
+
+  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, resolvedEvents, apiCalls, apiErrors })
 
   return NextResponse.json({
     success: true,
     eventsInWindow: eventMap.size,
     updated,
     justFinished: justFinished.length,
+    metaFixed: metaFixedEvents.length,
     resolvedEvents,
     apiCalls,
     errors: apiErrors,
