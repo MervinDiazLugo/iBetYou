@@ -69,12 +69,13 @@ export default function BackofficeEvents() {
   const searchParams = useSearchParams()
   const dateFromRef = useRef<HTMLInputElement | null>(null)
   const dateToRef = useRef<HTMLInputElement | null>(null)
-  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [view, setView] = useState<'external' | 'saved'>('saved')
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([])
+  const [externalError, setExternalError] = useState<string | null>(null)
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([])
   const [loading, setLoading] = useState(false)
   const [loadingSaved, setLoadingSaved] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState<string>("")
   const [sport, setSport] = useState<string>("all")
@@ -87,8 +88,6 @@ export default function BackofficeEvents() {
   const [countryFilter, setCountryFilter] = useState<string>("")
   const [eventsPage, setEventsPage] = useState(0)
   const [eventsTotal, setEventsTotal] = useState(0)
-  const [loadingMore, setLoadingMore] = useState(false)
-  const isFetchingMoreRef = useRef(false)
   const EVENTS_PAGE_SIZE = 50
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [scoreDialog, setScoreDialog] = useState<{ eventId: number; homeTeam: string; awayTeam: string } | null>(null)
@@ -117,12 +116,12 @@ export default function BackofficeEvents() {
   const fetchAbortRef = useRef<AbortController | null>(null)
 
   async function fetchExternalEvents() {
-    // Cancel any in-flight request
     fetchAbortRef.current?.abort()
     const controller = new AbortController()
     fetchAbortRef.current = controller
 
     setLoading(true)
+    setExternalError(null)
     setSelectedEvents(new Set())
     const effectiveSport = sport === 'all' ? 'football' : sport
     if (sport === 'all') setSport('football')
@@ -132,9 +131,10 @@ export default function BackofficeEvents() {
       if (controller.signal.aborted) return
 
       if (!res.ok) {
-        const error = await res.json()
-        const detail = error.details?.[0]?.reason ? ` (${error.details[0].reason})` : ''
-        showToast((error.error || 'Error al consultar la API') + detail, 'error')
+        const errData = await res.json()
+        const detail = errData.details?.[0]?.reason ? ` — ${errData.details[0].reason}` : ''
+        const msg = (errData.error || 'Error al consultar la API') + detail
+        setExternalError(msg)
         setExternalEvents([])
         return
       }
@@ -142,7 +142,15 @@ export default function BackofficeEvents() {
       const data = await res.json()
       if (controller.signal.aborted) return
 
-      const normalizedEvents = (Array.isArray(data) ? data : []).map((event: any) => {
+      const raw: any[] = Array.isArray(data) ? data : []
+
+      if (raw.length === 0) {
+        setExternalEvents([])
+        setExternalError('La API no devolvió eventos para este rango de fechas.')
+        return
+      }
+
+      const normalizedEvents = raw.map((event: any) => {
         if (effectiveSport === 'basketball') {
           return {
             fixture: {
@@ -188,10 +196,10 @@ export default function BackofficeEvents() {
         new Date(a.fixture?.date || '').getTime() - new Date(b.fixture?.date || '').getTime()
       )
       setExternalEvents(sorted)
-      fetchSavedEvents(0)
     } catch (err: any) {
       if (err?.name === 'AbortError') return
       console.error('Error fetching external events:', err)
+      setExternalError('Error inesperado al consultar la API.')
       setExternalEvents([])
     } finally {
       if (!controller.signal.aborted) setLoading(false)
@@ -230,7 +238,6 @@ export default function BackofficeEvents() {
     } finally {
       setLoadingSaved(false)
       setLoadingMore(false)
-      isFetchingMoreRef.current = false
     }
   }
 
@@ -240,30 +247,6 @@ export default function BackofficeEvents() {
     }
   }, [view, sport])
 
-  // Infinite scroll sentinel — use ref guard to prevent concurrent fetches
-  useEffect(() => {
-    const sentinel = sentinelRef.current
-    if (!sentinel) return
-    if (loadingMore || loadingSaved) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (
-          entries[0].isIntersecting &&
-          !isFetchingMoreRef.current &&
-          eventsTotal > 0 &&
-          savedEvents.length < eventsTotal
-        ) {
-          isFetchingMoreRef.current = true
-          fetchSavedEvents(eventsPage + 1)
-        }
-      },
-      { rootMargin: '200px' }
-    )
-
-    observer.observe(sentinel)
-    return () => observer.disconnect()
-  }, [loadingMore, loadingSaved, savedEvents.length, eventsTotal, eventsPage])
 
   // Handle event_id URL param — highlight and scroll to that event after load
   useEffect(() => {
@@ -786,7 +769,7 @@ export default function BackofficeEvents() {
                   <span className="text-sm">Deporte:</span>
                   <select
                     value={sport}
-                    onChange={(e) => setSport(e.target.value)}
+                    onChange={(e) => { setSport(e.target.value); setExternalError(null) }}
                     className="px-3 py-2 rounded-lg border bg-background"
                   >
                     <option value="football">⚽ Fútbol</option>
@@ -800,7 +783,7 @@ export default function BackofficeEvents() {
                     ref={dateFromRef}
                     type="date"
                     value={dateFrom}
-                    onChange={(e) => setDateFrom(e.target.value)}
+                    onChange={(e) => { setDateFrom(e.target.value); setExternalError(null) }}
                     className="w-auto min-w-[170px]"
                   />
                   <Button
@@ -826,7 +809,7 @@ export default function BackofficeEvents() {
                     ref={dateToRef}
                     type="date"
                     value={dateTo}
-                    onChange={(e) => setDateTo(e.target.value)}
+                    onChange={(e) => { setDateTo(e.target.value); setExternalError(null) }}
                     className="w-auto min-w-[170px]"
                   />
                   <Button
@@ -878,11 +861,19 @@ export default function BackofficeEvents() {
           {/* Events List */}
           {loading ? (
             <div className="text-center py-12">Consultando API externa...</div>
+          ) : externalError ? (
+            <Card>
+              <CardContent className="py-12 text-center space-y-2">
+                <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                <p className="text-destructive font-medium">{externalError}</p>
+                <p className="text-xs text-muted-foreground">Probá ajustando el rango de fechas (el plan gratuito de la API tiene restricciones)</p>
+              </CardContent>
+            </Card>
           ) : externalEvents.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <p className="text-muted-foreground mb-4">Ingresa un rango de fechas y consulta la API</p>
+                <p className="text-muted-foreground mb-4">Ingresa un rango de fechas y consultá la API</p>
               </CardContent>
             </Card>
           ) : (
@@ -1068,10 +1059,17 @@ export default function BackofficeEvents() {
                 </details>
               </section>
 
-              {/* Infinite scroll sentinel */}
-              <div ref={sentinelRef} className="h-4" />
               {loadingMore && (
-                <div className="text-center py-4 text-sm text-muted-foreground">Cargando más eventos...</div>
+                <div className="text-center py-4 text-sm text-muted-foreground">Cargando...</div>
+              )}
+              {!loadingMore && savedEvents.length < eventsTotal && (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fetchSavedEvents(eventsPage + 1)}
+                >
+                  Cargar más ({eventsTotal - savedEvents.length} restantes)
+                </Button>
               )}
               {!loadingMore && savedEvents.length >= eventsTotal && eventsTotal > 0 && (
                 <p className="text-center text-xs text-muted-foreground py-2">{eventsTotal} eventos en total</p>
