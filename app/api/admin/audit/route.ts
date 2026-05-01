@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
         created_at,
         profile:profiles!user_id(nickname)
       `, { count: "exact" })
+      .eq("token_type", "fantasy")
       .order("created_at", { ascending: false })
 
     if (from) txQuery = txQuery.gte("created_at", from)
@@ -45,17 +46,17 @@ export async function GET(request: NextRequest) {
     let summaryQuery = supabase
       .from("transactions")
       .select("amount, operation, token_type")
+      .eq("token_type", "fantasy")
 
     if (from) summaryQuery = summaryQuery.gte("created_at", from)
     if (to) summaryQuery = summaryQuery.lte("created_at", to)
     if (operation) summaryQuery = summaryQuery.eq("operation", operation)
-    if (tokenType) summaryQuery = summaryQuery.eq("token_type", tokenType)
     if (userId) summaryQuery = summaryQuery.eq("user_id", userId)
 
     // ── Wallet snapshot ───────────────────────────────────────────────────
     const walletsQuery = supabase
       .from("wallets")
-      .select("balance_fantasy, balance_real")
+      .select("balance_fantasy")
 
     // ── Bets locked ───────────────────────────────────────────────────────
     const lockedBetsQuery = supabase
@@ -128,7 +129,6 @@ export async function GET(request: NextRequest) {
     // ── Wallet snapshot ───────────────────────────────────────────────────
     const wallets = walletsResult.data || []
     const circulatingFantasy = wallets.reduce((s, w) => s + Number(w.balance_fantasy || 0), 0)
-    const circulatingReal = wallets.reduce((s, w) => s + Number(w.balance_real || 0), 0)
 
     // ── Locked in active bets ─────────────────────────────────────────────
     const locked = (lockedResult.data || []).reduce((acc, b) => {
@@ -149,9 +149,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       summary: {
-        // Arqueo de caja
+        // Arqueo de caja (solo Fantasy Tokens)
         circulating_fantasy: circulatingFantasy,
-        circulating_real: circulatingReal,
         locked_in_open_bets: locked.open,
         locked_in_active_bets: locked.active,
         total_in_system: circulatingFantasy + locked.open + locked.active,

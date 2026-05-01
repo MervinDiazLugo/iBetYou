@@ -29,7 +29,6 @@ const OPERATION_LABELS: Record<string, string> = {
 
 interface Summary {
   circulating_fantasy: number
-  circulating_real: number
   locked_in_open_bets: number
   locked_in_active_bets: number
   total_in_system: number
@@ -147,18 +146,14 @@ export default function AuditPage() {
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Wallet className="h-4 w-4" />
-                Arqueo de caja — tokens circulantes
+                Arqueo de caja — Fantasy Tokens
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
-                  <div className="text-xs text-muted-foreground mb-1">En wallets (Fantasy)</div>
+                  <div className="text-xs text-muted-foreground mb-1">En wallets</div>
                   <div className="text-2xl font-bold text-blue-400">{formatCurrency(summary.circulating_fantasy)}</div>
-                </div>
-                <div>
-                  <div className="text-xs text-muted-foreground mb-1">En wallets (Real)</div>
-                  <div className="text-2xl font-bold text-cyan-400">{formatCurrency(summary.circulating_real)}</div>
                 </div>
                 <div>
                   <div className="text-xs text-muted-foreground mb-1">
@@ -355,15 +350,14 @@ export default function AuditPage() {
                     <th className="text-left px-4 py-2">Fecha</th>
                     <th className="text-left px-4 py-2">Usuario</th>
                     <th className="text-left px-4 py-2">Operación</th>
-                    <th className="text-left px-4 py-2">Token</th>
-                    <th className="text-right px-4 py-2">Monto</th>
+                    <th className="text-right px-4 py-2">Monto (FT)</th>
                     <th className="text-left px-4 py-2">Referencia</th>
                   </tr>
                 </thead>
                 <tbody>
                   {data.transactions.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <td colSpan={5} className="text-center py-8 text-muted-foreground">
                         Sin movimientos en el período seleccionado
                       </td>
                     </tr>
@@ -378,14 +372,13 @@ export default function AuditPage() {
                       </td>
                       <td className="px-4 py-2">
                         <div className="font-medium">{tx.profile?.nickname ?? "—"}</div>
-                        <div className="text-xs text-muted-foreground">{tx.profile?.email ?? tx.user_id.slice(0, 8)}</div>
+                        <div className="text-xs text-muted-foreground">{tx.user_id.slice(0, 8)}</div>
                       </td>
                       <td className="px-4 py-2">
                         <Badge variant="outline" className="text-xs font-normal">
                           {OPERATION_LABELS[tx.operation] || tx.operation}
                         </Badge>
                       </td>
-                      <td className="px-4 py-2 text-xs text-muted-foreground capitalize">{tx.token_type}</td>
                       <td className={`px-4 py-2 text-right font-mono font-semibold tabular-nums ${tx.amount >= 0 ? "text-green-400" : "text-red-400"}`}>
                         {tx.amount >= 0 ? "+" : ""}{formatCurrency(tx.amount)}
                       </td>
