@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -69,6 +69,7 @@ export default function BackofficeEvents() {
   const searchParams = useSearchParams()
   const dateFromRef = useRef<HTMLInputElement | null>(null)
   const dateToRef = useRef<HTMLInputElement | null>(null)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
   const [view, setView] = useState<'external' | 'saved'>('saved')
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([])
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([])
@@ -231,6 +232,24 @@ export default function BackofficeEvents() {
       fetchSavedEvents(0)
     }
   }, [view, sport])
+
+  // Infinite scroll sentinel
+  useEffect(() => {
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore && !loadingSaved && savedEvents.length < eventsTotal) {
+          fetchSavedEvents(eventsPage + 1)
+        }
+      },
+      { rootMargin: '200px' }
+    )
+
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [loadingMore, loadingSaved, savedEvents.length, eventsTotal, eventsPage])
 
   // Handle event_id URL param — highlight and scroll to that event after load
   useEffect(() => {
@@ -1022,35 +1041,25 @@ export default function BackofficeEvents() {
                 </section>
               )}
 
-              <section>
-                <details className="rounded-lg border bg-card px-4 py-3">
-                  <summary className="cursor-pointer list-none flex items-center justify-between">
-                    <span className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</span>
+              {pastSavedEvents.length > 0 && (
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Eventos pasados</h3>
                     <Badge variant="secondary">{pastSavedEvents.length}</Badge>
-                  </summary>
-
-                  <div className="mt-4">
-                    {pastSavedEvents.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No hay eventos pasados con este filtro.</p>
-                    ) : (
-                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {pastSavedEvents.map(renderSavedEventCard)}
-                      </div>
-                    )}
                   </div>
-                </details>
-              </section>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {pastSavedEvents.map(renderSavedEventCard)}
+                  </div>
+                </section>
+              )}
 
-              {savedEvents.length < eventsTotal && (
-                <div className="text-center pt-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => fetchSavedEvents(eventsPage + 1)}
-                    disabled={loadingMore}
-                  >
-                    {loadingMore ? 'Cargando...' : `Cargar más (${savedEvents.length} de ${eventsTotal})`}
-                  </Button>
-                </div>
+              {/* Infinite scroll sentinel */}
+              <div ref={sentinelRef} className="h-4" />
+              {loadingMore && (
+                <div className="text-center py-4 text-sm text-muted-foreground">Cargando más eventos...</div>
+              )}
+              {!loadingMore && savedEvents.length >= eventsTotal && eventsTotal > 0 && (
+                <p className="text-center text-xs text-muted-foreground py-2">{eventsTotal} eventos en total</p>
               )}
             </div>
           )}
