@@ -88,6 +88,7 @@ export default function BackofficeEvents() {
   const [eventsPage, setEventsPage] = useState(0)
   const [eventsTotal, setEventsTotal] = useState(0)
   const [loadingMore, setLoadingMore] = useState(false)
+  const isFetchingMoreRef = useRef(false)
   const EVENTS_PAGE_SIZE = 50
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [scoreDialog, setScoreDialog] = useState<{ eventId: number; homeTeam: string; awayTeam: string } | null>(null)
@@ -229,6 +230,7 @@ export default function BackofficeEvents() {
     } finally {
       setLoadingSaved(false)
       setLoadingMore(false)
+      isFetchingMoreRef.current = false
     }
   }
 
@@ -238,14 +240,21 @@ export default function BackofficeEvents() {
     }
   }, [view, sport])
 
-  // Infinite scroll sentinel
+  // Infinite scroll sentinel — use ref guard to prevent concurrent fetches
   useEffect(() => {
     const sentinel = sentinelRef.current
     if (!sentinel) return
+    if (loadingMore || loadingSaved) return
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !loadingMore && !loadingSaved && savedEvents.length < eventsTotal) {
+        if (
+          entries[0].isIntersecting &&
+          !isFetchingMoreRef.current &&
+          eventsTotal > 0 &&
+          savedEvents.length < eventsTotal
+        ) {
+          isFetchingMoreRef.current = true
           fetchSavedEvents(eventsPage + 1)
         }
       },
@@ -595,8 +604,6 @@ export default function BackofficeEvents() {
   const now = new Date()
   const startOfToday = new Date(now)
   startOfToday.setHours(0, 0, 0, 0)
-  const startOfPastWindow = new Date(startOfToday)
-  startOfPastWindow.setDate(startOfPastWindow.getDate() - 7)
   const endOfToday = new Date(startOfToday)
   endOfToday.setHours(23, 59, 59, 999)
 
@@ -615,10 +622,7 @@ export default function BackofficeEvents() {
   })
 
   const pastSavedEvents = [...orderedSavedEvents]
-    .filter((event) => {
-      const eventDate = new Date(event.start_time)
-      return eventDate < startOfToday && eventDate >= startOfPastWindow
-    })
+    .filter((event) => new Date(event.start_time) < startOfToday)
     .sort((a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime())
 
   const getSportIcon = (sport: string) => {
