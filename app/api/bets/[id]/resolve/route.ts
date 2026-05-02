@@ -84,7 +84,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const { data: bet, error: betError } = await supabase
       .from("bets")
-      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, event:events(start_time)")
+      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, event:events(start_time, home_team, away_team, home_score, away_score)")
       .eq("id", betId)
       .single()
 
@@ -315,9 +315,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     // Notify winner and loser
     const loserId = winnerUserId === bet.creator_id ? bet.acceptor_id : bet.creator_id
+    const evR = Array.isArray(bet.event) ? bet.event[0] : bet.event
+    const matchInfoR = evR ? `${evR.home_team} vs ${evR.away_team}` + (evR.home_score !== null && evR.away_score !== null ? ` (${evR.home_score}-${evR.away_score})` : '') : 'Apuesta resuelta'
     const resolveNotifs = [
-      { userId: winnerUserId, type: "bet_resolved_win" as const, title: "¡Ganaste la apuesta!", body: `Ganaste $${totalPrize.toFixed(2)} Fantasy Tokens.`, betId },
-      ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Apuesta resuelta", body: "Perdiste esta apuesta. ¡Suerte la próxima!", betId }] : []),
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfoR, betId },
+      ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)
 

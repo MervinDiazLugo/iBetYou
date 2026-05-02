@@ -379,9 +379,11 @@ export async function PATCH(request: NextRequest) {
 
         const loserId = winnerUserId === bet.creator_id ? bet.acceptor_id : bet.creator_id
         if (loserId) {
+          const ev3a = (bet as any).event
+          const matchInfo3a = ev3a ? `${ev3a.home_team} vs ${ev3a.away_team}` + (ev3a.home_score !== null && ev3a.away_score !== null ? ` (${ev3a.home_score}-${ev3a.away_score})` : '') : 'Apuesta resuelta'
           await createNotifications([
-            { userId: winnerUserId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue aprobada. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: id },
-            { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: id },
+            { userId: winnerUserId, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfo3a, betId: id },
+            { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: matchInfo3a, betId: id },
           ], supabase)
         }
 
@@ -397,7 +399,7 @@ export async function PATCH(request: NextRequest) {
 
     let updateData: Record<string, unknown> = {}
     let operation = ""
-    let resolveContext: { totalPrize: number; loserId: string } | null = null
+    let resolveContext: { totalPrize: number; loserId: string; matchInfo: string } | null = null
 
     switch (action) {
       case 'resolve': {
@@ -406,7 +408,7 @@ export async function PATCH(request: NextRequest) {
         }
         const { data: betToResolve } = await supabase
           .from('bets')
-          .select('id, creator_id, acceptor_id, amount, multiplier, status')
+          .select('id, creator_id, acceptor_id, amount, multiplier, status, event:events(home_team, away_team, home_score, away_score)')
           .eq('id', bet_id)
           .single()
 
@@ -421,7 +423,9 @@ export async function PATCH(request: NextRequest) {
 
         const totalPrize = calculateTotalPrize(betToResolve.amount, betToResolve.multiplier)
         const loserId = winner_id === betToResolve.creator_id ? betToResolve.acceptor_id : betToResolve.creator_id
-        resolveContext = { totalPrize, loserId }
+        const ev3b = (betToResolve as any).event
+        const matchInfo3b = ev3b ? `${ev3b.home_team} vs ${ev3b.away_team}` + (ev3b.home_score !== null && ev3b.away_score !== null ? ` (${ev3b.home_score}-${ev3b.away_score})` : '') : 'Apuesta resuelta'
+        resolveContext = { totalPrize, loserId, matchInfo: matchInfo3b }
 
         updateData = { status: 'resolved', winner_id, resolved_at: new Date().toISOString() }
         operation = "resolve"
@@ -586,8 +590,8 @@ export async function PATCH(request: NextRequest) {
           })
         }
         await createNotifications([
-          { userId: winner_id, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta manualmente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
-          { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
+          { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: resolveContext.matchInfo, betId: bet_id },
+          { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: resolveContext.matchInfo, betId: bet_id },
         ], supabase)
       }
 
