@@ -4,6 +4,7 @@ export interface User {
   nickname: string
   avatar_url: string | null
   kyc_status: 'none' | 'pending' | 'approved' | 'rejected'
+  country?: string | null
   created_at: string
 }
 

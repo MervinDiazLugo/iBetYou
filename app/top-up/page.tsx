@@ -73,7 +73,7 @@ export default function RecargasPage() {
     try {
       const [walletRes, accountsRes, requestsRes] = await Promise.all([
         authFetch("/api/iby/wallet"),
-        fetch("/api/iby/deposit-accounts"),
+        authFetch("/api/iby/deposit-accounts"),
         authFetch("/api/iby/deposit-requests"),
       ])
 

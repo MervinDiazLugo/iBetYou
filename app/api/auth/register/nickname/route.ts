@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { userId, nickname } = await request.json()
+    const { userId, nickname, country } = await request.json()
 
     if (userId && userId !== authenticatedUserId) {
       return NextResponse.json(
@@ -38,9 +38,13 @@ export async function POST(request: NextRequest) {
     // Try to use the requested nickname, fall back to numbered versions if taken
     while (attemptNumber < 100 && !success) {
       try {
+        const updatePayload: Record<string, unknown> = { nickname: finalNickname }
+        if (country && typeof country === "string" && country.trim()) {
+          updatePayload.country = country.trim()
+        }
         const { error: updateError } = await supabase
           .from("profiles")
-          .update({ nickname: finalNickname })
+          .update(updatePayload)
           .eq("id", effectiveUserId)
 
         if (updateError) {

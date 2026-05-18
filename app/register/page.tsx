@@ -1,24 +1,61 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 
-export default function RegisterPage() {
+const LATAM_COUNTRIES = [
+  "Venezuela",
+  "Argentina",
+  "Colombia",
+  "Chile",
+  "México",
+  "Perú",
+  "Uruguay",
+  "Bolivia",
+  "Ecuador",
+  "Paraguay",
+  "Brasil",
+  "Costa Rica",
+  "Panamá",
+  "Honduras",
+  "El Salvador",
+  "Guatemala",
+  "Nicaragua",
+  "República Dominicana",
+  "Cuba",
+]
+
+const OTHER_COUNTRIES = [
+  "España",
+  "Estados Unidos",
+  "Otro",
+]
+
+function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createBrowserSupabaseClient()
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [nickname, setNickname] = useState("")
+  const [country, setCountry] = useState("")
+  const [referralCode, setReferralCode] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [termsAccepted, setTermsAccepted] = useState(false)
+
+  useEffect(() => {
+    const ref = searchParams.get("ref")
+    if (ref) setReferralCode(ref.toUpperCase())
+  }, [searchParams])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,10 +68,25 @@ export default function RegisterPage() {
       return
     }
 
+    if (!country) {
+      setError("El país es requerido")
+      setLoading(false)
+      return
+    }
+
     if (!ageConfirmed || !termsAccepted) {
       setError("Debes confirmar que eres mayor de edad y aceptar los términos para continuar")
       setLoading(false)
       return
+    }
+
+    // Set referral cookie before signUp so auth callback picks it up
+    const trimmedCode = referralCode.trim()
+    if (trimmedCode && /^[a-zA-Z0-9_-]{6,16}$/.test(trimmedCode)) {
+      const existing = document.cookie.split(";").some((c) => c.trim().startsWith("iby_ref="))
+      if (!existing) {
+        document.cookie = `iby_ref=${trimmedCode}; path=/; max-age=${60 * 60 * 24 * 30}; samesite=lax`
+      }
     }
 
     const { data, error: signUpError } = await supabase.auth.signUp({
@@ -49,7 +101,6 @@ export default function RegisterPage() {
     }
 
     if (data.user) {
-      // Call API to set nickname
       try {
         const { data: { session } } = await supabase.auth.getSession()
         const res = await fetch("/api/auth/register/nickname", {
@@ -58,13 +109,13 @@ export default function RegisterPage() {
             "Content-Type": "application/json",
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
-          body: JSON.stringify({ userId: data.user.id, nickname }),
+          body: JSON.stringify({ userId: data.user.id, nickname, country }),
         })
 
         const nicknameData = await res.json()
 
         if (!res.ok) {
-          setError(nicknameData.error || "Error saving nickname")
+          setError(nicknameData.error || "Error al guardar el perfil")
           setLoading(false)
           return
         }
@@ -74,7 +125,7 @@ export default function RegisterPage() {
           router.push("/login")
         }, 2000)
       } catch (err: any) {
-        setError(err.message || "Error saving nickname")
+        setError(err.message || "Error al guardar el perfil")
         setLoading(false)
       }
     }
@@ -112,7 +163,7 @@ export default function RegisterPage() {
             </div>
           </Link>
           <CardTitle className="text-2xl">Crear Cuenta</CardTitle>
-          <CardDescription>Únete y empieza a apuesta</CardDescription>
+          <CardDescription>Únete y empieza a apostar</CardDescription>
         </CardHeader>
 
         <form onSubmit={handleSubmit}>
@@ -167,6 +218,42 @@ export default function RegisterPage() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label htmlFor="country" className="text-sm font-medium">
+                País
+              </label>
+              <select
+                id="country"
+                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                required
+              >
+                <option value="">Selecciona tu país...</option>
+                {LATAM_COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+                <option disabled>──────────</option>
+                {OTHER_COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="referralCode" className="text-sm font-medium">
+                Código de referido <span className="text-muted-foreground font-normal">(opcional)</span>
+              </label>
+              <Input
+                id="referralCode"
+                type="text"
+                placeholder="Ej: A1B2C3D4"
+                value={referralCode}
+                onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                maxLength={16}
+              />
+            </div>
+
             <p className="text-xs text-muted-foreground">
               Al iniciar sesión recibirás $50 en Fantasy Tokens. ¡Cada login te da $50 más hasta $1000!
             </p>
@@ -218,5 +305,13 @@ export default function RegisterPage() {
         </form>
       </Card>
     </div>
+  )
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-background" />}>
+      <RegisterForm />
+    </Suspense>
   )
 }
