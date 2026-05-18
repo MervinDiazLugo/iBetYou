@@ -9,7 +9,7 @@ ALTER TABLE profiles
 
 -- Generate referral codes for existing users (backfill)
 UPDATE profiles
-SET referral_code = UPPER(SUBSTRING(MD5(id::text) FROM 1 FOR 8))
+SET referral_code = UPPER(ENCODE(gen_random_bytes(4), 'hex'))
 WHERE referral_code IS NULL;
 
 -- Now make it NOT NULL after backfill
@@ -17,11 +17,11 @@ ALTER TABLE profiles ALTER COLUMN referral_code SET NOT NULL;
 
 -- Add locked referral bonus column to wallets
 ALTER TABLE wallets
-  ADD COLUMN IF NOT EXISTS referral_bonus_locked DECIMAL(10,2) NOT NULL DEFAULT 0;
+  ADD COLUMN IF NOT EXISTS referral_bonus_locked DECIMAL(10,2) NOT NULL DEFAULT 0 CHECK (referral_bonus_locked >= 0);
 
 -- New referral_bonuses table
 CREATE TABLE IF NOT EXISTS referral_bonuses (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   beneficiary_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   referrer_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
   referee_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
