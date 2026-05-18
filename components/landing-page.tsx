@@ -35,7 +35,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
         .catch(() => {})
     }
 
-    fetch("/api/bets?status=open&limit=3")
+    fetch("/api/bets?limit=3")
       .then((r) => r.json())
       .then((d) => { if (Array.isArray(d.bets)) setPreviewBets(d.bets.slice(0, 3)) })
       .catch(() => {})
