@@ -31,6 +31,7 @@ interface BetDetail {
   creator_claimed?: boolean
   acceptor_claimed?: boolean
   created_at: string
+  mode?: string
   event: {
     id: number
     sport: string
@@ -548,7 +549,15 @@ export default function BetDetailPage() {
               <span className="text-muted-foreground">Tipo de apuesta</span>
               <Badge>{betTypeLabels[bet.bet_type] || bet.bet_type}</Badge>
             </div>
-            
+            <div className="flex justify-between items-center py-2 border-b">
+              <span className="text-muted-foreground">Modo</span>
+              {bet.mode === "real" ? (
+                <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30">Real IBC</Badge>
+              ) : (
+                <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30">Fantasy</Badge>
+              )}
+            </div>
+
             <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
               {(() => {
                 const exactScoreFavoredTeam = (() => {

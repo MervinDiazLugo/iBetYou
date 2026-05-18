@@ -14,6 +14,7 @@ import type { Bet, Event, User } from "@/types"
 import Link from "next/link"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { useToast } from "@/components/toast"
+import { useMode } from "@/components/mode-provider"
 import { CreateBetForm } from "@/components/create-bet-form"
 import { Countdown } from "@/components/countdown"
 
@@ -64,6 +65,7 @@ function HomeContent() {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [cloneBetId, setCloneBetId] = useState<string | null>(null)
   const { showToast } = useToast()
+  const { mode } = useMode()
   const [selectedEventForBet, setSelectedEventForBet] = useState<Event | null>(null)
   const [debouncedSearch, setDebouncedSearch] = useState("")
   const [betsVisible, setBetsVisible] = useState(20)
@@ -1147,9 +1149,9 @@ function HomeContent() {
               <Clock className="h-5 w-5 text-orange-500" />
               <h2 className="text-lg sm:text-xl font-bold">Mis Apuestas en Curso</h2>
             </div>
-            {inProgressBets.length > 0 ? (
+            {inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode).length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {inProgressBets.slice(0, 5).map((bet) => {
+                {inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode).slice(0, 5).map((bet) => {
                   const potentialWin = bet.amount * bet.multiplier + bet.amount
                   const betTypeLabels: Record<string, string> = {
                     direct: "Directa",
@@ -1171,6 +1173,11 @@ function HomeContent() {
                             <Badge variant="outline" className="text-[10px] py-0.5 px-2 leading-none">
                               {betTypeLabels[bet.bet_type] || bet.bet_type}
                             </Badge>
+                            {(bet as any).mode === "real" ? (
+                              <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-[10px] py-0.5 px-2 leading-none">Real IBC</Badge>
+                            ) : (
+                              <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-[10px] py-0.5 px-2 leading-none">Fantasy</Badge>
+                            )}
                           </div>
                         </div>
                         <div className="text-sm leading-snug font-semibold text-center px-1">
