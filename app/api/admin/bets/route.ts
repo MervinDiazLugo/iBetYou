@@ -388,6 +388,11 @@ export async function PATCH(request: NextRequest) {
           ], supabase)
         }
 
+        await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+        if (bet.acceptor_id) {
+          await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
+        }
+
         results.push({ id, success: true })
       }
       
@@ -594,6 +599,11 @@ export async function PATCH(request: NextRequest) {
           { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: resolveContext.matchInfo, betId: bet_id },
           { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: resolveContext.matchInfo, betId: bet_id },
         ], supabase)
+      }
+
+      await updateWageringProgress(currentBet.creator_id, currentBet.amount, supabase)
+      if (currentBet.acceptor_id) {
+        await updateWageringProgress(currentBet.acceptor_id, currentBet.amount, supabase)
       }
 
       const claimantId = currentBet.creator_claimed && !currentBet.acceptor_claimed
