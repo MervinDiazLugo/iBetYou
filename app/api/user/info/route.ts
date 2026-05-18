@@ -44,6 +44,13 @@ export async function GET(request: NextRequest) {
       .eq("user_id", user.id)
       .single()
 
+    // Get IBC wallet
+    const { data: ibcWallet } = await adminSupabase
+      .from("iby_wallets")
+      .select("balance, balance_blocked")
+      .eq("user_id", user.id)
+      .single()
+
     return NextResponse.json({
       success: true,
       user: {
@@ -56,6 +63,7 @@ export async function GET(request: NextRequest) {
       balance: {
         fantasy: wallet?.balance_fantasy || 0,
         real: wallet?.balance_real || 0,
+        ibc: Number(ibcWallet?.balance || 0) - Number(ibcWallet?.balance_blocked || 0),
       },
     })
   } catch (error) {

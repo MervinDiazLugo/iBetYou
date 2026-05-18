@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useToast } from "@/components/toast"
+import { useMode } from "@/components/mode-provider"
 import { Trophy, Calendar, DollarSign, AlertCircle } from "lucide-react"
 
 interface Event {
@@ -62,7 +63,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const { showToast } = useToast()
   
   const [user, setUser] = useState<{ email: string; nickname: string } | null>(null)
-  const [balance, setBalance] = useState<{ fantasy: number; real: number }>({ fantasy: 0, real: 0 })
+  const { mode } = useMode()
+  const [balance, setBalance] = useState<{ fantasy: number; real: number; ibc: number }>({ fantasy: 0, real: 0, ibc: 0 })
   const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -83,9 +85,10 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const betAmount = feeIncluded ? amount - fee : amount
   const isAsymmetric = betType === "exact_score"
   const totalNeeded = amount + fee // el creador reserva monto base + fee al publicar
+  const activeBalance = mode === "real" ? (Number(balance.ibc) || 0) : (Number(balance.fantasy) || 0)
   const maxAmountByBalance = Math.max(
     0,
-    Math.floor(((Number(balance.fantasy) || 0) / 1.03) * 100) / 100
+    Math.floor((activeBalance / 1.03) * 100) / 100
   )
   const maxAllowedAmount = maxAmountByBalance
   const maxAmountInteger = Math.max(1, Math.floor(maxAllowedAmount))
@@ -334,8 +337,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       return
     }
 
-    if ((Number(balance.fantasy) || 0) < totalNeeded) {
-      setError("Balance insuficiente")
+    if (activeBalance < totalNeeded) {
+      setError(mode === "real" ? "Saldo IBC insuficiente" : "Balance insuficiente")
       setLoading(false)
       return
     }
@@ -356,6 +359,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           amount: betAmount,
           multiplier,
           fee,
+          mode,
         }),
       })
 
@@ -591,7 +595,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              Máximo disponible según tu balance: {formatPesos(maxAllowedAmount)}
+              Máximo disponible: {formatPesos(maxAllowedAmount)} {mode === "real" ? "IBC" : "Fantasy"}
             </p>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
@@ -624,9 +628,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           )}
 
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-card/95 backdrop-blur border-t border-border">
-            {(Number(balance.fantasy) || 0) < totalNeeded && (
+            {(mode === "real" ? (Number(balance.ibc) || 0) : (Number(balance.fantasy) || 0)) < totalNeeded && (
               <p className="text-xs text-center text-destructive mb-2">
-                Balance insuficiente
+                {mode === "real" ? "Saldo IBC insuficiente" : "Balance insuficiente"}
               </p>
             )}
             <div className="flex flex-row gap-2">
@@ -636,7 +640,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               <Button
                 type="submit"
                 className="flex-1"
-                disabled={loading || !selectedEvent || (!betSelection && betType !== "exact_score") || (Number(balance.fantasy) || 0) < totalNeeded || maxAllowedAmount < 1}
+                disabled={loading || !selectedEvent || (!betSelection && betType !== "exact_score") || (mode === "real" ? (Number(balance.ibc) || 0) : (Number(balance.fantasy) || 0)) < totalNeeded || maxAllowedAmount < 1}
               >
                 {loading ? "Creando..." : `Publicar (${formatPesos(amount)})`}
               </Button>

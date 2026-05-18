@@ -10,6 +10,8 @@ export type NotificationType =
   | "bet_cancelled"
   | "referral_registered"
   | "referral_bonus_unlocked"
+  | "withdrawal_approved"
+  | "withdrawal_rejected"
 
 interface NotificationInput {
   userId: string
@@ -17,6 +19,7 @@ interface NotificationInput {
   title: string
   body: string
   betId?: string | null
+  mode?: string | null
 }
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
@@ -30,6 +33,7 @@ export async function createNotification(n: NotificationInput, client?: AdminCli
       title: n.title,
       body: n.body,
       bet_id: n.betId || null,
+      mode: n.mode || null,
     })
   } catch (e) {
     console.error("createNotification failed:", e)
@@ -47,6 +51,7 @@ export async function createNotifications(notifications: NotificationInput[], cl
         title: n.title,
         body: n.body,
         bet_id: n.betId || null,
+        mode: n.mode || null,
       }))
     )
   } catch (e) {
