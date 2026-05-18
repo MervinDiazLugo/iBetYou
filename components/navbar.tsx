@@ -57,7 +57,9 @@ export function Navbar() {
     }
     if (ibcRes.ok) {
       const d = await ibcRes.json()
-      setIbcBalance(Number(d.wallet?.balance || 0))
+      const bal = Number(d.wallet?.balance || 0)
+      const blocked = Number(d.wallet?.balance_blocked || 0)
+      setIbcBalance(bal - blocked)
     }
   }
 
@@ -190,6 +192,13 @@ export function Navbar() {
                           Recargas iBY
                         </Link>
                         <Link
+                          href="/withdrawals"
+                          className="block px-3 py-2 rounded-md text-sm hover:bg-secondary"
+                          onClick={() => setUserMenuOpen(false)}
+                        >
+                          Retiros IBC
+                        </Link>
+                        <Link
                           href="/my-referrals"
                           className="block px-3 py-2 rounded-md text-sm hover:bg-secondary text-amber-400"
                           onClick={() => setUserMenuOpen(false)}
@@ -283,6 +292,9 @@ export function Navbar() {
                   </Link>
                   <Link href="/top-up" className="px-4 py-2 hover:bg-secondary rounded">
                     Recargas iBY
+                  </Link>
+                  <Link href="/withdrawals" className="px-4 py-2 hover:bg-secondary rounded">
+                    Retiros IBC
                   </Link>
                   <Link href="/my-referrals" className="px-4 py-2 hover:bg-secondary rounded text-amber-400">
                     Mis Referidos
