@@ -27,11 +27,13 @@ export async function GET(request: NextRequest) {
           .from("wallets")
           .update({ balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 })
           .eq("user_id", userId)
+        // Note: intentionally returns a fresh redirect (not `response`) since no cookies
+        // need to be set on the admin path. Keep getOrCreateReferralCode AFTER this branch.
         return NextResponse.redirect(new URL("/backoffice", request.url))
       }
 
-      // Ensure user has a referral code
-      await getOrCreateReferralCode(userId, supabase)
+      // Non-critical: ensure user has a referral code. Swallow errors to never break login.
+      try { await getOrCreateReferralCode(userId, supabase) } catch {}
 
       const today = new Date().toISOString().split("T")[0]
       const bonusPerLogin = 50
