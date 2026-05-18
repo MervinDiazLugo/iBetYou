@@ -10,6 +10,7 @@ import { Trophy } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { ReferralBonusBanner } from "@/components/referral-bonus-banner"
+import { useMode } from "@/components/mode-provider"
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   open: { label: "Abierta", variant: "secondary" },
@@ -45,11 +46,14 @@ export default function MyBetsPage() {
   const createBetCtaStyle = { backgroundColor: "#16a34a", color: "#ffffff" }
 
   const { user, bets, loading, error } = useMyBets()
+  const { mode } = useMode()
   const [activeTab, setActiveTab] = useState<"all" | "created" | "taken">("all")
 
   const filteredBets = bets
     .filter((bet) => {
       if (!user) return false
+      const betMode = (bet as any).mode ?? "fantasy"
+      if (betMode !== mode) return false
       if (activeTab === "created") return bet.creator_id === user.id
       if (activeTab === "taken") return bet.acceptor_id === user.id
       return true
@@ -147,6 +151,11 @@ export default function MyBetsPage() {
                         <Badge variant="outline" className="text-xs">
                           {betTypeLabels[bet.bet_type] || bet.bet_type}
                         </Badge>
+                        {((bet as any).mode ?? "fantasy") === "real" ? (
+                          <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real IBC</Badge>
+                        ) : (
+                          <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">Fantasy</Badge>
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground shrink-0">
                         ID: {bet.id.slice(0, 8)}

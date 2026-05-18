@@ -19,6 +19,7 @@ interface BetWithDetails {
   winner_id?: string | null
   status: string
   created_at: string
+  mode?: string
   event: {
     id: number
     home_team: string
