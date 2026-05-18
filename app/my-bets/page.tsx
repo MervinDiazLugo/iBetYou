@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Trophy } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
+import { ReferralBonusBanner } from "@/components/referral-bonus-banner"
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   open: { label: "Abierta", variant: "secondary" },
@@ -74,6 +75,10 @@ export default function MyBetsPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
+
+      <div className="max-w-2xl mx-auto px-4 pt-4">
+        <ReferralBonusBanner />
+      </div>
 
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
