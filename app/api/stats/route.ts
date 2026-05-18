@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { NON_FINAL_BET_STATUSES } from "@/lib/bet-constants"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const modeFilter = searchParams.get("mode") || "fantasy"
   const supabase = createAdminSupabaseClient()
 
   try {
@@ -10,6 +12,7 @@ export async function GET() {
     const { data: allBets } = await supabase
       .from("bets")
       .select("id, creator_id, acceptor_id, winner_id, bet_type, status, resolved_at, event:events(home_team, away_team, league, sport)")
+      .eq("mode", modeFilter)
 
     const resolvedBets = (allBets || [])
       .filter((b) => b.status === "resolved")

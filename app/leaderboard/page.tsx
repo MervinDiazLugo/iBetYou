@@ -105,14 +105,16 @@ export default function LeaderboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>("wins")
+  const [leaderboardMode, setLeaderboardMode] = useState<"fantasy" | "real">("fantasy")
 
   useEffect(() => {
-    fetch("/api/stats")
+    setLoading(true)
+    fetch(`/api/stats?mode=${leaderboardMode}`)
       .then((r) => r.json())
       .then(setStats)
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [])
+  }, [leaderboardMode])
 
   return (
     <div className="min-h-screen bg-background">
@@ -124,6 +126,23 @@ export default function LeaderboardPage() {
             Leaderboard
           </h1>
           <p className="text-muted-foreground">Los mejores apostadores de la plataforma</p>
+        </div>
+
+        <div className="flex gap-2 mb-6">
+          <button
+            type="button"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${leaderboardMode === "fantasy" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"}`}
+            onClick={() => setLeaderboardMode("fantasy")}
+          >
+            Fantasy
+          </button>
+          <button
+            type="button"
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${leaderboardMode === "real" ? "bg-amber-500 text-black" : "bg-gray-800 text-gray-400 hover:text-white"}`}
+            onClick={() => setLeaderboardMode("real")}
+          >
+            Real (IBC)
+          </button>
         </div>
 
         {loading ? (

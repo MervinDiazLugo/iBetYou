@@ -10,18 +10,19 @@ export async function GET(request: NextRequest) {
 
   const { data: wallet, error } = await supabase
     .from("iby_wallets")
-    .select("balance, updated_at")
+    .select("balance, balance_blocked, referral_bonus_locked, updated_at")
     .eq("user_id", userId)
     .single()
 
   if (error || !wallet) {
-    // Auto-create wallet if missing
     const { data: created } = await supabase
       .from("iby_wallets")
       .insert({ user_id: userId })
-      .select("balance, updated_at")
+      .select("balance, balance_blocked, referral_bonus_locked, updated_at")
       .single()
-    return NextResponse.json({ wallet: created || { balance: 0 } })
+    return NextResponse.json({
+      wallet: created || { balance: 0, balance_blocked: 0, referral_bonus_locked: 0 },
+    })
   }
 
   return NextResponse.json({ wallet })
