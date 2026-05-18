@@ -74,10 +74,53 @@ export default function MyReferralsPage() {
       <div className="max-w-2xl mx-auto px-4 py-8 space-y-6">
         <h1 className="text-2xl font-bold">Mis Referidos</h1>
 
+        {/* How it works */}
+        <Card className="bg-gray-900 border-amber-500/30">
+          <CardHeader>
+            <CardTitle className="text-amber-400 text-base">Invita amigos, gana fichas</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-gray-300">
+            <p>
+              Comparte tu enlace personal. Cuando un amigo se registra usando tu código,{" "}
+              <span className="text-white font-semibold">ambos reciben 50 fichas de regalo</span>.
+            </p>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-gray-800 rounded-lg p-3">
+                <div className="text-xl font-bold text-amber-400 mb-1">1</div>
+                <p className="text-xs text-gray-400">Comparte tu enlace con amigos</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-3">
+                <div className="text-xl font-bold text-amber-400 mb-1">2</div>
+                <p className="text-xs text-gray-400">Tu amigo se registra con tu código</p>
+              </div>
+              <div className="bg-gray-800 rounded-lg p-3">
+                <div className="text-xl font-bold text-amber-400 mb-1">3</div>
+                <p className="text-xs text-gray-400">Los dos reciben 50 fichas</p>
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-4 space-y-2">
+              <p className="font-semibold text-amber-400">Detalles del bono</p>
+              <ul className="space-y-1.5 text-xs text-gray-300">
+                <li>• <span className="text-white">50 fichas</span> para ti + 50 fichas para tu referido</li>
+                <li>• Las fichas llegan <span className="text-white">bloqueadas</span> — se desbloquean apostando</li>
+                <li>• Requisito: apostar <span className="text-white">750 fichas</span> en apuestas de 10+ fichas</li>
+                <li>• Al completarlo, las 50 fichas pasan a tu saldo disponible automáticamente</li>
+                <li>• Puedes referir hasta <span className="text-white">{stats.max_referrals} personas</span></li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Las fichas son Fantasy Tokens sin valor monetario real. El bono aplica solo a nuevos usuarios que se registren por primera vez.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Share section */}
         <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
-            <CardTitle className="text-white text-base">Comparte tu enlace</CardTitle>
+            <CardTitle className="text-white text-base">Tu enlace personal</CardTitle>
           </CardHeader>
           <CardContent>
             <ReferralShare shareUrl={stats.share_url} whatsappUrl={stats.whatsapp_url} />
@@ -98,7 +141,7 @@ export default function MyReferralsPage() {
           </Card>
           <Card className="bg-gray-900 border-gray-700 text-center p-4">
             <div className="text-3xl font-bold text-green-400">{totalUnlocked * 50}</div>
-            <div className="text-gray-400 text-xs mt-1">Fichas desbloqueadas</div>
+            <div className="text-gray-400 text-xs mt-1">Fichas ganadas</div>
           </Card>
         </div>
 
@@ -127,7 +170,7 @@ export default function MyReferralsPage() {
                   </div>
                   <p className="text-gray-400 text-xs">
                     {stats.my_bonus.wagering_progress.toFixed(0)} /{" "}
-                    {stats.my_bonus.wagering_required.toFixed(0)} fichas apostadas
+                    {stats.my_bonus.wagering_required.toFixed(0)} fichas apostadas para desbloquear
                   </p>
                 </>
               )}
@@ -139,7 +182,7 @@ export default function MyReferralsPage() {
         <Card className="bg-gray-900 border-gray-700">
           <CardHeader>
             <CardTitle className="text-white text-base">
-              Referidos ({stats.referrals.length})
+              Referidos ({stats.referrals.length} / {stats.max_referrals})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -171,7 +214,7 @@ export default function MyReferralsPage() {
                       </Badge>
                       {r.bonus_status === "locked" && (
                         <p className="text-gray-500 text-xs mt-1">
-                          {r.wagering_progress.toFixed(0)}/{r.wagering_required.toFixed(0)}
+                          {r.wagering_progress.toFixed(0)}/{r.wagering_required.toFixed(0)} fichas
                         </p>
                       )}
                     </div>
