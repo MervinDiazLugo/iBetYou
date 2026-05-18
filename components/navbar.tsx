@@ -277,6 +277,14 @@ export function Navbar() {
                   <Link href="/my-referrals" className="px-4 py-2 hover:bg-secondary rounded text-amber-400">
                     Mis Referidos
                   </Link>
+                  <button
+                    type="button"
+                    onClick={handleSignOut}
+                    className="px-4 py-2 hover:bg-secondary rounded text-left flex items-center gap-2 text-sm text-muted-foreground"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Cerrar sesión
+                  </button>
                 </>
               )}
             </div>
