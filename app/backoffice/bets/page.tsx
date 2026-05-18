@@ -35,6 +35,7 @@ interface Bet {
   acceptor_selection?: string | null
   winner_id?: string | null
   status: string
+  mode?: string
   created_at: string
   updated_at?: string
   event: {
@@ -130,6 +131,7 @@ export default function BackofficeBets() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [modeFilter, setModeFilter] = useState<string>("all")
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [autoResolving, setAutoResolving] = useState<string | null>(null)
@@ -173,7 +175,8 @@ export default function BackofficeBets() {
     }
     try {
       const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : ''
-      const res = await authFetch(`/api/admin/bets?limit=100${statusParam}`)
+      const modeParam = modeFilter !== 'all' ? `&mode=${modeFilter}` : ''
+      const res = await authFetch(`/api/admin/bets?limit=100${statusParam}${modeParam}`)
       const data = await res.json()
       setBets(data.bets || [])
     } catch (err) {
@@ -353,7 +356,7 @@ export default function BackofficeBets() {
 
   useEffect(() => {
     fetchBets()
-  }, [statusFilter])
+  }, [statusFilter, modeFilter])
 
   useEffect(() => {
     fetchEventsWithBets()
@@ -731,6 +734,15 @@ export default function BackofficeBets() {
               <option value="cancelled">Canceladas</option>
               <option value="disputed">En disputa</option>
             </select>
+            <select
+              value={modeFilter}
+              onChange={(e) => setModeFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg border bg-background"
+            >
+              <option value="all">Todos los modos</option>
+              <option value="fantasy">Fantasy</option>
+              <option value="real">Real (IBC)</option>
+            </select>
           </div>
         </CardContent>
       </Card>
@@ -929,6 +941,15 @@ export default function BackofficeBets() {
                       <Badge variant="outline" className="text-xs">
                         Tipo: {betTypeLabel}
                       </Badge>
+                      {(bet as any).mode === "real" ? (
+                        <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">
+                          Real IBC
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">
+                          Fantasy
+                        </Badge>
+                      )}
                       <span className="text-sm text-muted-foreground">
                         {bet.event.league}
                       </span>

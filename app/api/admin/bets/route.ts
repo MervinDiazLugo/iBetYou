@@ -178,6 +178,11 @@ export async function GET(request: NextRequest) {
       acceptor:profiles!bets_acceptor_id_fkey(nickname, avatar_url)
     `)
 
+    const mode = searchParams.get('mode')
+    if (mode && mode !== 'all') {
+      query = query.eq('mode', mode)
+    }
+
     if (status && status !== 'all') {
       query = query.eq('status', status)
     } else if (!status) {
