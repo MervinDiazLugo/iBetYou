@@ -8,6 +8,8 @@ export type NotificationType =
   | "bet_resolved_loss"
   | "bet_disputed"
   | "bet_cancelled"
+  | "referral_registered"
+  | "referral_bonus_unlocked"
 
 interface NotificationInput {
   userId: string

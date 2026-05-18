@@ -68,3 +68,33 @@ export interface Transaction {
   reference_id: string | null
   created_at: string
 }
+
+export interface ReferralBonus {
+  id: string
+  beneficiary_id: string
+  referrer_id: string
+  referee_id: string
+  bonus_amount: number
+  wagering_required: number
+  wagering_progress: number
+  status: 'locked' | 'unlocked' | 'claimed'
+  created_at: string
+  unlocked_at: string | null
+}
+
+export interface ReferralStats {
+  referral_code: string
+  share_url: string
+  whatsapp_url: string
+  referral_count: number
+  max_referrals: number
+  referrals: Array<{
+    referee_id: string
+    nickname: string
+    created_at: string
+    bonus_status: 'locked' | 'unlocked' | 'claimed'
+    wagering_progress: number
+    wagering_required: number
+  }>
+  my_bonus: ReferralBonus | null
+}
