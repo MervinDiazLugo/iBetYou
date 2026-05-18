@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
+import { updateWageringProgress } from "@/lib/referrals"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -1000,6 +1001,11 @@ export async function POST(request: NextRequest) {
         { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens.`, betId: bet_id },
         { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
       ], supabase)
+    }
+
+    await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+    if (bet.acceptor_id) {
+      await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
     }
 
     return NextResponse.json({
