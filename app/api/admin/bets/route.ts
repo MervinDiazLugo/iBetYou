@@ -548,7 +548,7 @@ export async function PATCH(request: NextRequest) {
 
     const { data: currentBet } = await supabase
       .from('bets')
-      .select('id, status, winner_id, creator_id, acceptor_id, creator_claimed, acceptor_claimed')
+      .select('id, status, winner_id, creator_id, acceptor_id, creator_claimed, acceptor_claimed, amount')
       .eq('id', bet_id)
       .single()
 
