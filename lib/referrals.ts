@@ -62,11 +62,8 @@ export async function applyReferral(
 
     if (referredByError || !updatedProfile) return // Race condition: already processed
 
-    // Increment referrer's count
-    await supabase
-      .from("profiles")
-      .update({ referral_count: referrer.referral_count + 1 })
-      .eq("id", referrer.id)
+    // Atomic increment avoids race condition with concurrent referrals
+    await supabase.rpc("increment_referral_count", { p_user_id: referrer.id })
 
     const wageringRequired = BONUS_AMOUNT * WAGERING_MULTIPLIER
 
@@ -93,14 +90,23 @@ export async function applyReferral(
     ])
 
     // Credit locked bonus to both wallets
-    await supabase.rpc("increment_referral_bonus_locked", {
+    const { error: rpcError1 } = await supabase.rpc("increment_referral_bonus_locked", {
       p_user_id: referrer.id,
       p_amount: BONUS_AMOUNT,
     })
-    await supabase.rpc("increment_referral_bonus_locked", {
+    if (rpcError1) {
+      console.error("Failed to credit referrer bonus locked:", rpcError1)
+      return
+    }
+
+    const { error: rpcError2 } = await supabase.rpc("increment_referral_bonus_locked", {
       p_user_id: newUserId,
       p_amount: BONUS_AMOUNT,
     })
+    if (rpcError2) {
+      console.error("Failed to credit referee bonus locked:", rpcError2)
+      return
+    }
 
     // Log transactions
     await supabase.from("transactions").insert([
@@ -125,8 +131,8 @@ export async function applyReferral(
       {
         userId: referrer.id,
         type: "referral_registered",
-        title: "Nuevo referido registrado",
-        body: `${newUserProfile.nickname} se registró con tu código. ¡Sigue apostando para desbloquear tu bono!`,
+        title: `¡Tu referido ${newUserProfile.nickname ?? "un amigo"} se registró!`,
+        body: `${newUserProfile.nickname ?? "Tu referido"} se registró con tu código. ¡Sigue apostando para desbloquear tu bono!`,
         betId: null,
       },
       supabase
@@ -228,10 +234,12 @@ export async function getOrCreateReferralCode(
   if (profile?.referral_code) return profile.referral_code
 
   const code = generateReferralCode()
-  await supabase
+  const { error } = await supabase
     .from("profiles")
     .update({ referral_code: code })
     .eq("id", userId)
+
+  if (error) throw new Error(`Failed to persist referral code: ${error.message}`)
 
   return code
 }
