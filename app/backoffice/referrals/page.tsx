@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { Navbar } from "@/components/navbar"
 
 interface ReferralMetrics {
   total_referral_bonuses: number
@@ -19,12 +18,18 @@ export default function BackofficeReferralsPage() {
   useEffect(() => {
     const supabase = createBrowserSupabaseClient()
     supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (!session) return
-      const res = await fetch("/api/admin/referrals", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
-      if (res.ok) setMetrics(await res.json())
-      setLoading(false)
+      if (!session) {
+        setLoading(false)
+        return
+      }
+      try {
+        const res = await fetch("/api/admin/referrals", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        })
+        if (res.ok) setMetrics(await res.json())
+      } finally {
+        setLoading(false)
+      }
     })
   }, [])
 

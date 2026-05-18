@@ -8,17 +8,17 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminSupabaseClient()
 
-  const { count: totalReferrals } = await supabase
+  const { count: locked } = await supabase
     .from("referral_bonuses")
     .select("*", { count: "exact", head: true })
+    .eq("status", "locked")
 
-  const { data: statusCounts } = await supabase
+  const { count: unlocked } = await supabase
     .from("referral_bonuses")
-    .select("status")
+    .select("*", { count: "exact", head: true })
+    .eq("status", "unlocked")
 
-  const locked = statusCounts?.filter((r) => r.status === "locked").length ?? 0
-  const unlocked = statusCounts?.filter((r) => r.status === "unlocked").length ?? 0
-
+  // TODO: push this aggregation to a DB-level SUM() once wallet counts grow large
   const { data: walletSums } = await supabase
     .from("wallets")
     .select("referral_bonus_locked")
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     .limit(10)
 
   return NextResponse.json({
-    total_referral_bonuses: totalReferrals ?? 0,
+    total_referral_bonuses: (locked ?? 0) + (unlocked ?? 0),
     bonuses_locked: locked,
     bonuses_unlocked: unlocked,
     total_locked_tokens: totalLocked,
