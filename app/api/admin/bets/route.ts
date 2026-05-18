@@ -374,8 +374,8 @@ export async function PATCH(request: NextRequest) {
           const ev3a = (bet as any).event
           const matchInfo3a = ev3a ? `${ev3a.home_team} vs ${ev3a.away_team}` + (ev3a.home_score !== null && ev3a.away_score !== null ? ` (${ev3a.home_score}-${ev3a.away_score})` : '') : 'Apuesta resuelta'
           await createNotifications([
-            { userId: winnerUserId, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeApprove === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo3a, betId: id },
-            { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: matchInfo3a, betId: id },
+            { userId: winnerUserId, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeApprove === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo3a, betId: id, mode: betModeApprove },
+            { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: matchInfo3a, betId: id, mode: betModeApprove },
           ], supabase)
         }
 
@@ -431,7 +431,7 @@ export async function PATCH(request: NextRequest) {
       case 'cancel': {
         const { data: betToCancel, error: fetchErr } = await supabase
           .from('bets')
-          .select('id, creator_id, acceptor_id, amount, multiplier, fee_amount, type, bet_type, status')
+          .select('id, creator_id, acceptor_id, amount, multiplier, fee_amount, type, bet_type, status, mode')
           .eq('id', bet_id)
           .single()
 
@@ -506,8 +506,8 @@ export async function PATCH(request: NextRequest) {
         })
 
         const notifTargets = [
-          { userId: betToCancel.creator_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'Tu apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id },
-          ...(betToCancel.acceptor_id ? [{ userId: betToCancel.acceptor_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'La apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id }] : []),
+          { userId: betToCancel.creator_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'Tu apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id, mode: (betToCancel as any).mode ?? "fantasy" },
+          ...(betToCancel.acceptor_id ? [{ userId: betToCancel.acceptor_id, type: 'bet_cancelled' as const, title: 'Apuesta cancelada', body: 'La apuesta fue cancelada por un administrador. Te devolvimos tu saldo.', betId: bet_id, mode: (betToCancel as any).mode ?? "fantasy" }] : []),
         ]
         await createNotifications(notifTargets, supabase)
 
@@ -582,8 +582,8 @@ export async function PATCH(request: NextRequest) {
           operation: 'bet_won', reference_id: bet_id,
         })
         await createNotifications([
-          { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeResolve === "real" ? "IBC" : "Fantasy Tokens"}!`, body: resolveContext.matchInfo, betId: bet_id },
-          { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: resolveContext.matchInfo, betId: bet_id },
+          { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeResolve === "real" ? "IBC" : "Fantasy Tokens"}!`, body: resolveContext.matchInfo, betId: bet_id, mode: betModeResolve },
+          { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: resolveContext.matchInfo, betId: bet_id, mode: betModeResolve },
         ], supabase)
       }
 
@@ -968,8 +968,8 @@ export async function POST(request: NextRequest) {
     if (outcome.kind === 'winner') {
       const loserId = outcome.winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       await createNotifications([
-        { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} ${betModeAuto === "real" ? "IBC" : "Fantasy Tokens"}.`, betId: bet_id },
-        { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id },
+        { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} ${betModeAuto === "real" ? "IBC" : "Fantasy Tokens"}.`, betId: bet_id, mode: betModeAuto },
+        { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id, mode: betModeAuto },
       ], supabase)
     }
 

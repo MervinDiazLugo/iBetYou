@@ -13,6 +13,7 @@ interface Notification {
   title: string
   body: string
   bet_id: string | null
+  mode?: string | null
   read: boolean
   created_at: string
 }
@@ -146,6 +147,15 @@ export function NotificationBell({ userId, sessionToken }: Props) {
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium leading-tight">{n.title}</div>
                         <div className="text-xs text-muted-foreground mt-0.5 leading-snug">{n.body}</div>
+                        {n.mode && (
+                          <span className={`inline-block mt-1 text-[10px] font-semibold px-1.5 py-0.5 rounded border ${
+                            n.mode === "real"
+                              ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                              : "bg-blue-500/15 text-blue-400 border-blue-500/30"
+                          }`}>
+                            {n.mode === "real" ? "Real IBC" : "Fantasy"}
+                          </span>
+                        )}
                         <div className="text-xs text-muted-foreground mt-1">
                           {formatDate(n.created_at)}
                         </div>

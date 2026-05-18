@@ -271,6 +271,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       title: "¡Tu apuesta fue tomada!",
       body: `${takerName} tomó tu apuesta sobre ${eventRow?.home_team} vs ${eventRow?.away_team}`,
       betId: betId,
+      mode: (bet as any).mode ?? "fantasy",
     })
 
     return NextResponse.json({ success: true, bet: updatedBet })

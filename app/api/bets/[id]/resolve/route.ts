@@ -182,6 +182,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             ? "Tu rival dice que ganó. Confirmá o disputá el resultado."
             : "Tu rival dice que perdió. Confirmá o disputá el resultado.",
           betId,
+          mode: (bet as any).mode ?? "fantasy",
         }], supabase)
       }
 
@@ -231,8 +232,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
       // Notify both parties that the bet is now disputed
       const disputeNotifs = [
-        { userId: bet.creator_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId },
-        ...(bet.acceptor_id ? [{ userId: bet.acceptor_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId }] : []),
+        { userId: bet.creator_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId, mode: (bet as any).mode ?? "fantasy" },
+        ...(bet.acceptor_id ? [{ userId: bet.acceptor_id, type: "bet_disputed" as const, title: "Apuesta en disputa", body: "El resultado fue rechazado. Un árbitro revisará la apuesta.", betId, mode: (bet as any).mode ?? "fantasy" }] : []),
       ]
       await createNotifications(disputeNotifs, supabase)
 
@@ -303,8 +304,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const evR = Array.isArray(bet.event) ? bet.event[0] : bet.event
     const matchInfoR = evR ? `${evR.home_team} vs ${evR.away_team}` + (evR.home_score !== null && evR.away_score !== null ? ` (${evR.home_score}-${evR.away_score})` : '') : 'Apuesta resuelta'
     const resolveNotifs = [
-      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfoR, betId },
-      ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId }] : []),
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" },
+      ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)
 
