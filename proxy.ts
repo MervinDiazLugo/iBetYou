@@ -29,6 +29,16 @@ export async function proxy(request: NextRequest) {
 
   await supabase.auth.getUser()
 
+  const ref = request.nextUrl.searchParams.get("ref")
+  if (ref && /^[a-zA-Z0-9_-]{6,16}$/.test(ref) && !request.cookies.has("iby_ref")) {
+    response.cookies.set("iby_ref", ref, {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 30,
+      path: "/",
+    })
+  }
+
   return response
 }
 
