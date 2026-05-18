@@ -6,7 +6,7 @@ export function middleware(request: NextRequest) {
   const ref = request.nextUrl.searchParams.get("ref")
 
   // Only set cookie if ref param present and cookie not already set
-  if (ref && ref.length >= 6 && ref.length <= 16 && !request.cookies.has("iby_ref")) {
+  if (ref && /^[a-zA-Z0-9_-]{6,16}$/.test(ref) && !request.cookies.has("iby_ref")) {
     response.cookies.set("iby_ref", ref, {
       httpOnly: true,
       sameSite: "lax",
