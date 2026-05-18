@@ -491,8 +491,8 @@ export default function BetDetailPage() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
+
+      <main className="container mx-auto px-4 py-6 max-w-2xl" data-mode={bet.mode ?? "fantasy"}>
         <Button variant="ghost" className="mb-4" asChild>
           <Link href="/">
             <ArrowLeft className="h-4 w-4 mr-2" />
