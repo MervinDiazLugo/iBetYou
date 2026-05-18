@@ -5,6 +5,7 @@ import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
+import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const API_KEY = process.env.API_FOOTBALL_KEY
@@ -252,7 +253,7 @@ export async function POST(request: NextRequest) {
       .from("bets")
       .select(`
         id, event_id, creator_id, acceptor_id, amount, multiplier,
-        status, bet_type, creator_selection, selection,
+        status, bet_type, creator_selection, selection, mode,
         event:events(id, external_id, status, home_score, away_score, home_team, away_team, metadata)
       `)
       .in("bet_type", betTypes)
@@ -386,34 +387,15 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      const { data: winnerWallet } = await supabase
-        .from("wallets")
-        .select("balance_fantasy")
-        .eq("user_id", winnerId)
-        .single()
-
-      if (!winnerWallet) {
-        failed += 1
-        results.push({ bet_id: (bet as any).id, status: "failed", reason: "Wallet del ganador no encontrada" })
-        continue
-      }
-
-      const { error: walletPayError } = await supabase
-        .from("wallets")
-        .update({ balance_fantasy: Number(winnerWallet.balance_fantasy || 0) + totalPrize })
-        .eq("user_id", winnerId)
-
-      if (walletPayError) {
-        console.error("Wallet payout error (bet already resolved):", walletPayError, { betId: (bet as any).id, winnerId, totalPrize })
-      } else {
-        await supabase.from("transactions").insert({
-          user_id: winnerId,
-          token_type: "fantasy",
-          amount: totalPrize,
-          operation: `bet_won_auto_resolved_${betType}`,
-          reference_id: (bet as any).id,
-        })
-      }
+      const betMode = (bet as any).mode ?? "fantasy"
+      await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      await supabase.from("transactions").insert({
+        user_id: winnerId,
+        token_type: tokenTypeForMode(betMode),
+        amount: totalPrize,
+        operation: `bet_won_auto_resolved_${betType}`,
+        reference_id: (bet as any).id,
+      })
 
       await supabase.from("arbitration_decisions").insert({
         bet_id: (bet as any).id,
@@ -436,13 +418,13 @@ export async function POST(request: NextRequest) {
       const loserId = winnerId === (bet as any).creator_id ? (bet as any).acceptor_id : (bet as any).creator_id
       const matchInfo = `${eventRow.home_team} vs ${eventRow.away_team}` + (eventRow.home_score !== null && eventRow.away_score !== null ? ` (${eventRow.home_score}-${eventRow.away_score})` : '')
       await createNotifications([
-        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfo, betId: (bet as any).id },
+        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo, betId: (bet as any).id },
         { userId: loserId, type: "bet_resolved_loss", title: "Perdiste esta apuesta", body: matchInfo, betId: (bet as any).id },
       ], supabase)
 
-      await updateWageringProgress((bet as any).creator_id, (bet as any).amount, supabase)
+      await updateWageringProgress((bet as any).creator_id, (bet as any).amount, supabase, (bet as any).mode ?? "fantasy")
       if ((bet as any).acceptor_id) {
-        await updateWageringProgress((bet as any).acceptor_id, (bet as any).amount, supabase)
+        await updateWageringProgress((bet as any).acceptor_id, (bet as any).amount, supabase, (bet as any).mode ?? "fantasy")
       }
 
       resolved += 1

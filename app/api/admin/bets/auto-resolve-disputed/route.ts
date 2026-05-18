@@ -4,6 +4,7 @@ import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
+import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 
 async function logDecision(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -60,6 +61,7 @@ export async function POST(request: NextRequest) {
         amount,
         multiplier,
         status,
+        mode,
         event:events(id, home_team, away_team, home_score, away_score, sport)
       `)
       .eq("bet_type", "direct")
@@ -193,30 +195,15 @@ export async function POST(request: NextRequest) {
       }
 
       // Bet confirmed — now pay winner
-      const { data: winnerWallet } = await supabase
-        .from("wallets")
-        .select("balance_fantasy")
-        .eq("user_id", winnerId)
-        .single()
-
-      if (winnerWallet) {
-        const { error: walletPayError } = await supabase
-          .from("wallets")
-          .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
-          .eq("user_id", winnerId)
-
-        if (walletPayError) {
-          console.error("Wallet payout error (bet already resolved):", walletPayError, { betId: bet.id, winnerId, totalPrize })
-        } else {
-          await supabase.from("transactions").insert({
-            user_id: winnerId,
-            token_type: "fantasy",
-            amount: totalPrize,
-            operation: "bet_won_auto_resolved_disputed",
-            reference_id: bet.id,
-          })
-        }
-      }
+      const betMode = (bet as any).mode ?? "fantasy"
+      await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      await supabase.from("transactions").insert({
+        user_id: winnerId,
+        token_type: tokenTypeForMode(betMode),
+        amount: totalPrize,
+        operation: "bet_won_auto_resolved_disputed",
+        reference_id: bet.id,
+      })
 
       await logDecision(supabase, {
         bet_id: bet.id,
@@ -238,13 +225,13 @@ export async function POST(request: NextRequest) {
       const loserId = winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       const matchInfo = `${home_team} vs ${away_team}` + (home_score !== null && away_score !== null ? ` (${home_score}-${away_score})` : '')
       await createNotifications([
-        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfo, betId: bet.id },
+        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo, betId: bet.id },
         { userId: loserId, type: "bet_resolved_loss", title: "Perdiste esta apuesta", body: matchInfo, betId: bet.id },
       ], supabase)
 
-      await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+      await updateWageringProgress(bet.creator_id, bet.amount, supabase, (bet as any).mode ?? "fantasy")
       if (bet.acceptor_id) {
-        await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
+        await updateWageringProgress(bet.acceptor_id, bet.amount, supabase, (bet as any).mode ?? "fantasy")
       }
 
       resolved += 1

@@ -4,9 +4,10 @@ import { createNotification } from "@/lib/notifications"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, eventId, betType, selection, amount, multiplier } = await request.json()
+    const { userId, eventId, betType, selection, amount, multiplier, mode: rawMode } = await request.json()
     // Fee is always recalculated server-side — never trust the client-provided value
     const fee = amount * 0.03
+    const betMode = rawMode === "real" ? "real" : "fantasy"
     const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
 
     const authHeader = request.headers.get("authorization")
@@ -117,40 +118,55 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get user wallet
-    const { data: wallet, error: walletError } = await supabase
-      .from("wallets")
-      .select("balance_fantasy")
-      .eq("user_id", user.id)
-      .single()
-
-    if (walletError || !wallet) {
-      return NextResponse.json(
-        { error: "Wallet not found" },
-        { status: 404 }
-      )
-    }
-
-    // Validate balance
+    // Get user wallet and validate balance — route by mode
     const totalNeeded = amount + fee
-    if (wallet.balance_fantasy < totalNeeded) {
-      return NextResponse.json(
-        { error: "Insufficient balance" },
-        { status: 400 }
-      )
+    let currentBalance: number
+    if (betMode === "real") {
+      const { data: ibcWallet, error: ibcErr } = await supabase
+        .from("iby_wallets")
+        .select("balance, balance_blocked")
+        .eq("user_id", user.id)
+        .single()
+      if (ibcErr || !ibcWallet) {
+        return NextResponse.json({ error: "IBC wallet not found" }, { status: 404 })
+      }
+      const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
+      if (available < totalNeeded) {
+        return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
+      }
+      currentBalance = Number(ibcWallet.balance)
+    } else {
+      const { data: wallet, error: walletError } = await supabase
+        .from("wallets")
+        .select("balance_fantasy")
+        .eq("user_id", user.id)
+        .single()
+      if (walletError || !wallet) {
+        return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
+      }
+      if (wallet.balance_fantasy < totalNeeded) {
+        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+      }
+      currentBalance = wallet.balance_fantasy
     }
 
-    // Deduct from wallet first — if this fails, no bet is created
-    const { error: walletUpdateError } = await supabase
-      .from("wallets")
-      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
-      .eq("user_id", user.id)
-
-    if (walletUpdateError) {
-      return NextResponse.json(
-        { error: "Failed to update wallet" },
-        { status: 400 }
-      )
+    // Deduct from wallet — payment ordering invariant: update wallet before creating bet
+    if (betMode === "real") {
+      const { error: walletUpdateError } = await supabase
+        .from("iby_wallets")
+        .update({ balance: currentBalance - totalNeeded })
+        .eq("user_id", user.id)
+      if (walletUpdateError) {
+        return NextResponse.json({ error: "Failed to update IBC wallet" }, { status: 400 })
+      }
+    } else {
+      const { error: walletUpdateError } = await supabase
+        .from("wallets")
+        .update({ balance_fantasy: currentBalance - totalNeeded })
+        .eq("user_id", user.id)
+      if (walletUpdateError) {
+        return NextResponse.json({ error: "Failed to update wallet" }, { status: 400 })
+      }
     }
 
     // Create bet after confirmed deduction
@@ -169,16 +185,18 @@ export async function POST(request: NextRequest) {
         fee_amount: fee,
         creator_selection: selection.selection || "",
         status: "open",
+        mode: betMode,
       })
       .select()
       .single()
 
     if (betError) {
       // Rollback wallet deduction
-      await supabase
-        .from("wallets")
-        .update({ balance_fantasy: wallet.balance_fantasy })
-        .eq("user_id", user.id)
+      if (betMode === "real") {
+        await supabase.from("iby_wallets").update({ balance: currentBalance }).eq("user_id", user.id)
+      } else {
+        await supabase.from("wallets").update({ balance_fantasy: currentBalance }).eq("user_id", user.id)
+      }
       return NextResponse.json(
         { error: `Failed to create bet: ${betError.message}` },
         { status: 400 }
@@ -190,7 +208,7 @@ export async function POST(request: NextRequest) {
       .from("transactions")
       .insert({
         user_id: user.id,
-        token_type: "fantasy",
+        token_type: betMode === "real" ? "ibc" : "fantasy",
         amount: -totalNeeded,
         operation: "bet_created",
         reference_id: bet.id,

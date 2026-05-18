@@ -158,36 +158,63 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
     }
 
-    // Validate user has sufficient balance
-    const { data: wallet } = await supabase
-      .from("wallets")
-      .select("balance_fantasy")
-      .eq("user_id", effectiveUserId)
-      .single()
-
-    if (!wallet) {
-      return NextResponse.json({ error: 'Wallet not found' }, { status: 404 })
-    }
-
     // Only exact score bets are asymmetric.
     const isAsymmetric = bet.bet_type === 'exact_score'
+    const betMode = bet.mode === "real" ? "real" : "fantasy"
     const acceptorStake = isAsymmetric ? bet.amount * bet.multiplier : bet.amount
     const acceptorFee = acceptorStake * 0.03
     const totalNeeded = acceptorStake + acceptorFee
 
-    if (wallet.balance_fantasy < totalNeeded) {
-      return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
+    // Validate user has sufficient balance — route by bet mode
+    let takerBalance: number
+    if (betMode === "real") {
+      const { data: ibcWallet } = await supabase
+        .from("iby_wallets")
+        .select("balance, balance_blocked")
+        .eq("user_id", effectiveUserId)
+        .single()
+      if (!ibcWallet) {
+        return NextResponse.json({ error: "IBC wallet not found" }, { status: 404 })
+      }
+      const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
+      if (available < totalNeeded) {
+        return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
+      }
+      takerBalance = Number(ibcWallet.balance)
+    } else {
+      const { data: wallet } = await supabase
+        .from("wallets")
+        .select("balance_fantasy")
+        .eq("user_id", effectiveUserId)
+        .single()
+      if (!wallet) {
+        return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
+      }
+      if (wallet.balance_fantasy < totalNeeded) {
+        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+      }
+      takerBalance = wallet.balance_fantasy
     }
 
     // Deduct from taker's wallet — optimistic lock prevents stale rollback on race condition
-    const { error: walletError } = await supabase
-      .from("wallets")
-      .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
-      .eq("user_id", effectiveUserId)
-      .eq("balance_fantasy", wallet.balance_fantasy)
-
-    if (walletError) {
-      if (walletError.code === "PGRST116") {
+    let walletDeductError: any
+    if (betMode === "real") {
+      const { error } = await supabase
+        .from("iby_wallets")
+        .update({ balance: takerBalance - totalNeeded })
+        .eq("user_id", effectiveUserId)
+        .eq("balance", takerBalance)
+      walletDeductError = error
+    } else {
+      const { error } = await supabase
+        .from("wallets")
+        .update({ balance_fantasy: takerBalance - totalNeeded })
+        .eq("user_id", effectiveUserId)
+        .eq("balance_fantasy", takerBalance)
+      walletDeductError = error
+    }
+    if (walletDeductError) {
+      if (walletDeductError.code === "PGRST116") {
         return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
       }
       return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
@@ -205,7 +232,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (updateError || !updatedBet) {
       // Rollback wallet deduction
-      await supabase.from("wallets").update({ balance_fantasy: wallet.balance_fantasy }).eq("user_id", effectiveUserId)
+      if (betMode === "real") {
+        await supabase.from("iby_wallets").update({ balance: takerBalance }).eq("user_id", effectiveUserId)
+      } else {
+        await supabase.from("wallets").update({ balance_fantasy: takerBalance }).eq("user_id", effectiveUserId)
+      }
       if (updateError?.code === "PGRST116") {
         return NextResponse.json({ error: 'Esta apuesta ya fue tomada por otro usuario' }, { status: 409 })
       }
@@ -215,7 +246,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // Record transaction for taker
     await supabase.from("transactions").insert({
       user_id: effectiveUserId,
-      token_type: "fantasy",
+      token_type: betMode === "real" ? "ibc" : "fantasy",
       amount: -totalNeeded,
       operation: "bet_taken",
       reference_id: betId,

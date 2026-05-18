@@ -90,7 +90,7 @@ export async function applyReferral(
     ])
 
     // Credit locked bonus to both wallets
-    const { error: rpcError1 } = await supabase.rpc("increment_referral_bonus_locked", {
+    const { error: rpcError1 } = await supabase.rpc("increment_referral_bonus_locked_ibc", {
       p_user_id: referrer.id,
       p_amount: BONUS_AMOUNT,
     })
@@ -99,7 +99,7 @@ export async function applyReferral(
       return
     }
 
-    const { error: rpcError2 } = await supabase.rpc("increment_referral_bonus_locked", {
+    const { error: rpcError2 } = await supabase.rpc("increment_referral_bonus_locked_ibc", {
       p_user_id: newUserId,
       p_amount: BONUS_AMOUNT,
     })
@@ -112,14 +112,14 @@ export async function applyReferral(
     await supabase.from("transactions").insert([
       {
         user_id: referrer.id,
-        token_type: "fantasy",
+        token_type: "ibc",
         amount: BONUS_AMOUNT,
         operation: "referral_bonus",
         reference_id: null,
       },
       {
         user_id: newUserId,
-        token_type: "fantasy",
+        token_type: "ibc",
         amount: BONUS_AMOUNT,
         operation: "referral_bonus",
         reference_id: null,
@@ -150,8 +150,10 @@ export async function applyReferral(
 export async function updateWageringProgress(
   userId: string,
   betAmount: number,
-  supabase: AdminClient
+  supabase: AdminClient,
+  betMode: string = "fantasy"
 ): Promise<void> {
+  if (betMode !== "real") return  // Only real bets count toward IBC referral bonus
   if (betAmount < MIN_BET_FOR_WAGERING) return
 
   try {
@@ -178,8 +180,8 @@ export async function updateWageringProgress(
           .eq("id", bonus.id)
           .eq("status", "locked") // optimistic lock
 
-        // Move locked bonus to balance_fantasy
-        await supabase.rpc("unlock_referral_bonus", {
+        // Move locked bonus to iby_wallets balance
+        await supabase.rpc("unlock_referral_bonus_ibc", {
           p_user_id: userId,
           p_amount: bonus.bonus_amount,
         })
@@ -187,7 +189,7 @@ export async function updateWageringProgress(
         // Log transaction
         await supabase.from("transactions").insert({
           user_id: userId,
-          token_type: "fantasy",
+          token_type: "ibc",
           amount: bonus.bonus_amount,
           operation: "referral_bonus_unlock",
           reference_id: bonus.id,

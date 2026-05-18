@@ -4,6 +4,7 @@ import { supportsPeerResolution, calculateTotalPrize } from "@/lib/bet-resolutio
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { updateWageringProgress } from "@/lib/referrals"
+import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 
 type ResolveAction = "claim_win" | "claim_lose" | "confirm" | "reject"
 const LEGACY_PENDING_CREATOR = "pending_resolution_creator"
@@ -85,7 +86,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const { data: bet, error: betError } = await supabase
       .from("bets")
-      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, event:events(start_time, home_team, away_team, home_score, away_score)")
+      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, mode, event:events(start_time, home_team, away_team, home_score, away_score)")
       .eq("id", betId)
       .single()
 
@@ -276,28 +277,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Bet confirmed resolved — now pay winner
-    const { data: winnerWallet } = await supabase
-      .from("wallets")
-      .select("balance_fantasy")
-      .eq("user_id", winnerUserId)
-      .single()
-
-    if (!winnerWallet) {
-      return NextResponse.json({ error: "No se encontro billetera del ganador" }, { status: 404 })
-    }
-
-    const { error: walletPayError } = await supabase
-      .from("wallets")
-      .update({ balance_fantasy: Number(winnerWallet.balance_fantasy) + totalPrize })
-      .eq("user_id", winnerUserId)
-
-    if (walletPayError) {
-      console.error("Wallet payout error (bet already resolved):", walletPayError, { betId, winnerUserId, totalPrize })
-    }
-
+    const betMode = bet.mode ?? "fantasy"
+    await payoutToMode(supabase, winnerUserId, totalPrize, betMode)
     await supabase.from("transactions").insert({
       user_id: winnerUserId,
-      token_type: "fantasy",
+      token_type: tokenTypeForMode(betMode),
       amount: totalPrize,
       operation: "bet_won",
       reference_id: betId,
@@ -319,14 +303,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const evR = Array.isArray(bet.event) ? bet.event[0] : bet.event
     const matchInfoR = evR ? `${evR.home_team} vs ${evR.away_team}` + (evR.home_score !== null && evR.away_score !== null ? ` (${evR.home_score}-${evR.away_score})` : '') : 'Apuesta resuelta'
     const resolveNotifs = [
-      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfoR, betId },
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfoR, betId },
       ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)
 
-    await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+    await updateWageringProgress(bet.creator_id, bet.amount, supabase, bet.mode ?? "fantasy")
     if (bet.acceptor_id) {
-      await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
+      await updateWageringProgress(bet.acceptor_id, bet.amount, supabase, bet.mode ?? "fantasy")
     }
 
     return NextResponse.json({ success: true, bet: resolvedBet })
