@@ -25,24 +25,24 @@
 }
 
 [data-mode="real"] {
-  --background: #0d0900;
+  --background: #0a0a09;
   --foreground: #f0f0f0;
-  --card: #1a1000;
+  --card: #111110;
   --card-foreground: #f0f0f0;
-  --popover: #1a1000;
+  --popover: #111110;
   --popover-foreground: #f0f0f0;
   --primary: #f59e0b;
   --primary-foreground: #000000;
-  --secondary: #2a1f00;
+  --secondary: #1c1c1a;
   --secondary-foreground: #f0f0f0;
-  --muted: #2a1f00;
+  --muted: #1c1c1a;
   --muted-foreground: #888888;
   --accent: #f59e0b;
   --accent-foreground: #000000;
   --destructive: #ff4444;
   --destructive-foreground: #ffffff;
-  --border: #3d2e00;
-  --input: #3d2e00;
+  --border: #2e2c24;
+  --input: #2e2c24;
   --ring: #f59e0b;
   --mode-glow: 245 158 11;
 }
