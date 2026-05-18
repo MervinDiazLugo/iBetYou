@@ -1,25 +1,50 @@
 @import "tailwindcss";
 
-:root {
-  --background: #0a0a0a;
+:root,
+[data-mode="fantasy"] {
+  --background: #080b10;
   --foreground: #f0f0f0;
-  --card: #1a1a1a;
+  --card: #0f1520;
   --card-foreground: #f0f0f0;
-  --popover: #1a1a1a;
+  --popover: #0f1520;
   --popover-foreground: #f0f0f0;
-  --primary: #f0b90b;
-  --primary-foreground: #000000;
-  --secondary: #2a2a2a;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --secondary: #1a2236;
   --secondary-foreground: #f0f0f0;
-  --muted: #2a2a2a;
+  --muted: #1a2236;
   --muted-foreground: #888888;
-  --accent: #f0b90b;
+  --accent: #3b82f6;
+  --accent-foreground: #ffffff;
+  --destructive: #ff4444;
+  --destructive-foreground: #ffffff;
+  --border: #1e2d45;
+  --input: #1e2d45;
+  --ring: #3b82f6;
+  --mode-glow: 59 130 246;
+}
+
+[data-mode="real"] {
+  --background: #0d0900;
+  --foreground: #f0f0f0;
+  --card: #1a1000;
+  --card-foreground: #f0f0f0;
+  --popover: #1a1000;
+  --popover-foreground: #f0f0f0;
+  --primary: #f59e0b;
+  --primary-foreground: #000000;
+  --secondary: #2a1f00;
+  --secondary-foreground: #f0f0f0;
+  --muted: #2a1f00;
+  --muted-foreground: #888888;
+  --accent: #f59e0b;
   --accent-foreground: #000000;
   --destructive: #ff4444;
   --destructive-foreground: #ffffff;
-  --border: #333333;
-  --input: #333333;
-  --ring: #f0b90b;
+  --border: #3d2e00;
+  --input: #3d2e00;
+  --ring: #f59e0b;
+  --mode-glow: 245 158 11;
 }
 
 @theme inline {
@@ -45,8 +70,31 @@
   --font-sans: system-ui, -apple-system, sans-serif;
 }
 
+/* Smooth mode transitions */
+*, *::before, *::after {
+  transition-property: color, background-color, border-color, box-shadow, outline-color;
+  transition-duration: 250ms;
+  transition-timing-function: ease;
+}
+
+/* Kill transition on elements where delay feels wrong */
+input, textarea, select, [role="option"] {
+  transition: none;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/* Mode switch flash overlay */
+@keyframes mode-flash {
+  0%   { opacity: 0.4; }
+  100% { opacity: 0; }
+}
+
+.mode-transition-overlay {
+  animation: mode-flash 0.55s ease-out forwards;
+  pointer-events: none;
 }
