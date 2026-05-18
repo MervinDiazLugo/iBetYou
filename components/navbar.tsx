@@ -7,6 +7,8 @@ import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { NotificationBell } from "@/components/notification-bell"
+import { ModeToggle } from "@/components/mode-toggle"
+import { useMode } from "@/components/mode-provider"
 
 export function Navbar() {
   const createBetCtaClass = "inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-md !bg-[#16a34a] !text-white text-sm font-semibold shadow-md transition-all duration-200 hover:!bg-[#22c55e] hover:scale-105 hover:shadow-[0_0_18px_rgba(34,197,94,0.45)] hover:shadow-lg active:scale-95"
@@ -21,6 +23,7 @@ export function Navbar() {
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
   const supabase = createBrowserSupabaseClient()
+  const { mode } = useMode()
 
   const displayName =
     menuNickname?.trim() || user?.nickname?.trim() || user?.email?.split("@")[0] || ""
@@ -130,7 +133,12 @@ export function Navbar() {
           {/* User Section */}
           <div className="flex items-center gap-4">
             {!authLoading && user && (
-              <NotificationBell userId={user.id} sessionToken={sessionToken} />
+              <>
+                <NotificationBell userId={user.id} sessionToken={sessionToken} />
+                <div className="hidden md:flex items-center gap-1.5">
+                  <ModeToggle />
+                </div>
+              </>
             )}
             {!authLoading && user ? (
               <>
@@ -191,15 +199,17 @@ export function Navbar() {
                       </div>
 
                       <div className="border-t border-border p-3 text-sm space-y-1.5">
-                        <div className="flex items-center gap-2 text-primary font-medium">
+                        <div className={`flex items-center gap-2 font-medium ${mode === "fantasy" ? "text-primary" : "text-muted-foreground"}`}>
                           <Wallet className="h-4 w-4" />
                           <span>${balance.fantasy.toFixed(2)}</span>
                           <span className="text-xs text-muted-foreground">(Fantasy Token)</span>
+                          {mode === "fantasy" && <span className="text-xs bg-blue-500/20 text-blue-400 px-1 rounded">activo</span>}
                         </div>
-                        <div className="flex items-center gap-2 text-yellow-500 font-medium">
+                        <div className={`flex items-center gap-2 font-medium ${mode === "real" ? "text-amber-400" : "text-muted-foreground"}`}>
                           <Coins className="h-4 w-4" />
                           <span>{ibcBalance.toFixed(2)}</span>
                           <span className="text-xs text-muted-foreground">(iBY Coin)</span>
+                          {mode === "real" && <span className="text-xs bg-amber-500/20 text-amber-400 px-1 rounded">activo</span>}
                         </div>
                       </div>
 
