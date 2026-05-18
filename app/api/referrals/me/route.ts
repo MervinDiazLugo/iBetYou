@@ -43,10 +43,18 @@ export async function GET(request: NextRequest) {
     .eq("referee_id", userId)
     .maybeSingle()
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("referral_count, max_referrals")
+    .eq("id", userId)
+    .single()
+
   return NextResponse.json({
     referral_code: referralCode,
     share_url: shareUrl,
     whatsapp_url: whatsappUrl,
+    referral_count: profile?.referral_count ?? (referrals || []).length,
+    max_referrals: profile?.max_referrals ?? 50,
     referrals: (referrals || []).map((r) => ({
       referee_id: r.referee_id,
       nickname: (r.referee as any)?.nickname ?? "Usuario",
