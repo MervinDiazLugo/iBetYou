@@ -9,8 +9,13 @@ export async function GET(request: NextRequest) {
 
   const supabase = createAdminSupabaseClient()
 
-  const referralCode = await getOrCreateReferralCode(userId, supabase)
-  const origin = request.headers.get("origin") || process.env.NEXT_PUBLIC_APP_URL || ""
+  let referralCode: string
+  try {
+    referralCode = await getOrCreateReferralCode(userId, supabase)
+  } catch {
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  }
+  const origin = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
   const shareUrl = `${origin}/?ref=${referralCode}`
   const whatsappText = encodeURIComponent(
     `¡Te invito a iBetYou! La plataforma donde apuestas directamente contra otros fans, sin casa de apuestas. Regístrate con mi código y recibe 50 fichas gratis: ${shareUrl}`
@@ -36,7 +41,7 @@ export async function GET(request: NextRequest) {
     .select("*")
     .eq("beneficiary_id", userId)
     .eq("referee_id", userId)
-    .single()
+    .maybeSingle()
 
   return NextResponse.json({
     referral_code: referralCode,
