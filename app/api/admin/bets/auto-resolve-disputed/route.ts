@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
+import { updateWageringProgress } from "@/lib/referrals"
 
 async function logDecision(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -240,6 +241,11 @@ export async function POST(request: NextRequest) {
         { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} Fantasy Tokens!`, body: matchInfo, betId: bet.id },
         { userId: loserId, type: "bet_resolved_loss", title: "Perdiste esta apuesta", body: matchInfo, betId: bet.id },
       ], supabase)
+
+      await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+      if (bet.acceptor_id) {
+        await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
+      }
 
       resolved += 1
       results.push({
