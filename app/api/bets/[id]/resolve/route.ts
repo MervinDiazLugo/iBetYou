@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { supportsPeerResolution, calculateTotalPrize } from "@/lib/bet-resolution"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
+import { updateWageringProgress } from "@/lib/referrals"
 
 type ResolveAction = "claim_win" | "claim_lose" | "confirm" | "reject"
 const LEGACY_PENDING_CREATOR = "pending_resolution_creator"
@@ -322,6 +323,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)
+
+    await updateWageringProgress(bet.creator_id, bet.amount, supabase)
+    if (bet.acceptor_id) {
+      await updateWageringProgress(bet.acceptor_id, bet.amount, supabase)
+    }
 
     return NextResponse.json({ success: true, bet: resolvedBet })
   } catch (error: unknown) {
