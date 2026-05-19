@@ -139,6 +139,24 @@ export async function GET(request: NextRequest) {
     })
   }
 
+  // Also include featured events that started today and aren't finished yet.
+  // Featured events may have no bets but still need their status kept up to date.
+  const todayUtcStart = new Date(now)
+  todayUtcStart.setUTCHours(0, 0, 0, 0)
+  const { data: featuredEvents } = await supabase
+    .from("events")
+    .select("id, external_id, sport, start_time, status, metadata")
+    .eq("featured", true)
+    .neq("status", "finished")
+    .gte("start_time", todayUtcStart.toISOString())
+    .lte("start_time", new Date(now).toISOString())
+
+  for (const event of featuredEvents || []) {
+    if (!eventMap.has(event.id)) {
+      eventMap.set(event.id, { ...event, hasFirstScorer: false })
+    }
+  }
+
   if (eventMap.size === 0) {
     return NextResponse.json({ success: true, message: "No events in sync window", apiCalls: 0 })
   }

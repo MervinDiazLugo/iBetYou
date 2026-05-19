@@ -413,6 +413,13 @@ export default function BackofficeEvents() {
   }
 
   async function handleToggleFeatured(id: number, currentFeatured: boolean) {
+    if (!currentFeatured) {
+      const event = savedEvents.find(e => e.id === id)
+      if (event && new Date(event.start_time) < new Date()) {
+        showToast('No se puede destacar un evento que ya comenzó', 'error')
+        return
+      }
+    }
     try {
       const res = await authFetch('/api/admin/events', {
         method: 'PATCH',
