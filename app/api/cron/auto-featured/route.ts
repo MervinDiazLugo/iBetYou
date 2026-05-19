@@ -3,7 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-const MAX_FEATURED = 8
+const MAX_FEATURED = 16
 const LOOKAHEAD_DAYS = 3
 
 export async function GET(request: NextRequest) {
