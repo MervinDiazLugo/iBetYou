@@ -34,16 +34,10 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('status', status)
     } else {
-      // Featured events: show from start of today UTC so they remain visible all day.
-      // Regular events: 10-min lookback to cover timezone/status gaps at kickoff.
+      // Default: include upcoming and just-started events to avoid timezone/status gaps.
       const acceptanceWindowStart = new Date(Date.now() - 10 * 60 * 1000)
-      const todayUtcStart = new Date()
-      todayUtcStart.setUTCHours(0, 0, 0, 0)
       query = query.in('status', ['scheduled', 'live'])
-      query = query.or(
-        `start_time.gte.${acceptanceWindowStart.toISOString()},` +
-        `and(featured.eq.true,start_time.gte.${todayUtcStart.toISOString()})`
-      )
+      query = query.gte('start_time', acceptanceWindowStart.toISOString())
     }
 
     // Limit to next 30 days
