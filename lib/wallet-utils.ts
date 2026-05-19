@@ -13,6 +13,9 @@ export async function payoutToMode(
   amount: number,
   betMode: string
 ): Promise<void> {
+  if (betMode !== "real" && betMode !== "fantasy") {
+    throw new Error(`Invalid betMode: ${betMode}`)
+  }
   if (betMode === "real") {
     const { data: w } = await supabase
       .from("iby_wallets")
@@ -41,5 +44,8 @@ export async function payoutToMode(
 }
 
 export function tokenTypeForMode(betMode: string): string {
+  if (betMode !== "real" && betMode !== "fantasy") {
+    throw new Error(`Invalid betMode: ${betMode}`)
+  }
   return betMode === "real" ? "ibc" : "fantasy"
 }

@@ -7,6 +7,9 @@ export async function POST(request: NextRequest) {
     const { userId, eventId, betType, selection, amount, multiplier, mode: rawMode } = await request.json()
     // Fee is always recalculated server-side — never trust the client-provided value
     const fee = amount * 0.03
+    if (rawMode !== "real" && rawMode !== "fantasy" && rawMode !== undefined && rawMode !== null) {
+      return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
+    }
     const betMode = rawMode === "real" ? "real" : "fantasy"
     const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
 

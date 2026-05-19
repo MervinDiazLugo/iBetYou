@@ -30,6 +30,10 @@ export async function POST(request: NextRequest) {
   const body = await request.json()
   const { method_id, amount } = body
 
+  if (!amount || typeof amount !== "number" || amount <= 0 || !Number.isFinite(amount)) {
+    return NextResponse.json({ error: "Monto inválido" }, { status: 400 })
+  }
+
   const numAmount = Number(amount)
   if (!Number.isFinite(numAmount) || numAmount < MIN_WITHDRAWAL) {
     return NextResponse.json(

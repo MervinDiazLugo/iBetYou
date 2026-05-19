@@ -61,10 +61,16 @@ CREATE POLICY "Service role manages withdrawal requests" ON withdrawal_requests
 CREATE OR REPLACE FUNCTION lock_withdrawal_funds(p_user_id UUID, p_amount DECIMAL)
 RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
+  IF p_amount <= 0 THEN
+    RAISE EXCEPTION 'p_amount must be positive';
+  END IF;
   UPDATE iby_wallets
   SET balance = balance - p_amount,
       balance_blocked = balance_blocked + p_amount
   WHERE user_id = p_user_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'iby_wallet not found for user %', p_user_id;
+  END IF;
 END;
 $$;
 

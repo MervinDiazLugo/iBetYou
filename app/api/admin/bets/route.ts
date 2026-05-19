@@ -455,23 +455,13 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Refund creator
+        const cancelBetMode = (betToCancel as any).mode === "real" ? "real" : "fantasy"
         const creatorRefund = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
-        const { data: creatorWallet } = await supabase
-          .from('wallets').select('balance_fantasy').eq('user_id', betToCancel.creator_id).single()
-
-        if (creatorWallet) {
-          const { error: cwErr } = await supabase.from('wallets')
-            .update({ balance_fantasy: Number(creatorWallet.balance_fantasy) + creatorRefund })
-            .eq('user_id', betToCancel.creator_id)
-          if (!cwErr) {
-            await supabase.from('transactions').insert({
-              user_id: betToCancel.creator_id, token_type: 'fantasy', amount: creatorRefund,
-              operation: 'bet_cancelled_refund', reference_id: bet_id,
-            })
-          } else {
-            console.error('Cancel refund failed for creator:', cwErr, { betId: bet_id })
-          }
-        }
+        await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
+        await supabase.from('transactions').insert({
+          user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
+          operation: 'bet_cancelled_refund', reference_id: bet_id,
+        })
 
         // Refund acceptor if the bet was already taken
         if (betToCancel.acceptor_id) {
@@ -479,23 +469,11 @@ export async function PATCH(request: NextRequest) {
             ? Number(betToCancel.amount) * Number(betToCancel.multiplier)
             : Number(betToCancel.amount)
           const acceptorRefund = acceptorStake + acceptorStake * 0.03
-
-          const { data: acceptorWallet } = await supabase
-            .from('wallets').select('balance_fantasy').eq('user_id', betToCancel.acceptor_id).single()
-
-          if (acceptorWallet) {
-            const { error: awErr } = await supabase.from('wallets')
-              .update({ balance_fantasy: Number(acceptorWallet.balance_fantasy) + acceptorRefund })
-              .eq('user_id', betToCancel.acceptor_id)
-            if (!awErr) {
-              await supabase.from('transactions').insert({
-                user_id: betToCancel.acceptor_id, token_type: 'fantasy', amount: acceptorRefund,
-                operation: 'bet_cancelled_refund', reference_id: bet_id,
-              })
-            } else {
-              console.error('Cancel refund failed for acceptor:', awErr, { betId: bet_id })
-            }
-          }
+          await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
+          await supabase.from('transactions').insert({
+            user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
+            operation: 'bet_cancelled_refund', reference_id: bet_id,
+          })
         }
 
         await logArbitrationDecision(supabase, {
