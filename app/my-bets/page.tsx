@@ -10,7 +10,6 @@ import { Trophy } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { ReferralBonusBanner } from "@/components/referral-bonus-banner"
-import { useMode } from "@/components/mode-provider"
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   open: { label: "Abierta", variant: "secondary" },
@@ -46,14 +45,16 @@ export default function MyBetsPage() {
   const createBetCtaStyle = { backgroundColor: "#16a34a", color: "#ffffff" }
 
   const { user, bets, loading, error } = useMyBets()
-  const { mode } = useMode()
   const [activeTab, setActiveTab] = useState<"all" | "created" | "taken">("all")
+  const [modeTab, setModeTab] = useState<"all" | "fantasy" | "real">("all")
 
   const filteredBets = bets
     .filter((bet) => {
       if (!user) return false
-      const betMode = (bet as any).mode ?? "fantasy"
-      if (betMode !== mode) return false
+      if (modeTab !== "all") {
+        const betMode = (bet as any).mode ?? "fantasy"
+        if (betMode !== modeTab) return false
+      }
       if (activeTab === "created") return bet.creator_id === user.id
       if (activeTab === "taken") return bet.acceptor_id === user.id
       return true
@@ -90,12 +91,38 @@ export default function MyBetsPage() {
           <p className="text-muted-foreground">Gestiona tus apuestas creadas y tomadas</p>
         </div>
 
-        {/* Tabs */}
+        {/* Mode tabs */}
+        <div className="flex gap-2 mb-3">
+          <button
+            type="button"
+            onClick={() => setModeTab("all")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${modeTab === "all" ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Todas
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeTab("fantasy")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${modeTab === "fantasy" ? "bg-blue-600 text-white" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Fantasy
+          </button>
+          <button
+            type="button"
+            onClick={() => setModeTab("real")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${modeTab === "real" ? "bg-amber-500 text-black" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Real IBC
+          </button>
+        </div>
+
+        {/* Role tabs */}
         <div className="flex gap-2 mb-6">
           {(["all", "created", "taken"] as const).map((tab) => (
             <Button
               key={tab}
               variant={activeTab === tab ? "default" : "outline"}
+              size="sm"
               onClick={() => setActiveTab(tab)}
             >
               {tab === "all" ? "Todas" : tab === "created" ? "Creadas" : "Tomadas"}
