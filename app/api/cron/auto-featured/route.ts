@@ -45,9 +45,23 @@ export async function GET(request: NextRequest) {
 
   const prompt = `You are curating featured events for iBetYou, a Venezuelan P2P sports betting platform.
 
-Select the ${MAX_FEATURED} most compelling upcoming events for Venezuelan sports fans to bet on. Prioritize:
-- Major competitions: Champions League, Copa Libertadores, Copa Sudamericana, FIFA qualifiers, NBA Playoffs, MLB
-- Marquee matchups: top clubs, derbies, rivalry games, knockout rounds
+Select the ${MAX_FEATURED} most compelling upcoming events for Venezuelan sports fans to bet on.
+
+MANDATORY — always include if present, regardless of other criteria:
+- FIFA World Cup (any stage)
+- UEFA Champions League (any stage)
+- UEFA Europa League knockout rounds
+- Copa América
+- Copa Libertadores (knockout rounds especially)
+- Copa Sudamericana (knockout rounds especially)
+- FIFA World Cup Qualifiers (CONMEBOL)
+- NBA Playoffs / Finals
+- MLB Playoffs / World Series
+
+After mandatory events, fill remaining slots by prioritizing:
+- Top domestic leagues: Premier League, La Liga, Bundesliga, Serie A, Ligue 1
+- High-profile derbies and rivalry matches
+- Matches involving top global clubs (Real Madrid, Barcelona, Manchester City, Liverpool, etc.)
 - Variety across sports when available
 - Cultural relevance: Venezuelan fans follow South American football closely
 
