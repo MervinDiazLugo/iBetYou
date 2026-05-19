@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     let query = supabase
       .from('events')
       .select('*')
-      .order('featured', { ascending: false })
+      .order('featured', { ascending: false, nullsFirst: false })
       .order('start_time', { ascending: true })
 
     if (sport && sport !== 'all') {
