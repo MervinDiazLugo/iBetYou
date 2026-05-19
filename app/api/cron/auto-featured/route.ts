@@ -56,7 +56,7 @@ MANDATORY — always include if present, regardless of other criteria:
 - Copa Sudamericana (knockout rounds especially)
 - FIFA World Cup Qualifiers (CONMEBOL)
 - NBA Playoffs / Finals
-- MLB Playoffs / World Series
+- MLB (regular season AND playoffs — always include at least one MLB game if available)
 
 After mandatory events, fill remaining slots by prioritizing:
 - Top domestic leagues: Premier League, La Liga, Bundesliga, Serie A, Ligue 1
