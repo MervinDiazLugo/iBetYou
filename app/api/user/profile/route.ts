@@ -2,6 +2,13 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedUserId, requireBackofficeAdmin } from "@/lib/server-auth"
 
+const ALLOWED_COUNTRIES = [
+  "Venezuela","Argentina","Colombia","Chile","México","Perú","Uruguay",
+  "Bolivia","Ecuador","Paraguay","Brasil","Costa Rica","Panamá","Honduras",
+  "El Salvador","Guatemala","Nicaragua","República Dominicana","Cuba",
+  "España","Estados Unidos","Otro",
+]
+
 export async function GET(request: NextRequest) {
   try {
     const userIdFromQuery = request.nextUrl.searchParams.get("user_id")
@@ -73,5 +80,42 @@ export async function GET(request: NextRequest) {
       { error: "Failed to fetch profile" },
       { status: 500 }
     )
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const userId = await getAuthenticatedUserId(request)
+    if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+    const body = await request.json().catch(() => null)
+    if (!body) return NextResponse.json({ error: "Body inválido" }, { status: 400 })
+
+    const updates: Record<string, unknown> = {}
+
+    if (body.country !== undefined) {
+      if (!ALLOWED_COUNTRIES.includes(body.country)) {
+        return NextResponse.json({ error: "País inválido" }, { status: 400 })
+      }
+      updates.country = body.country
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 })
+    }
+
+    const supabase = createAdminSupabaseClient()
+    const { data, error } = await supabase
+      .from("profiles")
+      .update(updates)
+      .eq("id", userId)
+      .select("id, nickname, country")
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true, profile: data })
+  } catch (error) {
+    console.error("PATCH profile error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

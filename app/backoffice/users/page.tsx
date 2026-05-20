@@ -8,6 +8,13 @@ import { Users, ShieldCheck, Ban, Clock, Search, UserPlus, AlertTriangle } from 
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useToast } from "@/components/toast"
 
+const LATAM_COUNTRIES = [
+  "Venezuela","Argentina","Colombia","Chile","México","Perú","Uruguay",
+  "Bolivia","Ecuador","Paraguay","Brasil","Costa Rica","Panamá","Honduras",
+  "El Salvador","Guatemala","Nicaragua","República Dominicana","Cuba",
+  "España","Estados Unidos","Otro",
+]
+
 interface AdminUser {
   id: string
   nickname: string
@@ -17,6 +24,7 @@ interface AdminUser {
   betting_blocked_until?: string | null
   false_claim_count?: number | null
   created_at: string
+  country?: string | null
 }
 
 export default function BackofficeUsersPage() {
@@ -34,6 +42,8 @@ export default function BackofficeUsersPage() {
   const [createAdminError, setCreateAdminError] = useState("")
   const [banTarget, setBanTarget] = useState<AdminUser | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [countryTarget, setCountryTarget] = useState<AdminUser | null>(null)
+  const [countryValue, setCountryValue] = useState("")
 
   async function authFetch(input: RequestInfo | URL, init?: RequestInit) {
     const { data: { session } } = await supabase.auth.getSession()
@@ -358,6 +368,17 @@ export default function BackofficeUsersPage() {
                     {/* Acciones */}
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1.5">
+                        {user.role === "app_user" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs px-2"
+                            onClick={() => { setCountryTarget(user); setCountryValue(user.country || "") }}
+                            disabled={isLoading}
+                          >
+                            🌍 {user.country || "País"}
+                          </Button>
+                        )}
                         {user.role === "app_user" && !user.is_banned && (
                           <Button
                             size="sm"
@@ -408,6 +429,39 @@ export default function BackofficeUsersPage() {
         <p className="text-xs text-muted-foreground text-right">
           {filtered.length} de {users.length} usuarios
         </p>
+      )}
+
+      {/* Country modal */}
+      {countryTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-card border rounded-xl shadow-xl w-[min(92vw,26rem)] p-6 space-y-4">
+            <div>
+              <p className="font-semibold">Cambiar país — {countryTarget.nickname}</p>
+              <p className="text-sm text-muted-foreground">Actual: {countryTarget.country || "No especificado"}</p>
+            </div>
+            <select
+              className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+              value={countryValue}
+              onChange={e => setCountryValue(e.target.value)}
+            >
+              <option value="">Seleccioná un país...</option>
+              {LATAM_COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setCountryTarget(null)}>Cancelar</Button>
+              <Button
+                size="sm"
+                disabled={!countryValue || actionLoadingId === countryTarget.id}
+                onClick={async () => {
+                  await runAction({ action: "set_country", user_id: countryTarget.id, country: countryValue }, countryTarget.id)
+                  setCountryTarget(null)
+                }}
+              >
+                Guardar
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Delete admin confirmation modal */}

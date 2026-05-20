@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     let query = supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at")
+      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at, country")
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -224,6 +224,23 @@ export async function PATCH(request: NextRequest) {
         .update({ role })
         .eq("id", user_id)
         .select("id, nickname, role, is_banned")
+        .single()
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, user: data })
+    }
+
+    if (action === "set_country") {
+      const { country } = body as { country?: string }
+      if (!country?.trim()) {
+        return NextResponse.json({ error: "country is required" }, { status: 400 })
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ country: country.trim() })
+        .eq("id", user_id)
+        .select("id, nickname, country")
         .single()
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })

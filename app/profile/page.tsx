@@ -9,14 +9,23 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { formatCurrency } from "@/lib/utils"
-import { Wallet, User, Trophy, TrendingUp, Shield, LogOut } from "lucide-react"
+import { Wallet, Trophy, TrendingUp, Shield, LogOut, Globe } from "lucide-react"
+import { useToast } from "@/components/toast"
 
 interface ProfileData {
   nickname: string
   avatar_url: string | null
   kyc_status: string
   created_at: string
+  country: string | null
 }
+
+const LATAM_COUNTRIES = [
+  "Venezuela","Argentina","Colombia","Chile","México","Perú","Uruguay",
+  "Bolivia","Ecuador","Paraguay","Brasil","Costa Rica","Panamá","Honduras",
+  "El Salvador","Guatemala","Nicaragua","República Dominicana","Cuba",
+  "España","Estados Unidos","Otro",
+]
 
 interface Stats {
   total_bets: number
@@ -45,6 +54,10 @@ export default function ProfilePage() {
     current_streak: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [editingCountry, setEditingCountry] = useState(false)
+  const [selectedCountry, setSelectedCountry] = useState("")
+  const [savingCountry, setSavingCountry] = useState(false)
+  const { showToast } = useToast()
 
   useEffect(() => {
     async function loadData() {
@@ -72,6 +85,7 @@ export default function ProfilePage() {
           if (res.ok) {
             const data = await res.json()
             setProfile(data.profile)
+            setSelectedCountry(data.profile.country || "")
             setUser({
               email: authUser.email!,
               nickname: data.profile.nickname,
@@ -92,6 +106,32 @@ export default function ProfilePage() {
 
     loadData()
   }, [router, supabase])
+
+  const handleSaveCountry = async () => {
+    if (!selectedCountry) return
+    setSavingCountry(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({ country: selectedCountry }),
+      })
+      if (res.ok) {
+        setProfile(prev => prev ? { ...prev, country: selectedCountry } : prev)
+        setEditingCountry(false)
+        showToast("País actualizado", "success")
+      } else {
+        const d = await res.json()
+        showToast(d.error || "Error al guardar", "error")
+      }
+    } finally {
+      setSavingCountry(false)
+    }
+  }
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
@@ -166,6 +206,48 @@ export default function ProfilePage() {
                 {formatCurrency(balance.real)}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Country Card */}
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Globe className="h-4 w-4" />
+              País
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {editingCountry ? (
+              <div className="flex gap-2">
+                <select
+                  className="flex-1 px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  value={selectedCountry}
+                  onChange={e => setSelectedCountry(e.target.value)}
+                >
+                  <option value="">Seleccioná tu país...</option>
+                  {LATAM_COUNTRIES.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+                <Button size="sm" onClick={handleSaveCountry} disabled={savingCountry || !selectedCountry}>
+                  {savingCountry ? "..." : "Guardar"}
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => {
+                  setEditingCountry(false)
+                  setSelectedCountry(profile?.country || "")
+                }}>
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-sm">{profile?.country || <span className="text-muted-foreground">No especificado</span>}</span>
+                <Button size="sm" variant="outline" onClick={() => setEditingCountry(true)}>
+                  Cambiar
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 
