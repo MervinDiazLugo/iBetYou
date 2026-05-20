@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense, useRef } from "react"
+import { useState, useEffect, Suspense, useRef, useMemo } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -87,6 +87,7 @@ function HomeContent() {
   const [sortBy, setSortBy] = useState<"ending_soon" | "newest" | "highest_amount">("ending_soon")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [collapsedSports, setCollapsedSports] = useState<Record<string, boolean>>({})
+  const [selectedLeague, setSelectedLeague] = useState("all")
   const sessionTokenRef = useRef<string | null>(null)
   const userIdRef = useRef<string | null>(null)
   const initialLoadDoneRef = useRef(false)
@@ -364,7 +365,9 @@ function HomeContent() {
     const selectedRange = amountRanges.find((range) => range.id === selectedAmountRange) || amountRanges[0]
     const matchesAmount = bet.amount >= selectedRange.min && bet.amount <= selectedRange.max
 
-    return matchesSearch && matchesSport && matchesBetType && matchesAmount
+    const matchesLeague = selectedLeague === "all" || bet.event?.league === selectedLeague
+
+    return matchesSearch && matchesSport && matchesBetType && matchesAmount && matchesLeague
   }
 
   const filteredBets = bets.filter((bet) => {
@@ -401,16 +404,43 @@ function HomeContent() {
     return matchesMarketplaceFilters(bet)
   })
 
+  // Unique leagues derived from loaded events for the league tab bar
+  const uniqueLeagues = useMemo(() => {
+    const allEvents = [
+      ...(eventsPagination.football?.data || []),
+      ...(eventsPagination.basketball?.data || []),
+      ...(eventsPagination.baseball?.data || []),
+    ]
+    const seen = new Set<string>()
+    const result: Array<{ league: string; sport: string }> = []
+    for (const e of allEvents) {
+      if (e.league && !seen.has(e.league)) {
+        seen.add(e.league)
+        result.push({ league: e.league, sport: e.sport })
+      }
+    }
+    return result
+  }, [eventsPagination])
+
   // Events are already fetched per-sport and search-filtered by the API
   const eventsBySport = {
-    football: (selectedSport === "all" || selectedSport === "football") ? (eventsPagination.football?.data || []) : [],
-    basketball: (selectedSport === "all" || selectedSport === "basketball") ? (eventsPagination.basketball?.data || []) : [],
-    baseball: (selectedSport === "all" || selectedSport === "baseball") ? (eventsPagination.baseball?.data || []) : [],
+    football: (selectedSport === "all" || selectedSport === "football")
+      ? (eventsPagination.football?.data || []).filter(e => selectedLeague === "all" || e.league === selectedLeague)
+      : [],
+    basketball: (selectedSport === "all" || selectedSport === "basketball")
+      ? (eventsPagination.basketball?.data || []).filter(e => selectedLeague === "all" || e.league === selectedLeague)
+      : [],
+    baseball: (selectedSport === "all" || selectedSport === "baseball")
+      ? (eventsPagination.baseball?.data || []).filter(e => selectedLeague === "all" || e.league === selectedLeague)
+      : [],
   }
   const filteredEvents = [...eventsBySport.football, ...eventsBySport.basketball, ...eventsBySport.baseball]
 
+  // Reset league filter when sport changes
+  useEffect(() => { setSelectedLeague("all") }, [selectedSport])
+
   // Reset bets pagination when filters change
-  useEffect(() => { setBetsVisible(20) }, [selectedSport, selectedBetType, selectedAmountRange, searchTerm, sortBy])
+  useEffect(() => { setBetsVisible(20) }, [selectedSport, selectedBetType, selectedAmountRange, searchTerm, sortBy, selectedLeague])
 
   const activeSecondaryFiltersCount =
     (selectedBetType !== "all" ? 1 : 0) +
@@ -605,6 +635,39 @@ function HomeContent() {
               ))}
             </div>
           </div>
+
+          {/* League tabs */}
+          {uniqueLeagues.length > 0 && (
+            <div className="relative">
+              <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                <button
+                  type="button"
+                  onClick={() => setSelectedLeague("all")}
+                  className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap border ${
+                    selectedLeague === "all"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                  }`}
+                >
+                  🌐 Todas las ligas
+                </button>
+                {uniqueLeagues.map(({ league, sport }) => (
+                  <button
+                    key={league}
+                    type="button"
+                    onClick={() => setSelectedLeague(league)}
+                    className={`shrink-0 px-3 py-1 rounded-full text-xs font-semibold transition-colors whitespace-nowrap border ${
+                      selectedLeague === league
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                    }`}
+                  >
+                    {getSportIcon(sport)} {league}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {activeSecondaryFiltersCount > 0 && (
             <div className="flex flex-wrap items-center gap-2">
