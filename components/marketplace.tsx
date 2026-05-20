@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
-import { Search, Trophy, Users, Clock, Calendar, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react"
+import { Search, Trophy, Users, Clock, Calendar, SlidersHorizontal, ChevronDown, ChevronUp, ChevronLeft, ChevronRight } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import type { Bet, Event, User } from "@/types"
 import Link from "next/link"
@@ -88,6 +88,8 @@ function HomeContent() {
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [collapsedSports, setCollapsedSports] = useState<Record<string, boolean>>({})
   const [selectedLeague, setSelectedLeague] = useState("all")
+  const leagueScrollRef = useRef<HTMLDivElement>(null)
+  const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
   const sessionTokenRef = useRef<string | null>(null)
   const userIdRef = useRef<string | null>(null)
   const initialLoadDoneRef = useRef(false)
@@ -638,8 +640,30 @@ function HomeContent() {
 
           {/* League tabs */}
           {uniqueLeagues.length > 0 && (
-            <div className="relative">
-              <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="relative flex items-center gap-1">
+              {/* Left arrow — desktop only */}
+              <button
+                type="button"
+                aria-label="Scroll izquierda"
+                onClick={() => {
+                  leagueScrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })
+                }}
+                className={`hidden md:flex shrink-0 items-center justify-center w-7 h-7 rounded-full border border-border bg-background hover:bg-secondary transition-colors ${leagueScrollState.canLeft ? "opacity-100" : "opacity-30 pointer-events-none"}`}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+
+              <div
+                ref={leagueScrollRef}
+                className="flex gap-1.5 overflow-x-auto pb-1 flex-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                onScroll={(e) => {
+                  const el = e.currentTarget
+                  setLeagueScrollState({
+                    canLeft: el.scrollLeft > 4,
+                    canRight: el.scrollLeft < el.scrollWidth - el.clientWidth - 4,
+                  })
+                }}
+              >
                 <button
                   type="button"
                   onClick={() => setSelectedLeague("all")}
@@ -666,6 +690,18 @@ function HomeContent() {
                   </button>
                 ))}
               </div>
+
+              {/* Right arrow — desktop only */}
+              <button
+                type="button"
+                aria-label="Scroll derecha"
+                onClick={() => {
+                  leagueScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })
+                }}
+                className={`hidden md:flex shrink-0 items-center justify-center w-7 h-7 rounded-full border border-border bg-background hover:bg-secondary transition-colors ${leagueScrollState.canRight ? "opacity-100" : "opacity-30 pointer-events-none"}`}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
             </div>
           )}
 
