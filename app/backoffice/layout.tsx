@@ -16,7 +16,8 @@ import {
   BarChart2,
   ClipboardList,
   Gift,
-  Banknote
+  Banknote,
+  Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -31,6 +32,7 @@ const navigation = [
   { name: "Auditoría", href: "/backoffice/audit", icon: ClipboardList },
   { name: "Referidos", href: "/backoffice/referrals", icon: Gift },
   { name: "Retiros", href: "/backoffice/withdrawals", icon: Banknote },
+  { name: "Acceso por País", href: "/backoffice/countries", icon: Globe },
 ]
 
 export default function BackofficeLayout({

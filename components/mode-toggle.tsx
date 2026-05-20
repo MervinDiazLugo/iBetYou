@@ -4,26 +4,35 @@ import { useState } from "react"
 import { createPortal } from "react-dom"
 import { useMode } from "@/components/mode-provider"
 import { useAuth } from "@/components/providers"
+import { useCountryAccess } from "@/hooks/use-country-access"
 
 export function ModeToggle() {
   const { mode, setMode } = useMode()
   const { user } = useAuth()
+  const { canUseRealMoney } = useCountryAccess()
   const [showConfirm, setShowConfirm] = useState(false)
+  const [showBlocked, setShowBlocked] = useState(false)
 
   if (!user) return null
 
   function handleToggle() {
-    if (mode === "fantasy") {
-      setShowConfirm(true)
-    } else {
+    if (mode === "real") {
       setMode("fantasy")
+      return
     }
+    if (canUseRealMoney === false) {
+      setShowBlocked(true)
+      return
+    }
+    setShowConfirm(true)
   }
 
   function confirmSwitchToReal() {
     setMode("real")
     setShowConfirm(false)
   }
+
+  const locked = canUseRealMoney === false
 
   return (
     <>
@@ -33,17 +42,17 @@ export function ModeToggle() {
           onClick={handleToggle}
           className={`
             relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 focus:outline-none
-            ${mode === "real" ? "bg-amber-500" : "bg-blue-600"}
+            ${locked ? "bg-muted cursor-not-allowed opacity-60" : mode === "real" ? "bg-amber-500" : "bg-blue-600"}
           `}
-          title={mode === "fantasy" ? "Cambiar a Modo Real (IBC)" : "Cambiar a Modo Fantasy"}
+          title={locked ? "Modo Real no disponible en tu país" : mode === "fantasy" ? "Cambiar a Modo Real (IBC)" : "Cambiar a Modo Fantasy"}
         >
           <span className={`
             inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-300
-            ${mode === "real" ? "translate-x-6" : "translate-x-1"}
+            ${mode === "real" && !locked ? "translate-x-6" : "translate-x-1"}
           `} />
         </button>
-        <span className={`text-xs font-semibold ${mode === "real" ? "text-amber-400" : "text-blue-400"}`}>
-          {mode === "real" ? "Real" : "Fantasy"}
+        <span className={`text-xs font-semibold ${locked ? "text-muted-foreground" : mode === "real" ? "text-amber-400" : "text-blue-400"}`}>
+          {locked ? "Fantasy" : mode === "real" ? "Real" : "Fantasy"}
         </span>
       </div>
 
@@ -70,6 +79,25 @@ export function ModeToggle() {
                 Confirmar
               </button>
             </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {showBlocked && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
+            <h2 className="text-lg font-bold mb-2">Modo Real no disponible</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              El Modo Real con <span className="text-amber-400 font-semibold">iBY Coins (IBC)</span> aún no está habilitado en tu país. Por ahora podés disfrutar del Modo Fantasy sin límites.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowBlocked(false)}
+              className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90"
+            >
+              Entendido
+            </button>
           </div>
         </div>,
         document.body

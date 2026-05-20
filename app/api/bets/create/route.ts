@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
+import { canCountryUseRealMoney } from "@/lib/country-access"
 
 export async function POST(request: NextRequest) {
   try {
@@ -80,7 +81,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, is_banned, role, betting_blocked_until")
+      .select("id, is_banned, role, betting_blocked_until, country")
       .eq("id", user.id)
       .single()
 
@@ -99,6 +100,16 @@ export async function POST(request: NextRequest) {
         { error: "User is banned from betting" },
         { status: 403 }
       )
+    }
+
+    if (betMode === "real") {
+      const allowed = await canCountryUseRealMoney(profile?.country ?? null)
+      if (!allowed) {
+        return NextResponse.json(
+          { error: "El Modo Real no está habilitado en tu país" },
+          { status: 403 }
+        )
+      }
     }
 
     if (profile?.role === "backoffice_admin") {

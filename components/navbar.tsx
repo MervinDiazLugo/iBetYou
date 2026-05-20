@@ -10,6 +10,7 @@ import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { NotificationBell } from "@/components/notification-bell"
 import { ModeToggle } from "@/components/mode-toggle"
 import { useMode } from "@/components/mode-provider"
+import { useCountryAccess } from "@/hooks/use-country-access"
 import { formatCurrency } from "@/lib/utils"
 
 const NAV_ITEMS = [
@@ -30,6 +31,7 @@ export function Navbar() {
   const userMenuRef = useRef<HTMLDivElement | null>(null)
   const supabase = createBrowserSupabaseClient()
   const { mode } = useMode()
+  const { canUseRealMoney } = useCountryAccess()
 
   const displayName =
     menuNickname?.trim() || user?.nickname?.trim() || user?.email?.split("@")[0] || ""
@@ -127,9 +129,9 @@ export function Navbar() {
             <div className="flex items-center gap-2 shrink-0">
               {!authLoading && user && (
                 <>
-                  {/* Balance pill — desktop */}
+                  {/* Balance pill — desktop (only show top-up link if real money enabled) */}
                   <Link
-                    href={mode === "real" ? "/top-up" : "/top-up"}
+                    href={canUseRealMoney ? "/top-up" : "#"}
                     className="hidden md:flex items-center gap-2 rounded-lg border border-border bg-secondary/50 hover:bg-secondary px-3 py-1.5 transition-colors"
                   >
                     {mode === "real"
@@ -203,8 +205,10 @@ export function Navbar() {
                           {[
                             { href: "/profile", label: "Mi Perfil" },
                             { href: "/balance", label: "Balance de Jugadas" },
-                            { href: "/top-up", label: "Recargas iBY" },
-                            { href: "/withdrawals", label: "Retiros IBC" },
+                            ...(canUseRealMoney ? [
+                              { href: "/top-up", label: "Recargas iBY" },
+                              { href: "/withdrawals", label: "Retiros IBC" },
+                            ] : []),
                             { href: "/my-referrals", label: "Mis Referidos", accent: true },
                             { href: "/como-jugar", label: "Cómo Jugar" },
                           ].map((item) => (
@@ -333,8 +337,10 @@ export function Navbar() {
                     {[
                       { href: "/profile", label: "Mi Perfil" },
                       { href: "/balance", label: "Balance de Jugadas" },
-                      { href: "/top-up", label: "Recargas iBY" },
-                      { href: "/withdrawals", label: "Retiros IBC" },
+                      ...(canUseRealMoney ? [
+                        { href: "/top-up", label: "Recargas iBY" },
+                        { href: "/withdrawals", label: "Retiros IBC" },
+                      ] : []),
                       { href: "/my-referrals", label: "Mis Referidos", accent: true },
                       { href: "/como-jugar", label: "Cómo Jugar" },
                     ].map((item) => (
