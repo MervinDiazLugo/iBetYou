@@ -406,13 +406,13 @@ function HomeContent() {
     return matchesMarketplaceFilters(bet)
   })
 
-  // Unique leagues derived from loaded events for the league tab bar
+  // Unique leagues derived from loaded events — scoped to selected sport
   const uniqueLeagues = useMemo(() => {
     const allEvents = [
       ...(eventsPagination.football?.data || []),
       ...(eventsPagination.basketball?.data || []),
       ...(eventsPagination.baseball?.data || []),
-    ]
+    ].filter(e => selectedSport === "all" || e.sport === selectedSport)
     const seen = new Set<string>()
     const result: Array<{ league: string; sport: string }> = []
     for (const e of allEvents) {
@@ -422,7 +422,7 @@ function HomeContent() {
       }
     }
     return result
-  }, [eventsPagination])
+  }, [eventsPagination, selectedSport])
 
   // Events are already fetched per-sport and search-filtered by the API
   const eventsBySport = {
