@@ -14,6 +14,14 @@ export async function GET(request: NextRequest) {
 
     if (!sessionError && sessionData.user) {
       const userId = sessionData.user.id
+      const userMeta = sessionData.user.user_metadata || {}
+
+      // Apply nickname/country from registration metadata if present
+      if (userMeta.nickname) {
+        const profileUpdate: Record<string, unknown> = { nickname: userMeta.nickname }
+        if (userMeta.country) profileUpdate.country = userMeta.country
+        await supabase.from("profiles").update(profileUpdate).eq("id", userId)
+      }
 
       // Check if admin — admins get no tokens and go to backoffice
       const { data: profile } = await supabase

@@ -92,6 +92,10 @@ function RegisterForm() {
     const { data, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        data: { nickname: nickname.trim(), country: country.trim() },
+        emailRedirectTo: `${window.location.origin}/api/auth/callback`,
+      },
     })
 
     if (signUpError) {
@@ -103,22 +107,27 @@ function RegisterForm() {
     if (data.user) {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch("/api/auth/register/nickname", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({ userId: data.user.id, nickname, country }),
-        })
 
-        const nicknameData = await res.json()
+        if (session?.access_token) {
+          // Email confirmation OFF — session exists immediately, update profile now
+          const res = await fetch("/api/auth/register/nickname", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ userId: data.user.id, nickname, country }),
+          })
 
-        if (!res.ok) {
-          setError(nicknameData.error || "Error al guardar el perfil")
-          setLoading(false)
-          return
+          if (!res.ok) {
+            const nicknameData = await res.json()
+            setError(nicknameData.error || "Error al guardar el perfil")
+            setLoading(false)
+            return
+          }
         }
+        // If no session: email confirmation ON — nickname/country were passed as metadata
+        // and will be applied in /api/auth/callback when user confirms their email
 
         setSuccess(true)
         setTimeout(() => {
