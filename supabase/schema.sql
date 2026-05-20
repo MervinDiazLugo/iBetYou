@@ -144,30 +144,31 @@ CREATE INDEX idx_arbitration_decisions_created_at ON arbitration_decisions(creat
 
 -- Auto-create wallet on user registration
 CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 BEGIN
-  -- Desactivar RLS temporalmente para este trigger
-  SET session_replication_role = replica;
-  
-  INSERT INTO profiles (id, nickname, avatar_url, role, kyc_status, kyc_level)
+  INSERT INTO profiles (id, nickname, avatar_url, role, kyc_status, kyc_level, referral_code)
   VALUES (
     NEW.id,
     'user_' || SUBSTR(NEW.id::text, 1, 8),
     NULL,
     'app_user',
     'none',
-    'basic'
-  );
-  
+    'basic',
+    UPPER(SUBSTR(REPLACE(NEW.id::text, '-', ''), 1, 8))
+  )
+  ON CONFLICT (id) DO NOTHING;
+
   INSERT INTO wallets (user_id, balance_fantasy, balance_real, fantasy_total_accumulated)
-  VALUES (NEW.id, 50, 0, 50);
-  
-  -- Reactivar RLS
-  SET session_replication_role = default;
-  
+  VALUES (NEW.id, 50, 0, 50)
+  ON CONFLICT (user_id) DO NOTHING;
+
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
