@@ -61,10 +61,11 @@ export function NotificationBell({ userId, sessionToken }: Props) {
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
   }
 
-  // Initial load
+  // Initial load — wait for session token before fetching
   useEffect(() => {
+    if (!sessionToken) return
     fetchNotifications()
-  }, [userId])
+  }, [userId, sessionToken])
 
   // Realtime: new notification arrives → add to list + show toast
   useEffect(() => {

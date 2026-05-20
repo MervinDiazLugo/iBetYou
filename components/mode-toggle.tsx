@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import { useMode } from "@/components/mode-provider"
 import { useAuth } from "@/components/providers"
 
@@ -46,8 +47,8 @@ export function ModeToggle() {
         </span>
       </div>
 
-      {showConfirm && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60">
+      {showConfirm && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
           <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h2 className="text-lg font-bold mb-2">Cambiar a Modo Real</h2>
             <p className="text-sm text-muted-foreground mb-4">
@@ -70,7 +71,8 @@ export function ModeToggle() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
