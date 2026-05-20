@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
+import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const API_KEY = process.env.API_FOOTBALL_KEY!
@@ -388,7 +389,10 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, resolvedEvents, apiCalls, apiErrors })
+  // Cancel open bets on expired/finished events and refund creators
+  const cleanupResult = await cleanupExpiredOpenBets(supabase, "system")
+
+  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
 
   return NextResponse.json({
     success: true,
@@ -399,5 +403,6 @@ export async function GET(request: NextRequest) {
     resolvedEvents,
     apiCalls,
     errors: apiErrors,
+    cleanup: cleanupResult,
   })
 }

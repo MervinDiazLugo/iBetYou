@@ -10,7 +10,7 @@ export async function cleanupExpiredOpenBets(
 
   const { data: openBets, error: openBetsError } = await supabase
     .from("bets")
-    .select("id, creator_id, amount, fee_amount, status, acceptor_id, event:events(start_time, status)")
+    .select("id, creator_id, amount, fee_amount, status, acceptor_id, mode, event:events(start_time, status)")
     .eq("status", "open")
     .is("acceptor_id", null)
     .limit(1000)
@@ -42,39 +42,66 @@ export async function cleanupExpiredOpenBets(
       .update({ status: "cancelled" })
       .eq("id", bet.id)
       .eq("status", "open")
-      .select("id, creator_id, amount, fee_amount")
+      .select("id, creator_id, amount, fee_amount, mode")
       .single()
 
-    if (cancelError || !updatedBet) {
-      continue
-    }
+    if (cancelError || !updatedBet) continue
 
     cancelled += 1
     const creatorRefund = Number(updatedBet.amount || 0) + Number(updatedBet.fee_amount || 0)
+    const betMode = updatedBet.mode === "real" ? "real" : "fantasy"
 
-    const { data: creatorWallet } = await supabase
-      .from("wallets")
-      .select("balance_fantasy")
-      .eq("user_id", updatedBet.creator_id)
-      .single()
-
-    if (creatorWallet) {
-      const { error: walletErr } = await supabase
-        .from("wallets")
-        .update({ balance_fantasy: Number(creatorWallet.balance_fantasy || 0) + creatorRefund })
+    if (betMode === "real") {
+      const { data: ibcWallet } = await supabase
+        .from("iby_wallets")
+        .select("balance")
         .eq("user_id", updatedBet.creator_id)
+        .single()
 
-      if (!walletErr) {
-        await supabase.from("transactions").insert({
-          user_id: updatedBet.creator_id,
-          token_type: "fantasy",
-          amount: creatorRefund,
-          operation: "bet_cancelled_refund",
-          reference_id: updatedBet.id,
-        })
-        refunded += 1
-      } else {
-        console.error("Failed to refund wallet on bet expiry:", walletErr, { betId: updatedBet.id })
+      if (ibcWallet) {
+        const { error: walletErr } = await supabase
+          .from("iby_wallets")
+          .update({ balance: Number(ibcWallet.balance || 0) + creatorRefund })
+          .eq("user_id", updatedBet.creator_id)
+
+        if (!walletErr) {
+          await supabase.from("transactions").insert({
+            user_id: updatedBet.creator_id,
+            token_type: "ibc",
+            amount: creatorRefund,
+            operation: "bet_cancelled_refund",
+            reference_id: updatedBet.id,
+          })
+          refunded += 1
+        } else {
+          console.error("Failed to refund IBC wallet on bet expiry:", walletErr, { betId: updatedBet.id })
+        }
+      }
+    } else {
+      const { data: creatorWallet } = await supabase
+        .from("wallets")
+        .select("balance_fantasy")
+        .eq("user_id", updatedBet.creator_id)
+        .single()
+
+      if (creatorWallet) {
+        const { error: walletErr } = await supabase
+          .from("wallets")
+          .update({ balance_fantasy: Number(creatorWallet.balance_fantasy || 0) + creatorRefund })
+          .eq("user_id", updatedBet.creator_id)
+
+        if (!walletErr) {
+          await supabase.from("transactions").insert({
+            user_id: updatedBet.creator_id,
+            token_type: "fantasy",
+            amount: creatorRefund,
+            operation: "bet_cancelled_refund",
+            reference_id: updatedBet.id,
+          })
+          refunded += 1
+        } else {
+          console.error("Failed to refund fantasy wallet on bet expiry:", walletErr, { betId: updatedBet.id })
+        }
       }
     }
 
@@ -87,6 +114,7 @@ export async function cleanupExpiredOpenBets(
       details: {
         event_status: eventStatus,
         acceptance_window_minutes: ACCEPT_WINDOW_MINUTES,
+        mode: betMode,
       },
       decided_by: decidedBy,
       source: "system",
