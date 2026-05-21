@@ -22,9 +22,15 @@ interface Event {
   league: string
   country?: string
   metadata?: {
-    venue?: {
-      name?: string | null
-      city?: string | null
+    venue?: { name?: string | null; city?: string | null }
+    predictions?: {
+      percent?: { home: string; draw: string; away: string } | null
+      advice?: string | null
+      winner?: string | null
+      home_league_form?: string | null
+      away_league_form?: string | null
+      home_goals_avg?: string | null
+      away_goals_avg?: string | null
     }
   }
 }
@@ -521,6 +527,51 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               ))}
             </div>
           </div>
+
+          {selectedEvent?.metadata?.predictions?.percent && (
+            <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-3">
+              <div className="text-xs font-semibold text-blue-300 mb-1">🤖 Predicción</div>
+              <div className="flex gap-2">
+                <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground mb-0.5 truncate">{selectedEvent.home_team}</div>
+                  <div className="text-lg font-bold text-blue-300">{selectedEvent.metadata.predictions.percent.home}</div>
+                  {selectedEvent.metadata.predictions.home_league_form && (
+                    <div className="flex gap-0.5 justify-center mt-1">
+                      {selectedEvent.metadata.predictions.home_league_form.slice(-5).split("").map((c, i) => (
+                        <span key={i} className={`inline-block w-2 h-2 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 rounded-md bg-gray-500/10 border border-gray-500/20 p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground mb-0.5">Empate</div>
+                  <div className="text-lg font-bold text-gray-300">{selectedEvent.metadata.predictions.percent.draw}</div>
+                </div>
+                <div className="flex-1 rounded-md bg-orange-500/10 border border-orange-500/20 p-2 text-center">
+                  <div className="text-[10px] text-muted-foreground mb-0.5 truncate">{selectedEvent.away_team}</div>
+                  <div className="text-lg font-bold text-orange-300">{selectedEvent.metadata.predictions.percent.away}</div>
+                  {selectedEvent.metadata.predictions.away_league_form && (
+                    <div className="flex gap-0.5 justify-center mt-1">
+                      {selectedEvent.metadata.predictions.away_league_form.slice(-5).split("").map((c, i) => (
+                        <span key={i} className={`inline-block w-2 h-2 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {selectedEvent.metadata.predictions.advice && (
+                <p className="text-xs text-center text-amber-300/80 leading-snug">
+                  💡 {selectedEvent.metadata.predictions.advice}
+                </p>
+              )}
+              {(selectedEvent.metadata.predictions.home_goals_avg || selectedEvent.metadata.predictions.away_goals_avg) && (
+                <div className="flex justify-between text-[10px] text-muted-foreground px-1">
+                  <span>Goles/partido: <span className="text-foreground font-semibold">{selectedEvent.metadata.predictions.home_goals_avg}</span></span>
+                  <span>Goles/partido: <span className="text-foreground font-semibold">{selectedEvent.metadata.predictions.away_goals_avg}</span></span>
+                </div>
+              )}
+            </div>
+          )}
 
           {selectedEvent && (
             <div className="space-y-2">

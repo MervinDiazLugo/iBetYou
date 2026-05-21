@@ -1003,19 +1003,36 @@ function HomeContent() {
                       </div>
                     </div>
 
-                    {event.metadata?.predictions && (
-                      <div className="mt-2 space-y-1.5" onClick={e => e.stopPropagation()}>
-                        <PredictionPills predictions={event.metadata.predictions} homeTeam={event.home_team} awayTeam={event.away_team} />
-                        {(event.metadata.predictions.home_league_form || event.metadata.predictions.away_league_form) && (
-                          <div className="flex items-center justify-between px-1">
-                            <FormDots form={event.metadata.predictions.home_league_form} />
-                            <span className="text-[9px] text-muted-foreground">Forma</span>
-                            <FormDots form={event.metadata.predictions.away_league_form} />
+                    {event.metadata?.predictions?.percent && (
+                      <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
+                        <div className="text-[10px] text-muted-foreground font-medium text-center">🤖 Predicción</div>
+                        <div className="flex gap-1.5">
+                          <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 py-1.5 text-center">
+                            <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Local</div>
+                            <div className="text-sm font-bold text-blue-300">{event.metadata.predictions.percent.home}</div>
+                            {event.metadata.predictions.home_league_form && (
+                              <div className="flex gap-0.5 justify-center mt-1">
+                                <FormDots form={event.metadata.predictions.home_league_form} />
+                              </div>
+                            )}
                           </div>
-                        )}
+                          <div className="flex-1 rounded-md bg-gray-500/10 border border-gray-500/20 py-1.5 text-center">
+                            <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Empate</div>
+                            <div className="text-sm font-bold text-gray-300">{event.metadata.predictions.percent.draw}</div>
+                          </div>
+                          <div className="flex-1 rounded-md bg-orange-500/10 border border-orange-500/20 py-1.5 text-center">
+                            <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Visita</div>
+                            <div className="text-sm font-bold text-orange-300">{event.metadata.predictions.percent.away}</div>
+                            {event.metadata.predictions.away_league_form && (
+                              <div className="flex gap-0.5 justify-center mt-1">
+                                <FormDots form={event.metadata.predictions.away_league_form} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
                         {event.metadata.predictions.advice && (
-                          <p className="text-[9px] text-center text-amber-300/70 truncate">
-                            {translateAdvice(event.metadata.predictions.advice)}
+                          <p className="text-xs text-center text-amber-300/80 leading-snug">
+                            💡 {translateAdvice(event.metadata.predictions.advice)}
                           </p>
                         )}
                       </div>
@@ -1138,9 +1155,23 @@ function HomeContent() {
                               </div>
                             </div>
 
-                            {event.metadata?.predictions && (
-                              <div onClick={e => e.stopPropagation()}>
-                                <PredictionPills predictions={event.metadata.predictions} homeTeam={event.home_team} awayTeam={event.away_team} size="xs" />
+                            {event.metadata?.predictions?.percent && (
+                              <div onClick={e => e.stopPropagation()} className="space-y-1">
+                                <div className="text-[9px] text-muted-foreground font-medium text-center">🤖 Predicción</div>
+                                <div className="flex gap-1">
+                                  <div className="flex-1 rounded bg-blue-500/10 border border-blue-500/20 py-1 text-center">
+                                    <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Local</div>
+                                    <div className="text-xs font-bold text-blue-300">{event.metadata.predictions.percent.home}</div>
+                                  </div>
+                                  <div className="flex-1 rounded bg-gray-500/10 border border-gray-500/20 py-1 text-center">
+                                    <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Emp.</div>
+                                    <div className="text-xs font-bold text-gray-300">{event.metadata.predictions.percent.draw}</div>
+                                  </div>
+                                  <div className="flex-1 rounded bg-orange-500/10 border border-orange-500/20 py-1 text-center">
+                                    <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Visita</div>
+                                    <div className="text-xs font-bold text-orange-300">{event.metadata.predictions.percent.away}</div>
+                                  </div>
+                                </div>
                               </div>
                             )}
                             <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
