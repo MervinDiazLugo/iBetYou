@@ -1,10 +1,33 @@
 import { NextRequest, NextResponse } from "next/server"
+import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
+const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const MAX_FEATURED = 16
 const LOOKAHEAD_DAYS = 3
+
+function fetchApiSports(url: string): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const { hostname, pathname, search } = new URL(url)
+    const req = https.request(
+      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": API_FOOTBALL_KEY! } },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on("data", (c) => chunks.push(c))
+        res.on("end", () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
+          catch (e) { reject(e) }
+        })
+      }
+    )
+    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
+    req.on("error", reject)
+    req.end()
+  })
+}
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
