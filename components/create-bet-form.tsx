@@ -49,10 +49,9 @@ const sports = [
 ]
 
 function getAvailableBetTypes(sport: string) {
-  // Tipos complejos habilitados solo para futbol.
-  if (sport !== "football") {
-    return betTypes.filter((type) => type.id !== "half_time" && type.id !== "first_scorer")
-  }
+  if (sport === "football") return betTypes
+  // basketball/baseball: only direct
+  return betTypes.filter((type) => type.id === "direct")
 
   return betTypes
 }
