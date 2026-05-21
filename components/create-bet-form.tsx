@@ -372,7 +372,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
       showToast("Apuesta creada exitosamente!", "success")
       setLoading(false)
-      router.push("/my-bets")
+      onClose()
     } catch (err: any) {
       setError(err.message || "Error al crear la apuesta")
       setLoading(false)

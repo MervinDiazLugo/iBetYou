@@ -274,7 +274,7 @@ export default function BetDetailPage() {
       }
       
       showToast("¡Apuesta aceptada! Mucha suerte.", "success")
-      router.push("/my-bets")
+      router.push("/")
     } catch (err: any) {
       const message = err.message || "Error al aceptar la apuesta"
       setError(message)
