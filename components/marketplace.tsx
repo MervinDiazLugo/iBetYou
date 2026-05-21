@@ -1323,11 +1323,18 @@ function HomeContent() {
                       <div className="flex flex-col gap-1.5 w-full">
                         <div className="text-[9px] text-center text-muted-foreground">{getPostedAgo(bet.created_at)} · @{bet.creator?.nickname}</div>
                         <div className="flex gap-1.5">
-                          <Button variant="outline" size="sm" className="flex-1 text-xs h-7" asChild>
-                            <Link href={`/create?clone=${bet.id}`}>Clonar</Link>
+                          <Button variant="outline" size="sm" className="flex-1 text-xs h-7" onClick={() => {
+                            setCloneBetId(bet.id)
+                            setSelectedEventForBet(null)
+                            setShowCreateModal(true)
+                          }}>
+                            Clonar
                           </Button>
-                          <Button size="sm" className="flex-1 text-xs h-7 bg-primary hover:bg-primary/90" asChild>
-                            <Link href={`/bet/${bet.id}`}>Tomar</Link>
+                          <Button size="sm" className="flex-1 text-xs h-7 bg-primary hover:bg-primary/90" onClick={() => {
+                            if (!user) { window.location.href = "/login"; return }
+                            setSelectedBetForModal(bet)
+                          }}>
+                            Tomar
                           </Button>
                         </div>
                       </div>
@@ -1437,10 +1444,12 @@ function HomeContent() {
                         <Users className="h-3 w-3" />
                         <span>@{bet.creator?.nickname}</span>
                       </div>
-                      <Button variant="outline" size="sm" className="w-full text-xs h-8 border-orange-500/30 hover:bg-orange-500/10" asChild>
-                        <Link href={`/create?clone=${bet.id}`}>
-                          Clonar Apuesta
-                        </Link>
+                      <Button variant="outline" size="sm" className="w-full text-xs h-8 border-orange-500/30 hover:bg-orange-500/10" onClick={() => {
+                        setCloneBetId(bet.id)
+                        setSelectedEventForBet(null)
+                        setShowCreateModal(true)
+                      }}>
+                        Clonar Apuesta
                       </Button>
                     </div>
                   </CardFooter>
