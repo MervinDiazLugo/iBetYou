@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotification } from "@/lib/notifications"
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   const numAmount = Number(amount)
   if (!Number.isFinite(numAmount) || numAmount < MIN_WITHDRAWAL) {
     return NextResponse.json(
-      { error: `Monto mínimo de retiro: ${MIN_WITHDRAWAL} IBC` },
+      { error: `Monto mínimo de retiro: ${MIN_WITHDRAWAL} iBY` },
       { status: 400 }
     )
   }
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
   const available = ibcWallet ? Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked) : 0
 
   if (available < numAmount) {
-    return NextResponse.json({ error: "Saldo IBC insuficiente" }, { status: 400 })
+    return NextResponse.json({ error: "Saldo iBY insuficiente" }, { status: 400 })
   }
 
   const fee_amount = numAmount * FEE_RATE

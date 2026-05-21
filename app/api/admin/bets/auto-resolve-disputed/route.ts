@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
@@ -225,7 +225,7 @@ export async function POST(request: NextRequest) {
       const loserId = winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       const matchInfo = `${home_team} vs ${away_team}` + (home_score !== null && away_score !== null ? ` (${home_score}-${away_score})` : '')
       await createNotifications([
-        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo, betId: bet.id, mode: betMode },
+        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`, body: matchInfo, betId: bet.id, mode: betMode },
         { userId: loserId, type: "bet_resolved_loss", title: "Perdiste esta apuesta", body: matchInfo, betId: bet.id, mode: betMode },
       ], supabase)
 

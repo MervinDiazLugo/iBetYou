@@ -1,4 +1,4 @@
-import { createAdminSupabaseClient } from "@/lib/supabase"
+﻿import { createAdminSupabaseClient } from "@/lib/supabase"
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 import { createNotification } from "@/lib/notifications"
 
@@ -67,14 +67,14 @@ export async function cleanupExpiredOpenBets(
         if (!walletErr) {
           await supabase.from("transactions").insert({
             user_id: updatedBet.creator_id,
-            token_type: "ibc",
+            token_type: "iBY",
             amount: creatorRefund,
             operation: "bet_cancelled_refund",
             reference_id: updatedBet.id,
           })
           refunded += 1
         } else {
-          console.error("Failed to refund IBC wallet on bet expiry:", walletErr, { betId: updatedBet.id })
+          console.error("Failed to refund iBY wallet on bet expiry:", walletErr, { betId: updatedBet.id })
         }
       }
     } else {

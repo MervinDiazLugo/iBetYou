@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
@@ -741,7 +741,7 @@ export default function BackofficeBets() {
             >
               <option value="all">Todos los modos</option>
               <option value="fantasy">Fantasy</option>
-              <option value="real">Real (IBC)</option>
+              <option value="real">Real (iBY)</option>
             </select>
           </div>
         </CardContent>
@@ -943,7 +943,7 @@ export default function BackofficeBets() {
                       </Badge>
                       {(bet as any).mode === "real" ? (
                         <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">
-                          Real IBC
+                          Real iBY
                         </Badge>
                       ) : (
                         <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">

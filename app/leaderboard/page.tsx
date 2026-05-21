@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
@@ -141,7 +141,7 @@ export default function LeaderboardPage() {
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${leaderboardMode === "real" ? "bg-amber-500 text-black" : "bg-gray-800 text-gray-400 hover:text-white"}`}
             onClick={() => setLeaderboardMode("real")}
           >
-            Real (IBC)
+            Real (iBY)
           </button>
         </div>
 

@@ -1,0 +1,83 @@
+<h2>Landing Page — ¿Qué layout prefieres?</h2>
+<p class="subtitle">Todos muestran el mismo contenido, distinta estructura visual</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;border-radius:6px;font-family:monospace;font-size:11px;color:#94a3b8">
+      <div style="background:#1e3a5f;padding:6px 10px;border-radius:4px;margin-bottom:8px;color:#60a5fa;font-size:10px">iBetYou  |  Iniciar sesión  Registrarse</div>
+      <div style="text-align:center;padding:20px 0 12px">
+        <div style="font-size:20px;color:#f8fafc;font-weight:bold;margin-bottom:4px">Apuesta. Gana. Retira.</div>
+        <div style="font-size:10px;color:#94a3b8;margin-bottom:12px">La plataforma P2P de apuestas deportivas</div>
+        <div style="display:inline-block;background:#2563eb;color:white;padding:6px 16px;border-radius:20px;font-size:10px">Crear cuenta gratis →</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:8px">
+        <div style="background:#1e293b;padding:6px;border-radius:4px;text-align:center">
+          <div style="color:#60a5fa;font-size:14px">⚽</div>
+          <div style="color:#f8fafc;font-size:9px">Fútbol</div>
+        </div>
+        <div style="background:#1e293b;padding:6px;border-radius:4px;text-align:center">
+          <div style="color:#60a5fa;font-size:14px">⚾</div>
+          <div style="color:#f8fafc;font-size:9px">Béisbol</div>
+        </div>
+        <div style="background:#1e293b;padding:6px;border-radius:4px;text-align:center">
+          <div style="color:#60a5fa;font-size:14px">🏀</div>
+          <div style="color:#f8fafc;font-size:9px">Basketball</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Hero centrado + íconos de deportes</h3>
+      <p>Limpio, directo. CTA arriba del fold. Reconocible en mobile. Estándar en apps de apuestas profesionales.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;border-radius:6px;font-family:monospace;font-size:11px;color:#94a3b8">
+      <div style="background:#1e3a5f;padding:6px 10px;border-radius:4px;margin-bottom:8px;color:#60a5fa;font-size:10px">iBetYou  |  Iniciar sesión  Registrarse</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;align-items:center;padding:10px 0">
+        <div>
+          <div style="font-size:16px;color:#f8fafc;font-weight:bold;margin-bottom:4px;line-height:1.2">La apuesta es entre vos y otro fan</div>
+          <div style="font-size:9px;color:#94a3b8;margin-bottom:10px">Sin casa de apuestas. Ganas el 100% del pozo.</div>
+          <div style="display:inline-block;background:#2563eb;color:white;padding:5px 12px;border-radius:20px;font-size:9px">Empezar gratis →</div>
+        </div>
+        <div style="background:#1e293b;border-radius:6px;padding:8px">
+          <div style="background:#0f172a;border-radius:4px;padding:6px;margin-bottom:6px">
+            <div style="color:#94a3b8;font-size:8px">Real Madrid vs Bayern</div>
+            <div style="color:#22c55e;font-size:9px;font-weight:bold">+$240 disponibles</div>
+          </div>
+          <div style="background:#0f172a;border-radius:4px;padding:6px">
+            <div style="color:#94a3b8;font-size:8px">Yankees vs Red Sox</div>
+            <div style="color:#22c55e;font-size:9px;font-weight:bold">+$180 disponibles</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Split: copy izquierda + marketplace preview derecha</h3>
+      <p>Muestra apuestas reales activas. El usuario ve que hay actividad real antes de registrarse. Más persuasivo en mercados de confianza baja.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;padding:16px;border-radius:6px;font-family:monospace;font-size:11px;color:#94a3b8">
+      <div style="background:#1e3a5f;padding:6px 10px;border-radius:4px;margin-bottom:8px;color:#60a5fa;font-size:10px">iBetYou  |  Iniciar sesión  Registrarse</div>
+      <div style="text-align:center;padding:12px 0 8px">
+        <div style="font-size:18px;color:#f8fafc;font-weight:bold;margin-bottom:4px">+50 fichas gratis al registrarte</div>
+        <div style="font-size:9px;color:#94a3b8;margin-bottom:10px">Te invitaron. Tu bono te espera.</div>
+        <div style="background:#1e293b;border-radius:6px;padding:8px;margin-bottom:10px">
+          <div style="color:#f59e0b;font-size:10px;font-weight:bold">MERV42 te mandó esta invitación</div>
+          <div style="color:#94a3b8;font-size:8px;margin-top:2px">Código aplicado automáticamente ✓</div>
+        </div>
+        <div style="display:inline-block;background:#f59e0b;color:#0f172a;padding:6px 16px;border-radius:20px;font-size:10px;font-weight:bold">Reclamar mis 50 fichas →</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Landing de referido (cuando llega con ?ref=)</h3>
+      <p>Versión especial cuando el usuario llegó por link de referido. El código ya está aplicado, el bono está visible. Conversión máxima en el caso más común.</p>
+    </div>
+  </div>
+
+</div>
+
+<p class="subtitle" style="margin-top:16px">💡 Los 3 pueden coexistir: B es el default, C aparece cuando hay <code>?ref=</code> en la URL</p>

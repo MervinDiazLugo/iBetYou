@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server"
+﻿import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotifications } from "@/lib/notifications"
@@ -374,7 +374,7 @@ export async function PATCH(request: NextRequest) {
           const ev3a = (bet as any).event
           const matchInfo3a = ev3a ? `${ev3a.home_team} vs ${ev3a.away_team}` + (ev3a.home_score !== null && ev3a.away_score !== null ? ` (${ev3a.home_score}-${ev3a.away_score})` : '') : 'Apuesta resuelta'
           await createNotifications([
-            { userId: winnerUserId, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeApprove === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfo3a, betId: id, mode: betModeApprove },
+            { userId: winnerUserId, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeApprove === "real" ? "iBY" : "Fantasy Tokens"}!`, body: matchInfo3a, betId: id, mode: betModeApprove },
             { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: matchInfo3a, betId: id, mode: betModeApprove },
           ], supabase)
         }
@@ -560,7 +560,7 @@ export async function PATCH(request: NextRequest) {
           operation: 'bet_won', reference_id: bet_id,
         })
         await createNotifications([
-          { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeResolve === "real" ? "IBC" : "Fantasy Tokens"}!`, body: resolveContext.matchInfo, betId: bet_id, mode: betModeResolve },
+          { userId: winner_id, type: 'bet_resolved_win', title: `¡Ganaste ${totalPrize.toFixed(2)} ${betModeResolve === "real" ? "iBY" : "Fantasy Tokens"}!`, body: resolveContext.matchInfo, betId: bet_id, mode: betModeResolve },
           { userId: loserId, type: 'bet_resolved_loss', title: 'Perdiste esta apuesta', body: resolveContext.matchInfo, betId: bet_id, mode: betModeResolve },
         ], supabase)
       }
@@ -946,7 +946,7 @@ export async function POST(request: NextRequest) {
     if (outcome.kind === 'winner') {
       const loserId = outcome.winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       await createNotifications([
-        { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} ${betModeAuto === "real" ? "IBC" : "Fantasy Tokens"}.`, betId: bet_id, mode: betModeAuto },
+        { userId: outcome.winnerId, type: 'bet_resolved_win', title: '¡Ganaste la apuesta!', body: `Tu apuesta fue resuelta automáticamente. Ganaste ${totalPrize.toFixed(2)} ${betModeAuto === "real" ? "iBY" : "Fantasy Tokens"}.`, betId: bet_id, mode: betModeAuto },
         { userId: loserId, type: 'bet_resolved_loss', title: 'Apuesta resuelta', body: '¡Tu apuesta fue resuelta. Suerte la próxima!', betId: bet_id, mode: betModeAuto },
       ], supabase)
     }

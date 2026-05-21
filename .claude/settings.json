@@ -1,0 +1,20 @@
+{
+  "enabledPlugins": {
+    "everything-claude-code@everything-claude-code": true,
+    "cache-components@nextjs": true
+  },
+  "extraKnownMarketplaces": {
+    "everything-claude-code": {
+      "source": {
+        "source": "github",
+        "repo": "aaione/everything-claude-code-zh"
+      }
+    },
+    "nextjs": {
+      "source": {
+        "source": "github",
+        "repo": "vercel/next.js"
+      }
+    }
+  }
+}

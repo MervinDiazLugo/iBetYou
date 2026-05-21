@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useCallback } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -104,7 +104,7 @@ export default function BackofficeWithdrawalsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Retiros IBC</h1>
+        <h1 className="text-2xl font-bold">Retiros iBY</h1>
         <p className="text-muted-foreground text-sm">Gestión de solicitudes de retiro de iBY Coins.</p>
       </div>
 
@@ -150,7 +150,7 @@ export default function BackofficeWithdrawalsPage() {
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="font-bold">{Number(req.amount).toFixed(2)} IBC</p>
+                      <p className="font-bold">{Number(req.amount).toFixed(2)} iBY</p>
                       <p className="text-xs text-muted-foreground">
                         Fee: {Number(req.fee_amount).toFixed(2)} · Neto: {Number(req.net_amount).toFixed(2)}
                       </p>
@@ -203,7 +203,7 @@ export default function BackofficeWithdrawalsPage() {
             </h2>
 
             <p className="text-sm text-muted-foreground">
-              {actionDialog.req.user?.nickname} · {Number(actionDialog.req.amount).toFixed(2)} IBC → {Number(actionDialog.req.net_amount).toFixed(2)} IBC neto
+              {actionDialog.req.user?.nickname} · {Number(actionDialog.req.amount).toFixed(2)} iBY → {Number(actionDialog.req.net_amount).toFixed(2)} iBY neto
             </p>
 
             {actionDialog.action === "reject" && (

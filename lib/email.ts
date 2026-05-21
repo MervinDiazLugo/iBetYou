@@ -1,4 +1,4 @@
-import { Resend } from "resend"
+﻿import { Resend } from "resend"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const FROM = process.env.RESEND_FROM || "onboarding@resend.dev"
@@ -26,7 +26,7 @@ export async function sendDepositApprovedEmail(params: {
           </tr>
           <tr>
             <td style="padding:8px 0;color:#888">iBY Coins acreditados</td>
-            <td style="padding:8px 0;font-weight:bold;color:#7c3aed">${ibyCoins.toFixed(2)} IBC</td>
+            <td style="padding:8px 0;font-weight:bold;color:#7c3aed">${ibyCoins.toFixed(2)} iBY</td>
           </tr>
         </table>
         <p style="margin-top:24px">Ya podés ver tu saldo actualizado en <a href="https://i-bet-you.vercel.app/top-up">iBetYou</a>.</p>

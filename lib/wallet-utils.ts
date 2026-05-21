@@ -1,4 +1,4 @@
-import { createAdminSupabaseClient } from "@/lib/supabase"
+﻿import { createAdminSupabaseClient } from "@/lib/supabase"
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
@@ -47,5 +47,5 @@ export function tokenTypeForMode(betMode: string): string {
   if (betMode !== "real" && betMode !== "fantasy") {
     throw new Error(`Invalid betMode: ${betMode}`)
   }
-  return betMode === "real" ? "ibc" : "fantasy"
+  return betMode === "real" ? "iBY" : "fantasy"
 }

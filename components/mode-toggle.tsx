@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { createPortal } from "react-dom"
@@ -51,7 +51,7 @@ export function ModeToggle() {
           title={
             canUseRealMoney === null ? "Cargando..."
             : locked ? "Modo Real no disponible en tu país"
-            : mode === "fantasy" ? "Cambiar a Modo Real (IBC)"
+            : mode === "fantasy" ? "Cambiar a Modo Real (iBY)"
             : "Cambiar a Modo Fantasy"
           }
         >
@@ -74,7 +74,7 @@ export function ModeToggle() {
           <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h2 className="text-lg font-bold mb-2">Cambiar a Modo Real</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              En Modo Real apostas con <span className="text-amber-400 font-semibold">iBY Coins (IBC)</span> — moneda con valor real (1 IBC = $1 USD). Las apuestas se descuentan de tu saldo IBC.
+              En Modo Real apostas con <span className="text-amber-400 font-semibold">iBY Coins (iBY)</span> — moneda con valor real (1 iBY = $1 USD). Las apuestas se descuentan de tu saldo iBY.
             </p>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowConfirm(false)}
@@ -96,7 +96,7 @@ export function ModeToggle() {
           <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h2 className="text-lg font-bold mb-2">Modo Real no disponible</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              El Modo Real con <span className="text-amber-400 font-semibold">iBY Coins (IBC)</span> aún no está habilitado en tu país. Por ahora podés disfrutar del Modo Fantasy sin límites.
+              El Modo Real con <span className="text-amber-400 font-semibold">iBY Coins (iBY)</span> aún no está habilitado en tu país. Por ahora podés disfrutar del Modo Fantasy sin límites.
             </p>
             <button type="button" onClick={() => setShowBlocked(false)}
               className="w-full px-4 py-2 rounded-md bg-primary text-primary-foreground font-semibold text-sm hover:opacity-90">

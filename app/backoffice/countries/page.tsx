@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -119,7 +119,7 @@ export default function CountriesPage() {
           <Globe className="h-6 w-6" /> Acceso por País
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Controla qué países tienen acceso al Modo Real (IBC). Los usuarios de países no habilitados solo pueden usar Modo Fantasy.
+          Controla qué países tienen acceso al Modo Real (iBY). Los usuarios de países no habilitados solo pueden usar Modo Fantasy.
         </p>
       </div>
 

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
@@ -108,7 +108,7 @@ const METHOD_CONFIG: Record<string, MethodConfig> = {
       "Guardá el número de confirmación que Zelle genera.",
       "Completá el formulario de abajo con el monto, el número de confirmación y la fecha.",
     ],
-    note: "Zelle no tiene comisión. El monto que enviás es exactamente lo que acreditamos en IBC.",
+    note: "Zelle no tiene comisión. El monto que enviás es exactamente lo que acreditamos en iBY.",
   },
   bank: {
     name: "Banco",
@@ -298,7 +298,7 @@ export default function RecargasPage() {
           <div className="text-4xl">🌍</div>
           <h1 className="text-xl font-bold">No disponible en tu país</h1>
           <p className="text-sm text-muted-foreground">
-            Las recargas de iBY Coins (IBC) aún no están habilitadas en tu región.
+            Las recargas de iBY Coins (iBY) aún no están habilitadas en tu región.
             Por ahora podés disfrutar del Modo Fantasy sin límites.
           </p>
         </div>
@@ -317,9 +317,9 @@ export default function RecargasPage() {
             <Coins className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Tu saldo IBC</div>
+            <div className="text-xs text-muted-foreground">Tu saldo iBY</div>
             <div className="text-2xl font-bold text-amber-400 leading-tight">
-              {ibcBalance.toFixed(2)} <span className="text-sm font-medium text-muted-foreground">IBC</span>
+              {ibcBalance.toFixed(2)} <span className="text-sm font-medium text-muted-foreground">iBY</span>
             </div>
           </div>
         </div>
@@ -533,7 +533,7 @@ export default function RecargasPage() {
                     <div className="text-right shrink-0">
                       <div className="font-bold text-sm">${Number(req.amount).toFixed(2)}</div>
                       {req.iby_coins != null && (
-                        <div className="text-xs text-amber-400 font-medium">{Number(req.iby_coins).toFixed(2)} IBC</div>
+                        <div className="text-xs text-amber-400 font-medium">{Number(req.iby_coins).toFixed(2)} iBY</div>
                       )}
                       <Badge variant="outline" className={`mt-1 text-[10px] border-0 ${cfg.bg}`}>
                         <span className={cfg.color}>{cfg.label}</span>

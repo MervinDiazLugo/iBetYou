@@ -1,4 +1,4 @@
-import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
+﻿import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
 import { canCountryUseRealMoney } from "@/lib/country-access"
@@ -142,11 +142,11 @@ export async function POST(request: NextRequest) {
         .eq("user_id", user.id)
         .single()
       if (ibcErr || !ibcWallet) {
-        return NextResponse.json({ error: "IBC wallet not found" }, { status: 404 })
+        return NextResponse.json({ error: "iBY wallet not found" }, { status: 404 })
       }
       const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
       if (available < totalNeeded) {
-        return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
+        return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
       }
       currentBalance = Number(ibcWallet.balance)
     } else {
@@ -171,7 +171,7 @@ export async function POST(request: NextRequest) {
         .update({ balance: currentBalance - totalNeeded })
         .eq("user_id", user.id)
       if (walletUpdateError) {
-        return NextResponse.json({ error: "Failed to update IBC wallet" }, { status: 400 })
+        return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })
       }
     } else {
       const { error: walletUpdateError } = await supabase
@@ -222,7 +222,7 @@ export async function POST(request: NextRequest) {
       .from("transactions")
       .insert({
         user_id: user.id,
-        token_type: betMode === "real" ? "ibc" : "fantasy",
+        token_type: betMode === "real" ? "iBY" : "fantasy",
         amount: -totalNeeded,
         operation: "bet_created",
         reference_id: bet.id,

@@ -1,4 +1,4 @@
-import { randomBytes } from "crypto"
+﻿import { randomBytes } from "crypto"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { createNotification } from "@/lib/notifications"
 
@@ -112,14 +112,14 @@ export async function applyReferral(
     await supabase.from("transactions").insert([
       {
         user_id: referrer.id,
-        token_type: "ibc",
+        token_type: "iBY",
         amount: BONUS_AMOUNT,
         operation: "referral_bonus",
         reference_id: null,
       },
       {
         user_id: newUserId,
-        token_type: "ibc",
+        token_type: "iBY",
         amount: BONUS_AMOUNT,
         operation: "referral_bonus",
         reference_id: null,
@@ -153,7 +153,7 @@ export async function updateWageringProgress(
   supabase: AdminClient,
   betMode: string = "fantasy"
 ): Promise<void> {
-  if (betMode !== "real") return  // Only real bets count toward IBC referral bonus
+  if (betMode !== "real") return  // Only real bets count toward iBY referral bonus
   if (betAmount < MIN_BET_FOR_WAGERING) return
 
   try {
@@ -189,7 +189,7 @@ export async function updateWageringProgress(
         // Log transaction
         await supabase.from("transactions").insert({
           user_id: userId,
-          token_type: "ibc",
+          token_type: "iBY",
           amount: bonus.bonus_amount,
           operation: "referral_bonus_unlock",
           reference_id: bonus.id,

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -110,7 +110,7 @@ export default function BackofficeRecargas() {
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Error", "error"); return }
-      showToast(`Aprobada — ${coins} IBC acreditados a ${req.profile?.nickname || req.profile?.email}`, "success")
+      showToast(`Aprobada — ${coins} iBY acreditados a ${req.profile?.nickname || req.profile?.email}`, "success")
       fetchRequests()
     } finally {
       setActionLoading(null)
@@ -224,7 +224,7 @@ export default function BackofficeRecargas() {
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Error", "error"); return }
-      showToast(`Precio actualizado: 1 IBC = $${price}`, "success")
+      showToast(`Precio actualizado: 1 iBY = $${price}`, "success")
     } finally {
       setSavingPrice(false)
     }
@@ -337,7 +337,7 @@ export default function BackofficeRecargas() {
                         ) : req.iby_coins != null ? (
                           <div>
                             <div className="text-xs text-muted-foreground">iBY Coins acreditados</div>
-                            <div className="text-lg font-bold text-primary">{Number(req.iby_coins).toFixed(2)} IBC</div>
+                            <div className="text-lg font-bold text-primary">{Number(req.iby_coins).toFixed(2)} iBY</div>
                           </div>
                         ) : null}
 
@@ -452,7 +452,7 @@ export default function BackofficeRecargas() {
             ) : (
               <>
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Precio (pesos por 1 IBC)</label>
+                  <label className="text-sm font-medium">Precio (pesos por 1 iBY)</label>
                   <Input
                     type="number"
                     min="0.01"
@@ -463,7 +463,7 @@ export default function BackofficeRecargas() {
                   />
                   {ibcPrice && Number(ibcPrice) > 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Con este precio: $100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} IBC
+                      Con este precio: $100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} iBY
                     </p>
                   )}
                 </div>

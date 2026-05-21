@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useRef } from "react"
 import { Bell } from "lucide-react"
@@ -154,7 +154,7 @@ export function NotificationBell({ userId, sessionToken }: Props) {
                               ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
                               : "bg-blue-500/15 text-blue-400 border-blue-500/30"
                           }`}>
-                            {n.mode === "real" ? "Real IBC" : "Fantasy"}
+                            {n.mode === "real" ? "Real iBY" : "Fantasy"}
                           </span>
                         )}
                         <div className="text-xs text-muted-foreground mt-1">
