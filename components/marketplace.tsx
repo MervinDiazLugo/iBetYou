@@ -580,7 +580,15 @@ function HomeContent() {
                   <CardContent className="py-3 space-y-2">
                     <div className="flex items-center justify-between gap-2">
                       <Badge variant="secondary" className="text-[10px]">{getSportIcon(bet.event.sport)} {bet.event.league}</Badge>
-                      <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500">Vence pronto</Badge>
+                      <div className="flex gap-1">
+                        <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-500">Vence pronto</Badge>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] ${(bet as any).mode === "real" ? "border-green-500/40 text-green-400" : "border-violet-500/40 text-violet-400"}`}
+                        >
+                          {(bet as any).mode === "real" ? "💵" : "🎮"}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="text-sm font-semibold truncate">{bet.event.home_team} vs {bet.event.away_team}</div>
                     <div className="text-xs text-muted-foreground">{getPostedAgo(bet.created_at)}</div>
@@ -1094,6 +1102,12 @@ function HomeContent() {
                         <Badge variant="outline" className={`text-[9px] ${riskBadge.className}`}>
                           {riskBadge.label}
                         </Badge>
+                        <Badge
+                          variant="outline"
+                          className={`text-[9px] ${(bet as any).mode === "real" ? "border-green-500/40 text-green-400 bg-green-500/10" : "border-violet-500/40 text-violet-400 bg-violet-500/10"}`}
+                        >
+                          {(bet as any).mode === "real" ? "💵 Real" : "🎮 Fantasy"}
+                        </Badge>
                       </div>
 
                       <div className="grid grid-cols-2 gap-1.5 text-[10px]">
@@ -1204,9 +1218,15 @@ function HomeContent() {
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-center">
+                    <div className="flex items-center justify-center gap-1.5">
                       <Badge variant="outline" className="text-[10px] border-orange-500/30 text-orange-500">
                         {betTypeLabels[bet.bet_type] || bet.bet_type}
+                      </Badge>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${(bet as any).mode === "real" ? "border-green-500/40 text-green-400 bg-green-500/10" : "border-violet-500/40 text-violet-400 bg-violet-500/10"}`}
+                      >
+                        {(bet as any).mode === "real" ? "💵 Real" : "🎮 Fantasy"}
                       </Badge>
                     </div>
 

@@ -51,6 +51,7 @@ export interface Bet {
   fee_amount: number
   creator_selection: string
   acceptor_selection: string | null
+  mode: 'fantasy' | 'real'
   status: 'open' | 'taken' | 'pending_resolution' | 'resolved' | 'cancelled' | 'disputed'
   winner_id: string | null
   created_at: string
