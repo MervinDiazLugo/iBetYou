@@ -1308,6 +1308,26 @@ function HomeContent() {
                         </div>
                       </div>
 
+                      {bet.event.metadata?.predictions?.percent && (
+                        <div className="space-y-1">
+                          <div className="text-[9px] text-muted-foreground font-medium text-center">🤖 Predicción</div>
+                          <div className="flex gap-1">
+                            <div className="flex-1 rounded bg-blue-500/10 border border-blue-500/20 py-1 text-center">
+                              <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Local</div>
+                              <div className="text-xs font-bold text-blue-300">{bet.event.metadata.predictions.percent.home}</div>
+                            </div>
+                            <div className="flex-1 rounded bg-gray-500/10 border border-gray-500/20 py-1 text-center">
+                              <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Emp.</div>
+                              <div className="text-xs font-bold text-gray-300">{bet.event.metadata.predictions.percent.draw}</div>
+                            </div>
+                            <div className="flex-1 rounded bg-orange-500/10 border border-orange-500/20 py-1 text-center">
+                              <div className="text-[9px] text-muted-foreground leading-none mb-0.5">Visita</div>
+                              <div className="text-xs font-bold text-orange-300">{bet.event.metadata.predictions.percent.away}</div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="bg-primary/10 rounded p-2 border border-primary/20">
                         <div className="text-[9px] text-muted-foreground text-center mb-0.5">Apuesta</div>
                         <div className="text-sm font-bold text-center text-primary truncate">
