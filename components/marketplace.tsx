@@ -45,6 +45,53 @@ const amountRanges = [
   { id: "high", label: "Más de $50", min: 50, max: Number.POSITIVE_INFINITY },
 ]
 
+function translateAdvice(advice: string | null | undefined): string {
+  if (!advice) return ""
+  return advice
+    .replace(/Double chance\s*:\s*/i, "Doble chance: ")
+    .replace(/ or draw/gi, " o empate")
+    .replace(/draw or /gi, "empate o ")
+    .replace(/ to win$/gi, " gana")
+    .replace(/^Win or draw$/i, "Victoria o empate")
+    .replace(/^Win$/i, "Victoria")
+    .replace(/^Draw$/i, "Empate")
+}
+
+function FormDots({ form }: { form: string | null | undefined }) {
+  if (!form) return null
+  const chars = form.slice(-5).split("")
+  return (
+    <span className="flex gap-0.5 items-center">
+      {chars.map((c, i) => (
+        <span
+          key={i}
+          className={`inline-block w-2 h-2 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`}
+          title={c === "W" ? "Victoria" : c === "D" ? "Empate" : "Derrota"}
+        />
+      ))}
+    </span>
+  )
+}
+
+function PredictionPills({ predictions, homeTeam, awayTeam, size = "sm" }: {
+  predictions: NonNullable<NonNullable<import("@/types").Event["metadata"]>["predictions"]>
+  homeTeam: string
+  awayTeam: string
+  size?: "sm" | "xs"
+}) {
+  const { percent } = predictions
+  if (!percent) return null
+  const textSize = size === "xs" ? "text-[9px]" : "text-[10px]"
+  const padding = size === "xs" ? "px-1 py-0.5" : "px-1.5 py-0.5"
+  return (
+    <div className="flex gap-1 justify-center flex-wrap">
+      <span className={`rounded ${padding} ${textSize} font-semibold bg-blue-500/15 text-blue-300 border border-blue-500/25`}>{percent.home} Local</span>
+      <span className={`rounded ${padding} ${textSize} font-semibold bg-gray-500/20 text-gray-300 border border-gray-500/25`}>{percent.draw} Emp.</span>
+      <span className={`rounded ${padding} ${textSize} font-semibold bg-orange-500/15 text-orange-300 border border-orange-500/25`}>{percent.away} Visita</span>
+    </div>
+  )
+}
+
 function HomeContent() {
   const createBetCtaClass = "inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-semibold shadow-md transition-all duration-200 hover:scale-105 hover:shadow-[0_0_18px_rgba(34,197,94,0.45)] hover:shadow-lg active:scale-95"
   const createBetCtaStyle = { backgroundColor: "#16a34a", color: "#ffffff" }
@@ -836,7 +883,24 @@ function HomeContent() {
                       </div>
                     </div>
 
-                    <div className="text-center text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {event.metadata?.predictions && (
+                      <div className="mt-2 space-y-1.5" onClick={e => e.stopPropagation()}>
+                        <PredictionPills predictions={event.metadata.predictions} homeTeam={event.home_team} awayTeam={event.away_team} />
+                        {(event.metadata.predictions.home_league_form || event.metadata.predictions.away_league_form) && (
+                          <div className="flex items-center justify-between px-1">
+                            <FormDots form={event.metadata.predictions.home_league_form} />
+                            <span className="text-[9px] text-muted-foreground">Forma</span>
+                            <FormDots form={event.metadata.predictions.away_league_form} />
+                          </div>
+                        )}
+                        {event.metadata.predictions.advice && (
+                          <p className="text-[9px] text-center text-amber-300/70 truncate">
+                            {translateAdvice(event.metadata.predictions.advice)}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    <div className="text-center text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
                       Haz clic para crear apuesta
                     </div>
                   </CardContent>
@@ -954,6 +1018,11 @@ function HomeContent() {
                               </div>
                             </div>
 
+                            {event.metadata?.predictions && (
+                              <div onClick={e => e.stopPropagation()}>
+                                <PredictionPills predictions={event.metadata.predictions} homeTeam={event.home_team} awayTeam={event.away_team} size="xs" />
+                              </div>
+                            )}
                             <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
                               Haz clic para crear apuesta
                             </div>

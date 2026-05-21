@@ -35,6 +35,19 @@ export interface Event {
       name?: string | null
       city?: string | null
     }
+    predictions?: {
+      percent?: { home: string; draw: string; away: string } | null
+      advice?: string | null
+      winner?: string | null
+      home_form?: string | null
+      away_form?: string | null
+      home_goals_avg?: string | null
+      away_goals_avg?: string | null
+      home_league_form?: string | null
+      away_league_form?: string | null
+      comparison?: Record<string, { home: string; away: string }> | null
+      h2h?: Array<{ date: string | null; home: string | null; away: string | null; home_score: number | null; away_score: number | null }>
+    }
   }
 }
 

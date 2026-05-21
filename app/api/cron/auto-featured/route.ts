@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, sport, league, country, home_team, away_team, start_time, status")
+    .select("id, external_id, sport, league, country, home_team, away_team, start_time, status, metadata")
     .in("status", ["scheduled", "live"])
     .gte("start_time", now.toISOString())
     .lte("start_time", cutoff.toISOString())
@@ -130,7 +130,55 @@ No explanation. No markdown. Just the raw JSON array.`
     if (setErr) return NextResponse.json({ error: setErr.message }, { status: 500 })
   }
 
-  console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds })
+  // Fetch predictions for featured football events and store in metadata
+  const selectedEvents = events.filter(e => selectedIds.includes(e.id))
+  const footballEvents = selectedEvents.filter(e => e.sport === "football" && e.external_id?.startsWith("football_"))
+  let predictionsFetched = 0
+  const predictionErrors: string[] = []
 
-  return NextResponse.json({ success: true, total: events.length, featured: selectedIds })
+  for (const ev of footballEvents) {
+    const fixtureId = ev.external_id.replace("football_", "")
+    try {
+      const data = await fetchApiSports(`${FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+      const raw = data.response?.[0]
+      if (!raw) continue
+
+      const pred = raw.predictions
+      const home = raw.teams?.home
+      const away = raw.teams?.away
+
+      const predictions = {
+        percent: pred?.percent ?? null,
+        advice: pred?.advice ?? null,
+        winner: pred?.winner?.name ?? null,
+        home_form: home?.last_5?.form ?? null,
+        away_form: away?.last_5?.form ?? null,
+        home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
+        away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+        home_league_form: home?.league?.form ?? null,
+        away_league_form: away?.league?.form ?? null,
+        comparison: raw.comparison ?? null,
+        h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+          date: m.fixture?.date?.split("T")[0] ?? null,
+          home: m.teams?.home?.name ?? null,
+          away: m.teams?.away?.name ?? null,
+          home_score: m.goals?.home ?? null,
+          away_score: m.goals?.away ?? null,
+        })),
+      }
+
+      const existingMd = ev.metadata || {}
+      await supabase.from("events")
+        .update({ metadata: { ...existingMd, predictions } })
+        .eq("id", ev.id)
+
+      predictionsFetched++
+    } catch (e: any) {
+      predictionErrors.push(`${ev.external_id}: ${e.message}`)
+    }
+  }
+
+  console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
+
+  return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
 }
