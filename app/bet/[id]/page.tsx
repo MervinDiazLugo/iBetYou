@@ -273,7 +273,7 @@ export default function BetDetailPage() {
         throw new Error(errorData.error || 'Error al tomar la apuesta')
       }
       
-      showToast("¡Apuesta aceptada! Mucha suerte.", "success")
+      showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
       router.push("/")
     } catch (err: any) {
       const message = err.message || "Error al aceptar la apuesta"

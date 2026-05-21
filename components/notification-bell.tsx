@@ -77,7 +77,8 @@ export function NotificationBell({ userId, sessionToken }: Props) {
         (payload) => {
           const notif = payload.new as Notification
           setNotifications((prev) => [notif, ...prev])
-          showToast(notif.title, "notification", notif.body)
+          const toastType = notif.type === "bet_taken" ? "win" : "notification"
+          showToast(notif.title, toastType, notif.body)
         }
       )
       .subscribe()

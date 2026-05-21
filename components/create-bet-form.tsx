@@ -370,7 +370,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         throw new Error(message)
       }
 
-      showToast("Apuesta creada exitosamente!", "success")
+      showToast("¡Apuesta publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
       setLoading(false)
       onClose()
     } catch (err: any) {

@@ -187,7 +187,7 @@ function HomeContent() {
         const data = await res.json()
         throw new Error(data.error || "Error al tomar la apuesta")
       }
-      showToast("¡Apuesta aceptada! Mucha suerte.", "success")
+      showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
       setSelectedBetForModal(null)
       // Refresh open bets list
       const sportParam = selectedSport !== "all" ? `&sport=${selectedSport}` : ""
