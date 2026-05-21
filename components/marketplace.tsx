@@ -111,6 +111,8 @@ function HomeContent() {
   })
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [cloneBetId, setCloneBetId] = useState<string | null>(null)
+  const [selectedBetForModal, setSelectedBetForModal] = useState<BetWithDetails | null>(null)
+  const [takingBetModal, setTakingBetModal] = useState(false)
   const { showToast } = useToast()
   const { mode } = useMode()
   const [selectedEventForBet, setSelectedEventForBet] = useState<Event | null>(null)
@@ -167,6 +169,38 @@ function HomeContent() {
     setShowCreateModal(false)
     setCloneBetId(null)
     setSelectedEventForBet(null)
+  }
+
+  const handleTakeBetFromModal = async () => {
+    if (!selectedBetForModal || !user) return
+    setTakingBetModal(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const headers: HeadersInit = { "Content-Type": "application/json" }
+      if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+      const res = await fetch(`/api/bets/${selectedBetForModal.id}`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ user_id: user.id }),
+      })
+      if (!res.ok) {
+        const data = await res.json()
+        throw new Error(data.error || "Error al tomar la apuesta")
+      }
+      showToast("¡Apuesta aceptada! Mucha suerte.", "success")
+      setSelectedBetForModal(null)
+      // Refresh open bets list
+      const sportParam = selectedSport !== "all" ? `&sport=${selectedSport}` : ""
+      const userParam = user ? `&user_id=${user.id}` : ""
+      const freshHeaders: HeadersInit = {}
+      if (sessionTokenRef.current) freshHeaders.Authorization = `Bearer ${sessionTokenRef.current}`
+      fetch(`/api/bets?limit=50${userParam}${sportParam}`, { headers: freshHeaders })
+        .then(r => r.json()).then(data => setBets(data.bets || [])).catch(() => {})
+    } catch (err: any) {
+      showToast(err.message || "Error al tomar la apuesta", "error")
+    } finally {
+      setTakingBetModal(false)
+    }
   }
 
   // Check auth and load data via API
@@ -563,6 +597,89 @@ function HomeContent() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!selectedBetForModal} onOpenChange={(open) => { if (!open) setSelectedBetForModal(null) }}>
+        <DialogContent onClose={() => setSelectedBetForModal(null)}>
+          {selectedBetForModal && (() => {
+            const bet = selectedBetForModal
+            const betTypeLabels: Record<string, string> = {
+              direct: "Directa", exact_score: "Score Exacto",
+              first_scorer: "1er Anotador", half_time: "Medio Tiempo",
+            }
+            const potentialWin = bet.amount * bet.multiplier + bet.amount
+            const isOwn = user?.id === bet.creator_id
+            return (
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap mb-2">
+                    <Badge variant="secondary" className="text-[10px]">{getSportIcon(bet.event.sport)} {bet.event.league}</Badge>
+                    <Badge variant="outline" className={`text-[10px] ${(bet as any).mode === "real" ? "border-green-500/40 text-green-400" : "border-violet-500/40 text-violet-400"}`}>
+                      {(bet as any).mode === "real" ? "💵 Real" : "🎮 Fantasy"}
+                    </Badge>
+                    <span className="ml-auto text-[10px] text-muted-foreground">
+                      {new Date(bet.event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 my-3">
+                    <div className="flex-1 text-center">
+                      {bet.event.home_logo
+                        ? <img src={bet.event.home_logo} alt={bet.event.home_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                        : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold">{bet.event.home_team.slice(0,1)}</div>
+                      }
+                      <div className="text-sm font-bold leading-tight">{bet.event.home_team}</div>
+                    </div>
+                    <div className="text-base font-bold text-muted-foreground">VS</div>
+                    <div className="flex-1 text-center">
+                      {bet.event.away_logo
+                        ? <img src={bet.event.away_logo} alt={bet.event.away_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                        : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold">{bet.event.away_team.slice(0,1)}</div>
+                      }
+                      <div className="text-sm font-bold leading-tight">{bet.event.away_team}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-primary/10 rounded-lg p-3 border border-primary/20 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">{betTypeLabels[bet.bet_type]} · @{bet.creator?.nickname} apuesta por</div>
+                  <div className="text-base font-bold text-primary">{bet.creator_selection}</div>
+                  {bet.acceptor_selection && <div className="text-xs text-muted-foreground mt-1">Tú tomarías: <span className="font-semibold text-foreground">{bet.acceptor_selection}</span></div>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-secondary/60 rounded-lg p-3 text-center border border-border/50">
+                    <div className="text-xs text-muted-foreground">Monto a igualar</div>
+                    <div className="text-lg font-bold text-primary">{formatCurrency(bet.amount)}</div>
+                  </div>
+                  <div className="bg-green-500/10 rounded-lg p-3 text-center border border-green-500/30">
+                    <div className="text-xs text-muted-foreground">Premio total</div>
+                    <div className="text-lg font-bold text-green-500">{formatCurrency(potentialWin)}</div>
+                  </div>
+                </div>
+
+                {bet.bet_type === "exact_score" && bet.multiplier > 1 && (
+                  <div className="text-center">
+                    <Badge className="bg-green-500/20 text-green-500 border-green-500/30">⚡ Multiplicador x{bet.multiplier}</Badge>
+                  </div>
+                )}
+
+                <div className="flex gap-2 pt-1">
+                  <Button variant="outline" size="sm" className="flex-1" asChild>
+                    <Link href={`/bet/${bet.id}`}>Ver detalles</Link>
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="flex-1"
+                    disabled={takingBetModal || isOwn || !user}
+                    onClick={handleTakeBetFromModal}
+                  >
+                    {takingBetModal ? "Aceptando..." : isOwn ? "Es tu apuesta" : !user ? "Inicia sesión" : "Tomar apuesta"}
+                  </Button>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
+
       <main className="container mx-auto px-4 py-6">
         {/* Header */}
         <div className="mb-6">
@@ -640,8 +757,11 @@ function HomeContent() {
                     <div className="text-sm font-semibold truncate">{bet.event.home_team} vs {bet.event.away_team}</div>
                     <div className="text-xs text-muted-foreground">{getPostedAgo(bet.created_at)}</div>
                     <div className="text-xs">Apuesta: <span className="font-semibold text-primary">{formatCurrency(bet.amount)}</span></div>
-                    <Button size="sm" className="w-full" asChild>
-                      <Link href={`/bet/${bet.id}`}>Tomar apuesta</Link>
+                    <Button size="sm" className="w-full" onClick={() => {
+                      if (!user) { window.location.href = "/login"; return }
+                      setSelectedBetForModal(bet)
+                    }}>
+                      Ver y tomar
                     </Button>
                   </CardContent>
                 </Card>
