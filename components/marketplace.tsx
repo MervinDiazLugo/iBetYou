@@ -136,6 +136,7 @@ function HomeContent() {
   const [sortBy, setSortBy] = useState<"ending_soon" | "newest" | "highest_amount">("ending_soon")
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [collapsedSports, setCollapsedSports] = useState<Record<string, boolean>>({})
+  const [featuredEvents, setFeaturedEvents] = useState<Event[]>([])
   const [selectedLeague, setSelectedLeague] = useState("all")
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
@@ -347,6 +348,14 @@ function HomeContent() {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400)
     return () => clearTimeout(timer)
   }, [searchTerm])
+
+  // Load featured events independently of sport filter
+  useEffect(() => {
+    fetch("/api/events/list?featured=true&limit=16")
+      .then(r => r.json())
+      .then(data => setFeaturedEvents(Array.isArray(data) ? data : data.events || []))
+      .catch(() => {})
+  }, [])
 
   // Load events per sport from API — reset and refetch when search changes
   useEffect(() => {
@@ -948,17 +957,17 @@ function HomeContent() {
         </div>
 
         {/* Eventos Destacados */}
-        {filteredEvents.some(e => e.featured) && (
+        {featuredEvents.length > 0 && (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xl">⭐</span>
               <h2 className="text-lg sm:text-xl font-bold">Eventos Destacados</h2>
               <Badge className="bg-amber-400/20 text-amber-400 border-amber-400/40 text-xs" variant="outline">
-                {filteredEvents.filter(e => e.featured).length}
+                {featuredEvents.length}
               </Badge>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredEvents.filter(e => e.featured).map((event) => (
+              {featuredEvents.map((event) => (
                 <Card
                   key={`featured-${event.id}`}
                   className="overflow-hidden cursor-pointer border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all group"

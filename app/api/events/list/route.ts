@@ -6,6 +6,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
   const sport = searchParams.get("sport")
   const status = searchParams.get("status")
+  const featuredOnly = searchParams.get("featured") === "true"
   const paginated = searchParams.get("paginated") === "1"
   const rawLimit = Number(searchParams.get("limit") || "50")
   const rawOffset = Number(searchParams.get("offset") || "0")
@@ -21,7 +22,9 @@ export async function GET(request: NextRequest) {
       .order('featured', { ascending: false, nullsFirst: false })
       .order('start_time', { ascending: true })
 
-    if (sport && sport !== 'all') {
+    if (featuredOnly) {
+      query = query.eq('featured', true)
+    } else if (sport && sport !== 'all') {
       query = query.eq('sport', sport)
     }
 
