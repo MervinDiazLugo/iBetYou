@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 import { createNotification } from "@/lib/notifications"
+import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -119,8 +120,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized user scope' }, { status: 403 })
     }
 
-    if (!event_id || !bet_type || !creator_selection || !amount) {
+    if (!event_id || !bet_type || !creator_selection || amount === undefined || amount === null) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const parsedAmount = Number(amount)
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return NextResponse.json({ error: 'El monto debe ser un número positivo' }, { status: 400 })
     }
 
     const { data: eventRow, error: eventError } = await supabase
@@ -171,8 +177,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El multiplicador debe estar entre 1 y 100' }, { status: 400 })
     }
     const finalMultiplier = isAsymmetric ? parsedMultiplier : 1
-    const fee = amount * 0.03
-    const totalNeeded = amount + fee
+    const fee = parsedAmount * 0.03
+    const totalNeeded = parsedAmount + fee
 
     const { data: wallet } = await supabase
       .from('wallets')
@@ -188,14 +194,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Insufficient balance' }, { status: 400 })
     }
 
-    // Deduct from wallet first — if this fails, no bet is created
-    const { error: walletError } = await supabase
+    // Deduct from wallet first — optimistic lock prevents double-spend on concurrent requests
+    const { data: walletUpdated, error: walletError } = await supabase
       .from('wallets')
       .update({ balance_fantasy: wallet.balance_fantasy - totalNeeded })
       .eq('user_id', user_id)
+      .eq('balance_fantasy', wallet.balance_fantasy)
+      .select('user_id')
 
     if (walletError) {
       return NextResponse.json({ error: 'Failed to update wallet' }, { status: 500 })
+    }
+    if (!walletUpdated || walletUpdated.length === 0) {
+      return NextResponse.json({ error: 'Tu saldo cambió. Recarga e intenta de nuevo.' }, { status: 409 })
     }
 
     // Create bet after confirmed deduction
@@ -207,7 +218,7 @@ export async function POST(request: NextRequest) {
         type: isAsymmetric ? 'asymmetric' : 'symmetric',
         bet_type: bet_type || 'direct',
         selection: JSON.stringify({ betType: bet_type }),
-        amount,
+        amount: parsedAmount,
         multiplier: finalMultiplier,
         fee_amount: fee,
         creator_selection,
@@ -217,8 +228,11 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
-      // Rollback wallet deduction
-      await supabase.from('wallets').update({ balance_fantasy: wallet.balance_fantasy }).eq('user_id', user_id)
+      try {
+        await payoutToMode(supabase, user_id, totalNeeded, "fantasy")
+      } catch (rollbackErr) {
+        console.error("REFUND_FAILED", { userId: user_id, amount: totalNeeded, betMode: "fantasy", error: rollbackErr })
+      }
       return NextResponse.json({ error: betError.message }, { status: 500 })
     }
 

@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotification } from "@/lib/notifications"
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
+import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string; }> }) {
   const authenticatedUserId = await getAuthenticatedUserId(request)
@@ -161,7 +162,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // Only exact score bets are asymmetric.
     const isAsymmetric = bet.bet_type === 'exact_score'
     const betMode = bet.mode === "real" ? "real" : "fantasy"
-    const acceptorStake = isAsymmetric ? bet.amount * bet.multiplier : bet.amount
+    const acceptorStake = isAsymmetric ? Number(bet.amount) * Math.max(1, Number(bet.multiplier) || 1) : Number(bet.amount)
     const acceptorFee = acceptorStake * 0.03
     const totalNeeded = acceptorStake + acceptorFee
 
@@ -196,28 +197,33 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       takerBalance = wallet.balance_fantasy
     }
 
-    // Deduct from taker's wallet — optimistic lock prevents stale rollback on race condition
+    // Deduct from taker's wallet — optimistic lock prevents double-spend on concurrent requests
     let walletDeductError: any
+    let walletDeductRows: any[] | null = null
     if (betMode === "real") {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("iby_wallets")
         .update({ balance: takerBalance - totalNeeded })
         .eq("user_id", effectiveUserId)
         .eq("balance", takerBalance)
+        .select("user_id")
       walletDeductError = error
+      walletDeductRows = data
     } else {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("wallets")
         .update({ balance_fantasy: takerBalance - totalNeeded })
         .eq("user_id", effectiveUserId)
         .eq("balance_fantasy", takerBalance)
+        .select("user_id")
       walletDeductError = error
+      walletDeductRows = data
     }
     if (walletDeductError) {
-      if (walletDeductError.code === "PGRST116") {
-        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
-      }
       return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
+    }
+    if (!walletDeductRows || walletDeductRows.length === 0) {
+      return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
     }
 
     // Mark bet as taken — .eq("status", "open") acts as optimistic lock:
@@ -231,11 +237,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       .single()
 
     if (updateError || !updatedBet) {
-      // Rollback wallet deduction
-      if (betMode === "real") {
-        await supabase.from("iby_wallets").update({ balance: takerBalance }).eq("user_id", effectiveUserId)
-      } else {
-        await supabase.from("wallets").update({ balance_fantasy: takerBalance }).eq("user_id", effectiveUserId)
+      try {
+        await payoutToMode(supabase, effectiveUserId, totalNeeded, betMode)
+      } catch (rollbackErr) {
+        console.error("REFUND_FAILED", { userId: effectiveUserId, amount: totalNeeded, betMode, error: rollbackErr })
       }
       if (updateError?.code === "PGRST116") {
         return NextResponse.json({ error: 'Esta apuesta ya fue tomada por otro usuario' }, { status: 409 })

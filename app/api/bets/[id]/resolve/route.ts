@@ -59,13 +59,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const body = await request.json()
     const { user_id, action, reason } = body as { user_id?: string; action?: ResolveAction; reason?: string }
 
-    const authenticatedUserId = await getAuthenticatedUserId(request)
-    const host = request.headers.get("host") || ""
-    const isLocalhost = host.includes("localhost") || host.includes("127.0.0.1")
-    const isDevLocalFallback = process.env.NODE_ENV !== "production" && isLocalhost
-
-    const effectiveUserId = authenticatedUserId
-      || (isDevLocalFallback && typeof user_id === "string" ? user_id : null)
+    const effectiveUserId = await getAuthenticatedUserId(request)
 
     if (!effectiveUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -75,7 +69,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: "action is required" }, { status: 400 })
     }
 
-    if (authenticatedUserId && user_id && user_id !== authenticatedUserId) {
+    if (user_id && user_id !== effectiveUserId) {
       return NextResponse.json({ error: "Unauthorized user scope" }, { status: 403 })
     }
 
@@ -279,7 +273,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     // Bet confirmed resolved — now pay winner
     const betMode = bet.mode ?? "fantasy"
-    await payoutToMode(supabase, winnerUserId, totalPrize, betMode)
+    try {
+      await payoutToMode(supabase, winnerUserId, totalPrize, betMode)
+    } catch (payoutErr) {
+      console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId, betMode, error: payoutErr })
+      return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
+    }
     await supabase.from("transactions").insert({
       user_id: winnerUserId,
       token_type: tokenTypeForMode(betMode),

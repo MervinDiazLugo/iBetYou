@@ -78,7 +78,7 @@ export default function BetDetailPage() {
   const [takingBet, setTakingBet] = useState(false)
   const [resolvingAction, setResolvingAction] = useState<"claim_win" | "claim_lose" | "confirm" | "reject" | null>(null)
   const [user, setUser] = useState<{ id: string; email: string; nickname: string; role?: string } | null>(null)
-  const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
+  const [balance, setBalance] = useState({ fantasy: 0, real: 0, iBY: 0 })
   const [error, setError] = useState("")
   const [nowMs, setNowMs] = useState(Date.now())
   const [adminActionLoading, setAdminActionLoading] = useState(false)
@@ -113,6 +113,7 @@ export default function BetDetailPage() {
               setBalance({
                 fantasy: infoData.balance.fantasy,
                 real: infoData.balance.real,
+                iBY: infoData.balance.iBY ?? 0,
               })
             }
           }
@@ -235,7 +236,8 @@ export default function BetDetailPage() {
     const acceptorStake = isAsymmetric ? bet.amount * bet.multiplier : bet.amount
     const totalNeeded = acceptorStake + (acceptorStake * 0.03)
     
-    if (balance.fantasy < totalNeeded) {
+    const availableBalance = bet.mode === 'real' ? balance.iBY : balance.fantasy
+    if (availableBalance < totalNeeded) {
       setError("Balance insuficiente")
       setTakingBet(false)
       return
@@ -846,12 +848,12 @@ export default function BetDetailPage() {
                 className="w-full"
                 size="lg"
                 onClick={handleTakeBet}
-                disabled={takingBet || balance.fantasy < acceptorTotalNeeded}
+                disabled={takingBet || (bet.mode === 'real' ? balance.iBY : balance.fantasy) < acceptorTotalNeeded}
               >
                 {takingBet ? "Aceptando..." : `Aceptar Apuesta por ${formatCurrency(acceptorStake)}`}
               </Button>
-              
-              {balance.fantasy < acceptorTotalNeeded && (
+
+              {(bet.mode === 'real' ? balance.iBY : balance.fantasy) < acceptorTotalNeeded && (
                 <p className="text-xs text-center text-destructive mt-2">
                   Balance insuficiente
                 </p>

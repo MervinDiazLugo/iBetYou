@@ -182,21 +182,34 @@ export async function POST(request: NextRequest) {
       const totalPrize = calculateTotalPrize(bet.amount, bet.multiplier || 1)
 
       // Update bet first — .in("status") guard prevents double-resolution if resolved concurrently
-      const { error: betUpdateError } = await supabase
+      const { data: resolvedRows, error: betUpdateError } = await supabase
         .from("bets")
         .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
         .eq("id", bet.id)
         .in("status", ["disputed"])
+        .select("id")
 
       if (betUpdateError) {
         failed += 1
         results.push({ bet_id: bet.id, status: "failed", reason: betUpdateError.message })
         continue
       }
+      if (!resolvedRows || resolvedRows.length === 0) {
+        skipped += 1
+        results.push({ bet_id: bet.id, status: "skipped", reason: "already resolved or not disputed" })
+        continue
+      }
 
       // Bet confirmed — now pay winner
       const betMode = (bet as any).mode ?? "fantasy"
-      await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      try {
+        await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      } catch (payoutErr) {
+        failed += 1
+        console.error("PAYOUT_FAILED", { userId: winnerId, amount: totalPrize, betId: bet.id, betMode, error: payoutErr })
+        results.push({ bet_id: bet.id, status: "failed", reason: "Payout failed after 3 retries" })
+        continue
+      }
       await supabase.from("transactions").insert({
         user_id: winnerId,
         token_type: tokenTypeForMode(betMode),

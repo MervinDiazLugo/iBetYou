@@ -2,12 +2,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
 import { canCountryUseRealMoney } from "@/lib/country-access"
+import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, eventId, betType, selection, amount, multiplier, mode: rawMode } = await request.json()
-    // Fee is always recalculated server-side — never trust the client-provided value
-    const fee = amount * 0.03
+    const { userId, eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode } = await request.json()
     if (rawMode !== "real" && rawMode !== "fantasy" && rawMode !== undefined && rawMode !== null) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
     }
@@ -36,25 +35,32 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (!userId || !eventId || !betType || !selection || !amount) {
+    if (userId !== user.id) {
+      return NextResponse.json(
+        { error: "Unauthorized user scope" },
+        { status: 403 }
+      )
+    }
+
+    if (!eventId || !betType || !selection || rawAmount === undefined || rawAmount === null) {
       return NextResponse.json(
         { error: "Missing required fields" },
         { status: 400 }
       )
     }
 
+    const amount = Number(rawAmount)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return NextResponse.json({ error: "El monto debe ser un número positivo" }, { status: 400 })
+    }
+    // Fee is always recalculated server-side — never trust the client-provided value
+    const fee = amount * 0.03
+
     if (betType === "exact_score" && multiplier !== undefined) {
       const parsedMultiplier = Number(multiplier)
       if (!Number.isFinite(parsedMultiplier) || parsedMultiplier < 1 || parsedMultiplier > 100) {
         return NextResponse.json({ error: "El multiplicador debe estar entre 1 y 100" }, { status: 400 })
       }
-    }
-
-    if (userId !== user.id) {
-      return NextResponse.json(
-        { error: "Unauthorized user scope" },
-        { status: 403 }
-      )
     }
 
     const supabase = createAdminSupabaseClient()
@@ -165,21 +171,32 @@ export async function POST(request: NextRequest) {
     }
 
     // Deduct from wallet — payment ordering invariant: update wallet before creating bet
+    // Optimistic lock (.eq on balance) prevents double-spend on concurrent requests
     if (betMode === "real") {
-      const { error: walletUpdateError } = await supabase
+      const { data: ibcUpdated, error: walletUpdateError } = await supabase
         .from("iby_wallets")
         .update({ balance: currentBalance - totalNeeded })
         .eq("user_id", user.id)
+        .eq("balance", currentBalance)
+        .select("user_id")
       if (walletUpdateError) {
         return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })
       }
+      if (!ibcUpdated || ibcUpdated.length === 0) {
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
     } else {
-      const { error: walletUpdateError } = await supabase
+      const { data: fantasyUpdated, error: walletUpdateError } = await supabase
         .from("wallets")
         .update({ balance_fantasy: currentBalance - totalNeeded })
         .eq("user_id", user.id)
+        .eq("balance_fantasy", currentBalance)
+        .select("user_id")
       if (walletUpdateError) {
         return NextResponse.json({ error: "Failed to update wallet" }, { status: 400 })
+      }
+      if (!fantasyUpdated || fantasyUpdated.length === 0) {
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
       }
     }
 
@@ -205,11 +222,10 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
-      // Rollback wallet deduction
-      if (betMode === "real") {
-        await supabase.from("iby_wallets").update({ balance: currentBalance }).eq("user_id", user.id)
-      } else {
-        await supabase.from("wallets").update({ balance_fantasy: currentBalance }).eq("user_id", user.id)
+      try {
+        await payoutToMode(supabase, user.id, totalNeeded, betMode)
+      } catch (rollbackErr) {
+        console.error("REFUND_FAILED", { userId: user.id, amount: totalNeeded, betMode, error: rollbackErr })
       }
       return NextResponse.json(
         { error: `Failed to create bet: ${betError.message}` },

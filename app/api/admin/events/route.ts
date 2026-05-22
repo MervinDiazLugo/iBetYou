@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server"
+import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL
+
+function fetchApiSports(url: string): Promise<any> {
+  if (!API_FOOTBALL_KEY) return Promise.reject(new Error("API_FOOTBALL_KEY not set"))
+  return new Promise((resolve, reject) => {
+    const { hostname, pathname, search } = new URL(url)
+    const req = https.request(
+      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": API_FOOTBALL_KEY! } },
+      (res) => {
+        let body = ""
+        res.on("data", (chunk) => { body += chunk })
+        res.on("end", () => {
+          try { resolve(JSON.parse(body)) } catch (e) { reject(e) }
+        })
+      }
+    )
+    req.on("error", reject)
+    req.end()
+  })
+}
 
 export async function GET(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
@@ -63,16 +83,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "API not configured" }, { status: 500 })
       }
 
-      const response = await fetch(
-        `${API_FOOTBALL_URL}/fixtures?date=${new Date().toISOString().split("T")[0]}`,
-        { headers: { "x-apisports-key": API_FOOTBALL_KEY } }
-      )
-
-      if (!response.ok) {
+      let data: any
+      try {
+        data = await fetchApiSports(`${API_FOOTBALL_URL}/fixtures?date=${new Date().toISOString().split("T")[0]}`)
+      } catch {
         return NextResponse.json({ error: "Failed to fetch from external API" }, { status: 500 })
       }
-
-      const data = await response.json()
       if (!data.response || data.response.length === 0) {
         return NextResponse.json({ message: "No events found", events: [] })
       }
@@ -313,6 +329,48 @@ export async function PATCH(request: NextRequest) {
 
     const { error } = await supabase.from("events").update({ featured }).eq("id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    // When featuring a football event, fetch predictions immediately so stats show up in the UI
+    if (featured && API_FOOTBALL_URL) {
+      const { data: ev } = await supabase.from("events").select("external_id, metadata, sport").eq("id", id).single()
+      if (ev?.sport === "football" && ev.external_id?.startsWith("football_")) {
+        const fixtureId = ev.external_id.replace("football_", "")
+        try {
+          const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+          const raw = data.response?.[0]
+          if (raw) {
+            const pred = raw.predictions
+            const home = raw.teams?.home
+            const away = raw.teams?.away
+            const predictions = {
+              percent: pred?.percent ?? null,
+              advice: pred?.advice ?? null,
+              winner: pred?.winner?.name ?? null,
+              home_form: home?.last_5?.form ?? null,
+              away_form: away?.last_5?.form ?? null,
+              home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
+              away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+              home_league_form: home?.league?.form ?? null,
+              away_league_form: away?.league?.form ?? null,
+              comparison: raw.comparison ?? null,
+              h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+                date: m.fixture?.date?.split("T")[0] ?? null,
+                home: m.teams?.home?.name ?? null,
+                away: m.teams?.away?.name ?? null,
+                home_score: m.goals?.home ?? null,
+                away_score: m.goals?.away ?? null,
+              })),
+            }
+            await supabase.from("events")
+              .update({ metadata: { ...(ev.metadata || {}), predictions } })
+              .eq("id", id)
+          }
+        } catch (predErr) {
+          console.error("Failed to fetch predictions for featured event", id, predErr)
+        }
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (error: unknown) {
     console.error("Admin patch event error:", error)

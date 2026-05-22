@@ -388,7 +388,14 @@ export async function POST(request: NextRequest) {
       }
 
       const betMode = (bet as any).mode ?? "fantasy"
-      await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      try {
+        await payoutToMode(supabase, winnerId, totalPrize, betMode)
+      } catch (payoutErr) {
+        failed += 1
+        console.error("PAYOUT_FAILED", { userId: winnerId, amount: totalPrize, betId: (bet as any).id, betMode, error: payoutErr })
+        results.push({ bet_id: (bet as any).id, status: "failed", reason: "Payout failed after 3 retries" })
+        continue
+      }
       await supabase.from("transactions").insert({
         user_id: winnerId,
         token_type: tokenTypeForMode(betMode),

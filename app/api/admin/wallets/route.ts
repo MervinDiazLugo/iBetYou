@@ -77,10 +77,12 @@ export async function POST(request: NextRequest) {
         updateQuery = supabase.from('wallets')
           .update({ balance_fantasy: wallet.balance_fantasy + amount })
           .eq('user_id', user_id)
+          .eq('balance_fantasy', wallet.balance_fantasy)
       } else if (token_type === 'real') {
         updateQuery = supabase.from('wallets')
           .update({ balance_real: wallet.balance_real + amount })
           .eq('user_id', user_id)
+          .eq('balance_real', wallet.balance_real)
       } else {
         return NextResponse.json({ error: 'Invalid token_type' }, { status: 400 })
       }

@@ -3,8 +3,9 @@
  * For symmetric bets (multiplier=1): 2 * amount.
  * For exact_score bets: amount * multiplier + amount.
  */
-export function calculateTotalPrize(amount: number | string, multiplier: number | string): number {
-  return Number(amount) * Number(multiplier) + Number(amount)
+export function calculateTotalPrize(amount: number | string, multiplier: number | string | null | undefined): number {
+  const safeMult = Number.isFinite(Number(multiplier)) && Number(multiplier) >= 1 ? Number(multiplier) : 1
+  return Number(amount) * safeMult + Number(amount)
 }
 
 const PEER_RESOLUTION_BY_TYPE: Record<string, boolean> = {

@@ -348,7 +348,13 @@ export async function PATCH(request: NextRequest) {
         }
 
         const betModeApprove = (bet as any).mode ?? "fantasy"
-        await payoutToMode(supabase, winnerUserId, totalPrize, betModeApprove)
+        try {
+          await payoutToMode(supabase, winnerUserId, totalPrize, betModeApprove)
+        } catch (payoutErr) {
+          console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId: id, betMode: betModeApprove, error: payoutErr })
+          results.push({ id, success: false, error: "Payout failed after 3 retries" })
+          continue
+        }
         await supabase.from('transactions').insert({
           user_id: winnerUserId,
           token_type: tokenTypeForMode(betModeApprove),
@@ -444,20 +450,28 @@ export async function PATCH(request: NextRequest) {
         }
 
         // Update bet status first — if this fails, no money moves
-        const { error: cancelBetError } = await supabase
+        const { data: cancelledRows, error: cancelBetError } = await supabase
           .from('bets')
           .update({ status: 'cancelled' })
           .eq('id', bet_id)
           .not('status', 'in', '("cancelled","resolved")')
+          .select('id')
 
         if (cancelBetError) {
           return NextResponse.json({ error: cancelBetError.message }, { status: 500 })
+        }
+        if (!cancelledRows || cancelledRows.length === 0) {
+          return NextResponse.json({ error: 'Bet is already resolved or cancelled' }, { status: 400 })
         }
 
         // Refund creator
         const cancelBetMode = (betToCancel as any).mode === "real" ? "real" : "fantasy"
         const creatorRefund = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
-        await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
+        try {
+          await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
+        } catch (refundErr) {
+          console.error("REFUND_FAILED", { userId: betToCancel.creator_id, amount: creatorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
+        }
         await supabase.from('transactions').insert({
           user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
           operation: 'bet_cancelled_refund', reference_id: bet_id,
@@ -466,10 +480,14 @@ export async function PATCH(request: NextRequest) {
         // Refund acceptor if the bet was already taken
         if (betToCancel.acceptor_id) {
           const acceptorStake = betToCancel.bet_type === 'exact_score'
-            ? Number(betToCancel.amount) * Number(betToCancel.multiplier)
+            ? Number(betToCancel.amount) * Math.max(1, Number(betToCancel.multiplier) || 1)
             : Number(betToCancel.amount)
           const acceptorRefund = acceptorStake + acceptorStake * 0.03
-          await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
+          try {
+            await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
+          } catch (refundErr) {
+            console.error("REFUND_FAILED", { userId: betToCancel.acceptor_id, amount: acceptorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
+          }
           await supabase.from('transactions').insert({
             user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
             operation: 'bet_cancelled_refund', reference_id: bet_id,
@@ -554,7 +572,12 @@ export async function PATCH(request: NextRequest) {
       if (resolveContext) {
         const { totalPrize, loserId } = resolveContext
         const betModeResolve = currentBet?.mode ?? "fantasy"
-        await payoutToMode(supabase, winner_id, totalPrize, betModeResolve)
+        try {
+          await payoutToMode(supabase, winner_id, totalPrize, betModeResolve)
+        } catch (payoutErr) {
+          console.error("PAYOUT_FAILED", { userId: winner_id, amount: totalPrize, betId: bet_id, betMode: betModeResolve, error: payoutErr })
+          return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
+        }
         await supabase.from('transactions').insert({
           user_id: winner_id, token_type: tokenTypeForMode(betModeResolve), amount: totalPrize,
           operation: 'bet_won', reference_id: bet_id,
@@ -800,7 +823,7 @@ export async function POST(request: NextRequest) {
 
     const creatorStake = Number(bet.amount)
     const acceptorStake = bet.bet_type === 'exact_score'
-      ? Number(bet.amount) * Number(bet.multiplier)
+      ? Number(bet.amount) * Math.max(1, Number(bet.multiplier) || 1)
       : Number(bet.amount)
 
     if (bet.bet_type === 'direct') {
@@ -922,15 +945,20 @@ export async function POST(request: NextRequest) {
     const totalPrize = outcome.kind === 'winner' ? creatorStake + acceptorStake : 0
 
     const betModeAuto = (bet as any).mode ?? "fantasy"
-    if (outcome.kind === 'winner') {
-      await payoutToMode(supabase, outcome.winnerId, totalPrize, betModeAuto)
-      await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: tokenTypeForMode(betModeAuto), amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
-    } else {
-      // tie or split — refund each party their original stake
-      await payoutToMode(supabase, bet.creator_id, outcome.creatorRefund, betModeAuto)
-      await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
-      await payoutToMode(supabase, bet.acceptor_id, outcome.acceptorRefund, betModeAuto)
-      await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+    try {
+      if (outcome.kind === 'winner') {
+        await payoutToMode(supabase, outcome.winnerId, totalPrize, betModeAuto)
+        await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: tokenTypeForMode(betModeAuto), amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
+      } else {
+        // tie or split — refund each party their original stake
+        await payoutToMode(supabase, bet.creator_id, outcome.creatorRefund, betModeAuto)
+        await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        await payoutToMode(supabase, bet.acceptor_id, outcome.acceptorRefund, betModeAuto)
+        await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+      }
+    } catch (payoutErr) {
+      console.error("PAYOUT_FAILED", { betId: bet_id, betMode: betModeAuto, outcome: outcome.kind, error: payoutErr })
+      return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
     }
 
     // ── Phase 5: audit log + notifications ──────────────────────────────────
