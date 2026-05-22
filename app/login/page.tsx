@@ -29,7 +29,11 @@ export default function LoginPage() {
     })
 
     if (signInError) {
-      setError(signInError.message)
+      if (signInError.message.toLowerCase().includes("banned") || signInError.message.toLowerCase().includes("disabled")) {
+        setError("Tu cuenta está en pausa (Tiempo Fuera). Podrás volver a ingresar en 72 horas.")
+      } else {
+        setError(signInError.message)
+      }
       setLoading(false)
       return
     }

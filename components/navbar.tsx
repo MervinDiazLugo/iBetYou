@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Wallet, User, LogOut, Menu, X, Coins, Plus } from "lucide-react"
+import { Wallet, User, LogOut, Menu, X, Coins, Plus, PauseCircle } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -24,6 +24,8 @@ export function Navbar() {
   const { user, loading: authLoading, signOut } = useAuth()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [showSelfExcludeConfirm, setShowSelfExcludeConfirm] = useState(false)
+  const [selfExcludeLoading, setSelfExcludeLoading] = useState(false)
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
   const [ibcBalance, setIbcBalance] = useState(0)
   const [menuNickname, setMenuNickname] = useState("")
@@ -84,6 +86,23 @@ export function Navbar() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  async function handleSelfExclude() {
+    setSelfExcludeLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch("/api/user/self-exclude", {
+        method: "POST",
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+      })
+      if (res.ok) {
+        await signOut()
+      }
+    } finally {
+      setSelfExcludeLoading(false)
+      setShowSelfExcludeConfirm(false)
+    }
+  }
 
   // Close mobile menu on route change
   useEffect(() => { setMobileMenuOpen(false) }, [pathname])
@@ -230,7 +249,15 @@ export function Navbar() {
                           ))}
                         </div>
 
-                        <div className="border-t border-border p-2">
+                        <div className="border-t border-border p-2 space-y-0.5">
+                          <button
+                            type="button"
+                            onClick={() => { setUserMenuOpen(false); setShowSelfExcludeConfirm(true) }}
+                            className="w-full px-3 py-2 rounded-lg text-sm text-left hover:bg-red-500/10 flex items-center gap-2 text-red-400 transition-colors"
+                          >
+                            <PauseCircle className="h-4 w-4" />
+                            Tiempo Fuera (72h)
+                          </button>
                           <button
                             type="button"
                             onClick={signOut}
@@ -375,9 +402,16 @@ export function Navbar() {
               )}
             </div>
 
-            {/* Sign out */}
+            {/* Sign out + tiempo fuera */}
             {user && (
-              <div className="border-t border-border p-3">
+              <div className="border-t border-border p-3 space-y-1">
+                <button
+                  type="button"
+                  onClick={() => { setMobileMenuOpen(false); setShowSelfExcludeConfirm(true) }}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <PauseCircle className="h-4 w-4" /> Tiempo Fuera (72h)
+                </button>
                 <button
                   type="button"
                   onClick={signOut}
@@ -387,6 +421,44 @@ export function Navbar() {
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Tiempo fuera confirmation modal */}
+      {showSelfExcludeConfirm && (
+        <div className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-500/15 flex items-center justify-center shrink-0">
+                <PauseCircle className="h-5 w-5 text-red-400" />
+              </div>
+              <div>
+                <h2 className="font-bold text-base">Tiempo Fuera</h2>
+                <p className="text-xs text-muted-foreground">Auto-exclusión temporal</p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Tu cuenta quedará <span className="text-foreground font-medium">bloqueada por 72 horas</span>. No podrás iniciar sesión ni realizar apuestas durante ese tiempo.
+            </p>
+            <p className="text-xs text-muted-foreground">Esta acción no se puede deshacer. El acceso se restaura automáticamente después de 72 horas.</p>
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowSelfExcludeConfirm(false)}
+                disabled={selfExcludeLoading}
+                className="flex-1 px-4 py-2 rounded-lg border border-border text-sm hover:bg-secondary transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSelfExclude}
+                disabled={selfExcludeLoading}
+                className="flex-1 px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                {selfExcludeLoading ? "Procesando..." : "Confirmar pausa"}
+              </button>
+            </div>
           </div>
         </div>
       )}
