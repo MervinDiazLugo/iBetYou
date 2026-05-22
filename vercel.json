@@ -11,6 +11,6 @@
     {
       "path": "/api/cron/auto-bets",
       "schedule": "0 7 * * *"
-    },
+    }
   ]
 }
