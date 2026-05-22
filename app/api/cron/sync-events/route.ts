@@ -105,6 +105,7 @@ function getDateRange(days: number): string[] {
 }
 
 const BATCH_SIZE = 500
+const MAX_PREDICTIONS = 20
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization")
@@ -119,6 +120,9 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
   const dates = getDateRange(7)
   const summary: Record<string, { inserted: number; skipped: number; errors: string[] }> = {}
+
+  // Collect newly inserted football events for prediction enrichment
+  const newFootballEvents: Array<{ id: number; external_id: string }> = []
 
   for (const sport of SPORTS) {
     summary[sport.id] = { inserted: 0, skipped: 0, errors: [] }
@@ -155,17 +159,67 @@ export async function GET(request: NextRequest) {
     // Batch insert new events
     for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
       const batch = toInsert.slice(i, i + BATCH_SIZE)
-      const { data: inserted, error } = await supabase.from("events").insert(batch).select("id")
+      const { data: inserted, error } = await supabase.from("events").insert(batch).select("id, external_id")
       if (error) {
         summary[sport.id].errors.push(`insert: ${error.message}`)
       } else {
         summary[sport.id].inserted += (inserted || []).length
+        if (sport.id === "football" && inserted) {
+          newFootballEvents.push(...(inserted as Array<{ id: number; external_id: string }>))
+        }
       }
     }
   }
 
-  const totalInserted = Object.values(summary).reduce((acc, s) => acc + s.inserted, 0)
-  console.log("[cron/sync-events]", summary)
+  // Fetch predictions for new football events (up to MAX_PREDICTIONS)
+  let predictionsFetched = 0
+  const predictionErrors: string[] = []
+  const toEnrich = newFootballEvents.slice(0, MAX_PREDICTIONS)
 
-  return NextResponse.json({ success: true, totalInserted, summary })
+  for (const ev of toEnrich) {
+    const fixtureId = ev.external_id.replace("football_", "")
+    try {
+      const data = await fetchApiSports(`${FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+      const raw = data.response?.[0]
+      if (!raw) continue
+
+      const pred = raw.predictions
+      const home = raw.teams?.home
+      const away = raw.teams?.away
+
+      const predictions = {
+        percent: pred?.percent ?? null,
+        advice: pred?.advice ?? null,
+        winner: pred?.winner?.name ?? null,
+        home_form: home?.last_5?.form ?? null,
+        away_form: away?.last_5?.form ?? null,
+        home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
+        away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+        home_league_form: home?.league?.form ?? null,
+        away_league_form: away?.league?.form ?? null,
+        comparison: raw.comparison ?? null,
+        h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+          date: m.fixture?.date?.split("T")[0] ?? null,
+          home: m.teams?.home?.name ?? null,
+          away: m.teams?.away?.name ?? null,
+          home_score: m.goals?.home ?? null,
+          away_score: m.goals?.away ?? null,
+        })),
+      }
+
+      const { data: evRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+      await supabase.from("events")
+        .update({ metadata: { ...(evRow?.metadata || {}), predictions } })
+        .eq("id", ev.id)
+
+      predictionsFetched++
+    } catch (e: any) {
+      predictionErrors.push(`${ev.external_id}: ${e.message}`)
+    }
+  }
+
+  const totalInserted = Object.values(summary).reduce((acc, s) => acc + s.inserted, 0)
+  console.log("[cron/sync-events]", { summary, predictionsFetched, predictionErrors })
+
+  return NextResponse.json({ success: true, totalInserted, summary, predictionsFetched, predictionErrors })
 }
