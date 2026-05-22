@@ -376,6 +376,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       }
 
       showToast("¡Apuesta publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
+      window.dispatchEvent(new Event("wallet:updated"))
       setLoading(false)
       onClose()
     } catch (err: any) {

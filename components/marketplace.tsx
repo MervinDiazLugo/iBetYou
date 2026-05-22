@@ -188,6 +188,7 @@ function HomeContent() {
         throw new Error(data.error || "Error al tomar la apuesta")
       }
       showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
+      window.dispatchEvent(new Event("wallet:updated"))
       setSelectedBetForModal(null)
       // Refresh open bets list
       const sportParam = selectedSport !== "all" ? `&sport=${selectedSport}` : ""

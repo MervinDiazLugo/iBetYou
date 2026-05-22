@@ -71,6 +71,13 @@ export function Navbar() {
   }, [userMenuOpen, user?.id])
 
   useEffect(() => {
+    if (!user?.id) return
+    const handler = () => loadWalletData(user.id)
+    window.addEventListener("wallet:updated", handler)
+    return () => window.removeEventListener("wallet:updated", handler)
+  }, [user?.id])
+
+  useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) setUserMenuOpen(false)
     }

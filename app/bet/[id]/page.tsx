@@ -274,6 +274,7 @@ export default function BetDetailPage() {
       }
       
       showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
+      window.dispatchEvent(new Event("wallet:updated"))
       router.push("/")
     } catch (err: any) {
       const message = err.message || "Error al aceptar la apuesta"
