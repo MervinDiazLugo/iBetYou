@@ -85,6 +85,8 @@ export default function BetDetailPage() {
   const [adminAutoResolving, setAdminAutoResolving] = useState(false)
   const [promptDialog, setPromptDialog] = useState<{ title: string; defaultValue: string; onConfirm: (value: string) => void } | null>(null)
   const [promptValue, setPromptValue] = useState("")
+  const [retractLoading, setRetractLoading] = useState(false)
+  const [retractConfirm, setRetractConfirm] = useState(false)
   
   const betId = params.id as string
 
@@ -491,6 +493,80 @@ export default function BetDetailPage() {
     }
   }
   
+  function getRetractPreview(
+    bet: BetDetail,
+    userId: string,
+    nowMs: number
+  ): { window: "grace" | "pre_game" | "in_game"; penalty: number; myRefund: number } {
+    const GRACE_MS = 12 * 60 * 60 * 1000
+    const eventStartMs = new Date(bet.event.start_time).getTime()
+    const eventStatus = (bet.event as any).status ?? "scheduled"
+
+    const win: "grace" | "pre_game" | "in_game" =
+      eventStatus === "live" || eventStatus === "finished"
+        ? "in_game"
+        : nowMs < eventStartMs - GRACE_MS
+        ? "grace"
+        : "pre_game"
+
+    const creatorStake = bet.amount
+    const creatorFee = bet.fee_amount
+    const isAsymmetric = bet.bet_type === "exact_score"
+    const acceptorStake = isAsymmetric
+      ? creatorStake * Math.max(1, bet.multiplier)
+      : creatorStake
+    const acceptorFee = acceptorStake * 0.03
+
+    if (bet.status === "open") {
+      return {
+        window: win,
+        penalty: 0,
+        myRefund: win === "grace" ? creatorStake + creatorFee : creatorStake,
+      }
+    }
+
+    if (win === "grace") {
+      const myRefund =
+        userId === bet.creator_id
+          ? creatorStake + creatorFee
+          : acceptorStake + acceptorFee
+      return { window: win, penalty: 0, myRefund }
+    }
+
+    const penaltyRate = win === "in_game" ? 0.4 : 0.1
+    const penalty = creatorStake * penaltyRate
+
+    if (userId === bet.creator_id) {
+      return { window: win, penalty, myRefund: creatorStake - penalty }
+    }
+    return { window: win, penalty, myRefund: acceptorStake - penalty }
+  }
+
+  async function handleRetract() {
+    if (!bet || !user) return
+    setRetractLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch(`/api/bets/${bet.id}/retract`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Error al retractarse")
+      setRetractConfirm(false)
+      showToast("Apuesta cancelada. Tu reembolso fue procesado.", "success")
+      window.dispatchEvent(new Event("wallet:updated"))
+      await loadBet()
+    } catch (err: any) {
+      showToast(err.message || "Error al retractarse", "error")
+    } finally {
+      setRetractLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
@@ -961,6 +1037,18 @@ export default function BetDetailPage() {
                   </div>
                 </>
               )}
+
+              {bet.status === "taken" && user.id === bet.acceptor_id && (
+                <div className="pt-2 border-t border-border/40">
+                  <Button
+                    variant="outline"
+                    className="w-full text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={() => setRetractConfirm(true)}
+                  >
+                    Retractarme de esta apuesta
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
@@ -973,9 +1061,18 @@ export default function BetDetailPage() {
               <p className="text-muted-foreground">
                 Espera a que alguien la acepte en el marketplace.
               </p>
-              <Button className="mt-4" asChild>
-                <Link href="/my-bets">Ver mis apuestas</Link>
-              </Button>
+              <div className="flex flex-col gap-2 mt-4">
+                <Button asChild>
+                  <Link href="/my-bets">Ver mis apuestas</Link>
+                </Button>
+                <Button
+                  variant="outline"
+                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={() => setRetractConfirm(true)}
+                >
+                  Cancelar apuesta
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -1076,6 +1173,16 @@ export default function BetDetailPage() {
                 </>
               )}
 
+              {bet.status === "taken" && (
+                <Button
+                  variant="outline"
+                  className="w-full mt-3 text-destructive border-destructive/40 hover:bg-destructive/10"
+                  onClick={() => setRetractConfirm(true)}
+                >
+                  Retractarme de esta apuesta
+                </Button>
+              )}
+
               <Button className="mt-4" asChild>
                 <Link href="/my-bets">Ver mis apuestas</Link>
               </Button>
@@ -1097,6 +1204,57 @@ export default function BetDetailPage() {
             </CardContent>
           </Card>
         )}
+      {retractConfirm && bet && user && (() => {
+        const preview = getRetractPreview(bet, user.id, nowMs)
+        const windowLabel =
+          preview.window === "grace"
+            ? "Período de gracia (>12h antes del evento)"
+            : preview.window === "pre_game"
+            ? "Pre-partido (<12h antes del evento)"
+            : "Partido en curso o finalizado"
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-background rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
+              <h2 className="text-lg font-semibold">¿Retractarte de la apuesta?</h2>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Ventana temporal</span>
+                  <span className="font-medium">{windowLabel}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Penalidad</span>
+                  <span className={preview.penalty > 0 ? "font-medium text-destructive" : "font-medium text-green-500"}>
+                    {preview.penalty > 0 ? `-${formatCurrency(preview.penalty)}` : "Sin penalidad"}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t pt-2">
+                  <span className="text-muted-foreground">Tu reembolso</span>
+                  <span className="font-bold text-green-500">{formatCurrency(preview.myRefund)}</span>
+                </div>
+              </div>
+              {preview.penalty > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  La penalidad va al otro participante como compensación.
+                </p>
+              )}
+              <div className="flex gap-3 pt-1">
+                <Button variant="outline" className="flex-1" onClick={() => setRetractConfirm(false)}>
+                  No, quedarme
+                </Button>
+                <Button
+                  variant="destructive"
+                  className="flex-1"
+                  disabled={retractLoading}
+                  onClick={handleRetract}
+                >
+                  {retractLoading ? "Procesando..." : "Confirmar retracción"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Admin prompt dialog */}
       {promptDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
