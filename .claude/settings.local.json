@@ -34,7 +34,32 @@
       "Bash(curl -s -X GET \"https://i-bet-you.vercel.app/api/cron/auto-bets\" -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://i-bet-you.vercel.app/api/cron/auto-bets\" -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\")",
       "Bash(gh deployment *)",
-      "Bash(gh run *)"
+      "Bash(gh run *)",
+      "Bash(curl -s 'https://v3.football.api-sports.io/fixtures?date=2026-05-21' -H 'x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c')",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); r=d.get\\('response',[]\\); print\\(json.dumps\\(r[0], indent=2\\) if r else 'empty'\\)\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/fixtures?date=2026-05-21\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/fixtures?date=2026-05-22&status=NS\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/predictions?fixture=1524534\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/fixtures?date=2026-05-22&league=39\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/fixtures?date=2026-05-22&league=13\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/predictions?fixture=42327\")",
+      "Bash(curl -s -X POST https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/rpc/run_query -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg')",
+      "Bash(curl -s 'https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/events?featured=eq.true&status=eq.scheduled&select=id,external_id,sport,home_team,away_team,start_time&limit=5' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg')",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/predictions?fixture=1535204\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/teams/statistics?team=1186&season=2026&league=13\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/players/topscorers?season=2026&league=13\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/teams?name=Atletico-MG\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/teams/statistics?team=1062&season=2025&league=71\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v1.basketball.api-sports.io/games/statistics/teams?id=42513\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/teams/statistics?team=1062&season=2024&league=71\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v3.football.api-sports.io/standings?league=13&season=2026\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v1.basketball.api-sports.io/standings?league=12&season=2024-2025\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v1.baseball.api-sports.io/standings?league=1&season=2026\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" \"https://v1.basketball.api-sports.io/teams/statistics?team=133&season=2024-2025&league=12\")",
+      "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" -H \"Accept-Language: es\" \"https://v3.football.api-sports.io/predictions?fixture=1535204\")",
+      "Bash(curl -s -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\" \"https://i-bet-you.vercel.app/api/cron/sync-predictions\")",
+      "Bash(curl -s -X POST https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/rpc/exec_sql -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Content-Type: application/json' -d '{\"query\": \"SELECT COUNT\\(*\\) FROM events WHERE sport = '\\\\''football'\\\\'' AND status = '\\\\''scheduled'\\\\'' AND \\(metadata->'\\\\''predictions'\\\\''\\) IS NULL AND id NOT IN \\(SELECT DISTINCT event_id FROM bets WHERE status IN \\(\\('\\\\''open'\\\\'', '\\\\''taken'\\\\'', '\\\\''pending_resolution'\\\\'', '\\\\''disputed'\\\\''\\)\\)\\);\"}')",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://i-bet-you.vercel.app/api/admin/cleanup-no-predictions\" -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\")"
     ]
   }
 }
