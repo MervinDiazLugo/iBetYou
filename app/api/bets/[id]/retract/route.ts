@@ -93,9 +93,16 @@ export async function POST(
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
-    .select("is_banned, betting_blocked_until")
+    .select("is_banned, betting_blocked_until, role")
     .eq("id", userId)
     .single()
+
+  if (profileError) {
+    const missingColumn = profileError.message?.includes("betting_blocked_until")
+    if (!missingColumn) {
+      return NextResponse.json({ error: "Failed to validate user profile" }, { status: 500 })
+    }
+  }
 
   if (!profileError && profile?.is_banned) {
     return NextResponse.json({ error: "Usuario bloqueado" }, { status: 403 })
@@ -108,6 +115,10 @@ export async function POST(
         error: `No puedes realizar esta acción hasta ${blockedUntil.toLocaleString("es-ES")}`,
       }, { status: 403 })
     }
+  }
+
+  if (!profileError && profile?.role === "backoffice_admin") {
+    return NextResponse.json({ error: "Los usuarios de backoffice no pueden retractarse de apuestas" }, { status: 403 })
   }
 
   if (bet.status === "open" && !isCreator) {
