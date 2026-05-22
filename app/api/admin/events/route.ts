@@ -270,6 +270,65 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, removed, groups: duplicateGroups.length })
     }
 
+    if (action === "refresh_featured_predictions") {
+      if (!API_FOOTBALL_KEY || !API_FOOTBALL_URL) {
+        return NextResponse.json({ error: "API not configured" }, { status: 500 })
+      }
+
+      const { data: featuredEvents, error: fetchErr } = await supabase
+        .from("events")
+        .select("id, external_id, metadata")
+        .eq("featured", true)
+        .eq("sport", "football")
+        .in("status", ["scheduled", "live"])
+
+      if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
+
+      let fetched = 0
+      const errors: string[] = []
+
+      for (const ev of featuredEvents || []) {
+        if (!ev.external_id?.startsWith("football_")) continue
+        const fixtureId = ev.external_id.replace("football_", "")
+        try {
+          const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+          const raw = data.response?.[0]
+          if (!raw) continue
+
+          const pred = raw.predictions
+          const home = raw.teams?.home
+          const away = raw.teams?.away
+          const predictions = {
+            percent: pred?.percent ?? null,
+            advice: pred?.advice ?? null,
+            winner: pred?.winner?.name ?? null,
+            home_form: home?.last_5?.form ?? null,
+            away_form: away?.last_5?.form ?? null,
+            home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
+            away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+            home_league_form: home?.league?.form ?? null,
+            away_league_form: away?.league?.form ?? null,
+            comparison: raw.comparison ?? null,
+            h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+              date: m.fixture?.date?.split("T")[0] ?? null,
+              home: m.teams?.home?.name ?? null,
+              away: m.teams?.away?.name ?? null,
+              home_score: m.goals?.home ?? null,
+              away_score: m.goals?.away ?? null,
+            })),
+          }
+          await supabase.from("events")
+            .update({ metadata: { ...(ev.metadata || {}), predictions } })
+            .eq("id", ev.id)
+          fetched++
+        } catch (e: any) {
+          errors.push(`${ev.external_id}: ${e.message}`)
+        }
+      }
+
+      return NextResponse.json({ success: true, fetched, errors, total: featuredEvents?.length ?? 0 })
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
   } catch (error: unknown) {
     console.error("Admin events POST error:", error)

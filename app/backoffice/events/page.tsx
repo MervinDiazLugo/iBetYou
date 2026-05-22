@@ -571,6 +571,26 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleRefreshFeaturedPredictions() {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'refresh_featured_predictions' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const errMsg = data.errors?.length ? ` (${data.errors.length} errores)` : ''
+        showToast(`Predicciones actualizadas: ${data.fetched}/${data.total}${errMsg}`, data.errors?.length ? 'error' : 'success')
+        fetchSavedEvents(0)
+      } else {
+        showToast(data.error || 'Error al actualizar predicciones', 'error')
+      }
+    } catch {
+      showToast('Error al actualizar predicciones', 'error')
+    }
+  }
+
   async function handleCreate() {
     if (!newEvent.home_team || !newEvent.away_team || !newEvent.start_time) {
       showToast('Completa los campos requeridos', 'error')
@@ -778,6 +798,10 @@ export default function BackofficeEvents() {
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRefreshFeaturedPredictions} title="Actualiza predicciones IA para todos los eventos destacados">
+            <Star className="h-4 w-4 mr-2 text-amber-400" />
+            Predicciones ⭐
+          </Button>
           <Button variant="outline" onClick={handleCleanupNoBets}>
             <Trash2 className="h-4 w-4 mr-2" />
             Sin apuestas
