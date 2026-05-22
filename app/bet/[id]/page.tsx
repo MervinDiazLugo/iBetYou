@@ -1065,13 +1065,15 @@ export default function BetDetailPage() {
                 <Button asChild>
                   <Link href="/my-bets">Ver mis apuestas</Link>
                 </Button>
-                <Button
-                  variant="outline"
-                  className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                  onClick={() => setRetractConfirm(true)}
-                >
-                  Cancelar apuesta
-                </Button>
+                {!isBackofficeAdmin && (
+                  <Button
+                    variant="outline"
+                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                    onClick={() => setRetractConfirm(true)}
+                  >
+                    Cancelar apuesta
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -1173,7 +1175,7 @@ export default function BetDetailPage() {
                 </>
               )}
 
-              {bet.status === "taken" && (
+              {bet.status === "taken" && !isBackofficeAdmin && (
                 <Button
                   variant="outline"
                   className="w-full mt-3 text-destructive border-destructive/40 hover:bg-destructive/10"
