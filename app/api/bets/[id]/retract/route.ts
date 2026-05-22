@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
-import { payoutToMode } from "@/lib/wallet-utils"
+import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { createNotifications } from "@/lib/notifications"
 
 const GRACE_MS = 12 * 60 * 60 * 1000
@@ -21,7 +21,7 @@ function calcRefunds(
   bet: { amount: number; fee_amount: number; multiplier: number; bet_type: string },
   cancellerId: string,
   creatorId: string,
-  window: "grace" | "pre_game" | "in_game",
+  timingWindow: "grace" | "pre_game" | "in_game",
   betStatus: string
 ): { creatorRefund: number; acceptorRefund: number } {
   const creatorStake = Number(bet.amount)
@@ -30,24 +30,25 @@ function calcRefunds(
   const acceptorStake = isAsymmetric
     ? creatorStake * Math.max(1, Number(bet.multiplier))
     : creatorStake
+  // Assumes 3% fee rate is unchanged since acceptance; use a stored acceptor_fee_amount if available
   const acceptorFee = acceptorStake * 0.03
 
   if (betStatus === "open") {
     return {
-      creatorRefund: window === "grace" ? creatorStake + creatorFee : creatorStake,
+      creatorRefund: timingWindow === "grace" ? creatorStake + creatorFee : creatorStake,
       acceptorRefund: 0,
     }
   }
 
   // Taken bet
-  if (window === "grace") {
+  if (timingWindow === "grace") {
     return {
       creatorRefund: creatorStake + creatorFee,
       acceptorRefund: acceptorStake + acceptorFee,
     }
   }
 
-  const penaltyRate = window === "in_game" ? 0.40 : 0.10
+  const penaltyRate = timingWindow === "in_game" ? 0.40 : 0.10
   const penalty = creatorStake * penaltyRate
 
   if (cancellerId === creatorId) {
@@ -90,6 +91,25 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("profiles")
+    .select("is_banned, betting_blocked_until")
+    .eq("id", userId)
+    .single()
+
+  if (!profileError && profile?.is_banned) {
+    return NextResponse.json({ error: "Usuario bloqueado" }, { status: 403 })
+  }
+
+  if (!profileError && profile?.betting_blocked_until) {
+    const blockedUntil = new Date(profile.betting_blocked_until)
+    if (blockedUntil > new Date()) {
+      return NextResponse.json({
+        error: `No puedes realizar esta acción hasta ${blockedUntil.toLocaleString("es-ES")}`,
+      }, { status: 403 })
+    }
+  }
+
   if (bet.status === "open" && !isCreator) {
     return NextResponse.json({ error: "Solo el creador puede cancelar una apuesta abierta" }, { status: 400 })
   }
@@ -107,12 +127,16 @@ export async function POST(
     return NextResponse.json({ error: "Evento no encontrado" }, { status: 400 })
   }
 
-  const window = retractWindow(event.start_time, event.status)
-  const refunds = calcRefunds(bet, userId, bet.creator_id, window, bet.status)
+  const timingWindow = retractWindow(event.start_time, event.status)
+  const refunds = calcRefunds(bet, userId, bet.creator_id, timingWindow, bet.status)
   const betMode = bet.mode === "real" ? "real" : "fantasy"
   const action = isCreator ? "retract_creator" : "retract_acceptor"
 
-  // 1. Cancel bet (status update before any money movement)
+  if (refunds.creatorRefund < 0 || refunds.acceptorRefund < 0) {
+    console.error("NEGATIVE_REFUND", { betId, refunds })
+    return NextResponse.json({ error: "Error calculando reembolsos" }, { status: 500 })
+  }
+
   const { data: updatedRows, error: cancelError } = await supabase
     .from("bets")
     .update({ status: "cancelled" })
@@ -130,43 +154,42 @@ export async function POST(
     )
   }
 
-  // 2. Refund creator
   if (refunds.creatorRefund > 0) {
     try {
       await payoutToMode(supabase, bet.creator_id, refunds.creatorRefund, betMode)
-      await supabase.from("transactions").insert({
+      const { error: txError } = await supabase.from("transactions").insert({
         user_id: bet.creator_id,
-        token_type: betMode === "real" ? "iBY" : "fantasy",
+        token_type: tokenTypeForMode(betMode),
         amount: refunds.creatorRefund,
         operation: "bet_retracted_refund",
         reference_id: betId,
       })
+      if (txError) console.error("TRANSACTION_INSERT_FAILED", { betId, userId: bet.creator_id, txError })
     } catch (err) {
       console.error("REFUND_FAILED creator", { betId, userId: bet.creator_id, amount: refunds.creatorRefund, err })
       return NextResponse.json({ error: "Error procesando reembolso del creador" }, { status: 500 })
     }
   }
 
-  // 3. Refund acceptor (only for taken bets)
   if (bet.status === "taken" && bet.acceptor_id && refunds.acceptorRefund > 0) {
     try {
       await payoutToMode(supabase, bet.acceptor_id, refunds.acceptorRefund, betMode)
-      await supabase.from("transactions").insert({
+      const { error: txError } = await supabase.from("transactions").insert({
         user_id: bet.acceptor_id,
-        token_type: betMode === "real" ? "iBY" : "fantasy",
+        token_type: tokenTypeForMode(betMode),
         amount: refunds.acceptorRefund,
         operation: "bet_retracted_refund",
         reference_id: betId,
       })
+      if (txError) console.error("TRANSACTION_INSERT_FAILED", { betId, userId: bet.acceptor_id, txError })
     } catch (err) {
       console.error("REFUND_FAILED acceptor", { betId, userId: bet.acceptor_id, amount: refunds.acceptorRefund, err })
       return NextResponse.json({ error: "Error procesando reembolso del aceptante" }, { status: 500 })
     }
   }
 
-  // 4. Record in arbitration_decisions
-  const penalty = window !== "grace" && bet.status === "taken"
-    ? Number(bet.amount) * (window === "in_game" ? 0.40 : 0.10)
+  const penalty = timingWindow !== "grace" && bet.status === "taken"
+    ? Number(bet.amount) * (timingWindow === "in_game" ? 0.40 : 0.10)
     : 0
 
   await supabase.from("arbitration_decisions").insert({
@@ -175,15 +198,14 @@ export async function POST(
     previous_status: bet.status,
     new_status: "cancelled",
     decided_winner_id: null,
-    reason: window === "grace"
+    reason: timingWindow === "grace"
       ? "Retracción dentro del período de gracia — sin penalidad"
-      : `Retracción ${window === "in_game" ? "con partido en curso" : "pre-partido"} — penalidad ${window === "in_game" ? "40%" : "10%"}`,
-    details: { window, penalty, creatorRefund: refunds.creatorRefund, acceptorRefund: refunds.acceptorRefund },
+      : `Retracción ${timingWindow === "in_game" ? "con partido en curso" : "pre-partido"} — penalidad ${timingWindow === "in_game" ? "40%" : "10%"}`,
+    details: { window: timingWindow, penalty, creatorRefund: refunds.creatorRefund, acceptorRefund: refunds.acceptorRefund },
     decided_by: userId,
     source: "system",
   })
 
-  // 5. Notify both parties
   const notifications = []
   const cancellerLabel = isCreator ? "El creador" : "El aceptante"
   const penaltyText = penalty > 0 ? ` (penalidad de ${penalty.toFixed(2)})` : ""
@@ -212,7 +234,7 @@ export async function POST(
 
   return NextResponse.json({
     success: true,
-    window,
+    window: timingWindow,
     penalty,
     creatorRefund: refunds.creatorRefund,
     acceptorRefund: refunds.acceptorRefund,
