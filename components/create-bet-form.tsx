@@ -80,7 +80,11 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const [betSelection, setBetSelection] = useState<string>("")
   const [exactScoreHome, setExactScoreHome] = useState(0)
   const [exactScoreAway, setExactScoreAway] = useState(0)
-  const [amount, setAmount] = useState(10)
+  const [amount, setAmount] = useState(() => {
+    if (typeof window === "undefined") return 10
+    const saved = Number(localStorage.getItem("lastBetAmount"))
+    return Number.isFinite(saved) && saved > 0 ? saved : 10
+  })
   const [multiplier, setMultiplier] = useState(1)
   const [feeIncluded, setFeeIncluded] = useState(true)
   const [balanceLoaded, setBalanceLoaded] = useState(false)
@@ -376,6 +380,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       }
 
       showToast("¡Apuesta publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
+      localStorage.setItem("lastBetAmount", String(amount))
       window.dispatchEvent(new Event("wallet:updated"))
       setLoading(false)
       onClose()
