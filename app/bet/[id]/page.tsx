@@ -500,7 +500,7 @@ export default function BetDetailPage() {
   ): { window: "grace" | "pre_game" | "in_game"; penalty: number; myRefund: number } {
     const GRACE_MS = 12 * 60 * 60 * 1000
     const eventStartMs = new Date(bet.event.start_time).getTime()
-    const eventStatus = (bet.event as any).status ?? "scheduled"
+    const eventStatus = bet.event.status ?? "scheduled"
 
     const win: "grace" | "pre_game" | "in_game" =
       eventStatus === "live" || eventStatus === "finished"
