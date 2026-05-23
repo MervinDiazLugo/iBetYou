@@ -415,8 +415,8 @@ export default function BackofficeEvents() {
   async function handleToggleFeatured(id: number, currentFeatured: boolean) {
     if (!currentFeatured) {
       const event = savedEvents.find(e => e.id === id)
-      if (event && new Date(event.start_time) < new Date()) {
-        showToast('No se puede destacar un evento que ya comenzó', 'error')
+      if (event && (event.status === 'finished' || event.status === 'postponed')) {
+        showToast('No se puede destacar un evento finalizado o pospuesto', 'error')
         return
       }
     }
