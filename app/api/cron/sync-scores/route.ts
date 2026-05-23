@@ -466,13 +466,16 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Cancel all active bets on events that just became postponed/cancelled
+  // Cancel all active bets on events that just became postponed/cancelled, and unfeature them
   for (const eventId of justPostponed) {
     try {
       await cancelBetsForEvent(supabase, eventId)
     } catch (e: any) {
       apiErrors.push(`cancel-postponed/event_${eventId}: ${e.message}`)
     }
+  }
+  if (justPostponed.length > 0) {
+    await supabase.from("events").update({ featured: false }).in("id", justPostponed)
   }
 
   // Cancel open bets on expired/finished events and refund creators

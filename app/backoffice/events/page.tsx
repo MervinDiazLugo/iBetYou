@@ -571,6 +571,26 @@ export default function BackofficeEvents() {
     }
   }
 
+  async function handleRunAutoFeatured() {
+    try {
+      const res = await authFetch('/api/admin/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run_auto_featured' }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const msg = data.message || `IA destacó ${data.featured?.length ?? 0} eventos, ${data.predictionsFetched} predicciones`
+        showToast(msg, 'success')
+        fetchSavedEvents(0)
+      } else {
+        showToast(data.error || 'Error al ejecutar auto-featured', 'error')
+      }
+    } catch {
+      showToast('Error al ejecutar auto-featured', 'error')
+    }
+  }
+
   async function handleRefreshFeaturedPredictions() {
     try {
       const res = await authFetch('/api/admin/events', {
@@ -798,6 +818,10 @@ export default function BackofficeEvents() {
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleRunAutoFeatured} title="IA selecciona los mejores eventos para destacar">
+            <Star className="h-4 w-4 mr-2 text-amber-400" />
+            Auto-Destacar IA
+          </Button>
           <Button variant="outline" onClick={handleRefreshFeaturedPredictions} title="Actualiza predicciones IA para todos los eventos destacados">
             <Star className="h-4 w-4 mr-2 text-amber-400" />
             Predicciones ⭐

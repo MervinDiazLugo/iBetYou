@@ -5,6 +5,7 @@ import { requireBackofficeAdmin } from "@/lib/server-auth"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
 function fetchApiSports(url: string): Promise<any> {
   if (!API_FOOTBALL_KEY) return Promise.reject(new Error("API_FOOTBALL_KEY not set"))
@@ -327,6 +328,115 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({ success: true, fetched, errors, total: featuredEvents?.length ?? 0 })
+    }
+
+    if (action === "run_auto_featured") {
+      if (!ANTHROPIC_API_KEY) {
+        return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 })
+      }
+
+      const MAX_FEATURED = 16
+      const LOOKAHEAD_DAYS = 3
+      const now = new Date()
+      const cutoff = new Date(now.getTime() + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000)
+
+      const { data: events, error: evErr } = await supabase
+        .from("events")
+        .select("id, external_id, sport, league, country, home_team, away_team, start_time, status, metadata")
+        .in("status", ["scheduled", "live"])
+        .gte("start_time", now.toISOString())
+        .lte("start_time", cutoff.toISOString())
+        .order("start_time", { ascending: true })
+
+      if (evErr) return NextResponse.json({ error: evErr.message }, { status: 500 })
+      if (!events || events.length < 3) {
+        return NextResponse.json({ success: true, message: "Not enough upcoming events to curate", featured: [] })
+      }
+
+      const eventList = events.map(e => ({
+        id: e.id, sport: e.sport, league: e.league, country: e.country,
+        match: `${e.home_team} vs ${e.away_team}`, start_time: e.start_time,
+      }))
+
+      const prompt = `You are curating featured events for iBetYou, a Venezuelan P2P sports betting platform.
+Select the ${MAX_FEATURED} most compelling upcoming events for Venezuelan sports fans to bet on.
+MANDATORY — always include if present: FIFA World Cup, UEFA Champions League, UEFA Europa League knockouts, Copa América, Copa Libertadores knockouts, Copa Sudamericana knockouts, FIFA WC Qualifiers CONMEBOL, NBA Playoffs/Finals, MLB (always include at least one MLB game).
+After mandatory events, fill remaining slots by prioritizing: top domestic leagues (Premier League, La Liga, Bundesliga, Serie A, Ligue 1), high-profile derbies, top global clubs, variety across sports, South American football for Venezuelan fans.
+Upcoming events (next ${LOOKAHEAD_DAYS} days):
+${JSON.stringify(eventList, null, 2)}
+Respond with ONLY a JSON array of the selected event IDs. Example: [123, 456, 789]
+No explanation. No markdown. Just the raw JSON array.`
+
+      let selectedIds: number[] = []
+      try {
+        const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "x-api-key": ANTHROPIC_API_KEY,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 256,
+            messages: [{ role: "user", content: prompt }],
+          }),
+        })
+        if (!aiRes.ok) {
+          const body = await aiRes.text()
+          return NextResponse.json({ error: `Claude API error: ${aiRes.status} ${body}` }, { status: 500 })
+        }
+        const aiData = await aiRes.json()
+        const text: string = aiData?.content?.[0]?.text ?? ""
+        const match = text.match(/\[[\d,\s]+\]/)
+        if (!match) return NextResponse.json({ error: "Claude returned unparseable response", raw: text }, { status: 500 })
+        const parsed: unknown = JSON.parse(match[0])
+        if (!Array.isArray(parsed)) throw new Error("Not an array")
+        const validIds = new Set(events.map(e => e.id))
+        selectedIds = (parsed as unknown[]).map(v => Number(v)).filter(id => Number.isFinite(id) && validIds.has(id)).slice(0, MAX_FEATURED)
+      } catch (e: any) {
+        return NextResponse.json({ error: `Failed to parse Claude response: ${e.message}` }, { status: 500 })
+      }
+
+      await supabase.from("events").update({ featured: false }).eq("featured", true)
+      if (selectedIds.length > 0) {
+        await supabase.from("events").update({ featured: true }).in("id", selectedIds)
+      }
+
+      // Fetch predictions for featured football events
+      const footballEvents = events.filter(e => selectedIds.includes(e.id) && e.sport === "football" && e.external_id?.startsWith("football_"))
+      let predictionsFetched = 0
+      const predictionErrors: string[] = []
+      if (API_FOOTBALL_KEY && API_FOOTBALL_URL) {
+        for (const ev of footballEvents) {
+          const fixtureId = ev.external_id.replace("football_", "")
+          try {
+            const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+            const raw = data.response?.[0]
+            if (!raw) continue
+            const pred = raw.predictions
+            const home = raw.teams?.home
+            const away = raw.teams?.away
+            const predictions = {
+              percent: pred?.percent ?? null, advice: pred?.advice ?? null, winner: pred?.winner?.name ?? null,
+              home_form: home?.last_5?.form ?? null, away_form: away?.last_5?.form ?? null,
+              home_goals_avg: home?.last_5?.goals?.for?.average ?? null, away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+              home_league_form: home?.league?.form ?? null, away_league_form: away?.league?.form ?? null,
+              comparison: raw.comparison ?? null,
+              h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+                date: m.fixture?.date?.split("T")[0] ?? null, home: m.teams?.home?.name ?? null,
+                away: m.teams?.away?.name ?? null, home_score: m.goals?.home ?? null, away_score: m.goals?.away ?? null,
+              })),
+            }
+            await supabase.from("events").update({ metadata: { ...(ev.metadata || {}), predictions } }).eq("id", ev.id)
+            predictionsFetched++
+          } catch (e: any) {
+            predictionErrors.push(`${ev.external_id}: ${e.message}`)
+          }
+        }
+      }
+
+      return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })
