@@ -389,10 +389,80 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // 8. Find finished events with null scores that have pending direct/exact_score bets
+  const { data: nullScoreBets } = await supabase
+    .from("bets")
+    .select(`
+      bet_type,
+      event:events!event_id(id, external_id, sport, status, home_score, away_score)
+    `)
+    .in("status", ["taken", "disputed"])
+    .in("bet_type", ["direct", "exact_score"])
+
+  const nullScoreMap = new Map<number, { id: number; external_id: string; sport: string }>()
+
+  for (const bet of nullScoreBets || []) {
+    const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
+    if (!event || event.status !== "finished") continue
+    if (event.home_score !== null && event.away_score !== null) continue
+    nullScoreMap.set(event.id, event)
+  }
+
+  const scoreFixedEvents: number[] = []
+
+  for (const ev of nullScoreMap.values()) {
+    const externalId: string = ev.external_id || ""
+    try {
+      let homeScore: number | null = null
+      let awayScore: number | null = null
+
+      if (externalId.startsWith("football_")) {
+        const fixtureId = externalId.replace("football_", "")
+        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
+        apiCalls++
+        homeScore = data.response?.[0]?.goals?.home ?? null
+        awayScore = data.response?.[0]?.goals?.away ?? null
+      } else if (externalId.startsWith("baseball_")) {
+        const gameId = externalId.replace("baseball_", "")
+        const data = await fetchApiSports(`${BASEBALL_URL}/games?id=${gameId}`)
+        apiCalls++
+        homeScore = data.response?.[0]?.scores?.home?.total ?? null
+        awayScore = data.response?.[0]?.scores?.away?.total ?? null
+      } else if (externalId.startsWith("basketball_")) {
+        const gameId = externalId.replace("basketball_", "")
+        const data = await fetchApiSports(`${BASKETBALL_URL}/games?id=${gameId}`)
+        apiCalls++
+        homeScore = data.response?.[0]?.scores?.home?.total ?? null
+        awayScore = data.response?.[0]?.scores?.away?.total ?? null
+      }
+
+      if (homeScore !== null && awayScore !== null) {
+        await supabase.from("events").update({ home_score: homeScore, away_score: awayScore }).eq("id", ev.id)
+        scoreFixedEvents.push(ev.id)
+      }
+    } catch (e: any) {
+      apiErrors.push(`score-fix/${externalId}: ${e.message}`)
+    }
+  }
+
+  for (const eventId of scoreFixedEvents) {
+    try {
+      const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${CRON_SECRET}` },
+        body: JSON.stringify({ event_id: eventId }),
+      })
+      if (res.ok) resolvedEvents.push(eventId)
+      else apiErrors.push(`auto-resolve/score-fix/event_${eventId}: HTTP ${res.status}`)
+    } catch (e: any) {
+      apiErrors.push(`auto-resolve/score-fix/event_${eventId}: ${e.message}`)
+    }
+  }
+
   // Cancel open bets on expired/finished events and refund creators
   const cleanupResult = await cleanupExpiredOpenBets(supabase, "system")
 
-  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
+  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, scoreFixed: scoreFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
 
   return NextResponse.json({
     success: true,
@@ -400,6 +470,7 @@ export async function GET(request: NextRequest) {
     updated,
     justFinished: justFinished.length,
     metaFixed: metaFixedEvents.length,
+    scoreFixed: scoreFixedEvents.length,
     resolvedEvents,
     apiCalls,
     errors: apiErrors,

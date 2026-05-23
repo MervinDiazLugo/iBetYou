@@ -8,6 +8,8 @@ import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
+const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
+const BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
 const API_KEY = process.env.API_FOOTBALL_KEY
 
 function fetchApiSports(url: string): Promise<any> {
@@ -29,6 +31,34 @@ function fetchApiSports(url: string): Promise<any> {
     req.on("error", reject)
     req.end()
   })
+}
+
+async function fetchScoresOnDemand(externalId: string): Promise<{ homeScore: number; awayScore: number } | null> {
+  try {
+    if (externalId.startsWith("football_")) {
+      const fixtureId = externalId.replace("football_", "")
+      const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
+      const item = data.response?.[0]
+      const home = item?.goals?.home
+      const away = item?.goals?.away
+      if (home !== null && home !== undefined && away !== null && away !== undefined) return { homeScore: home, awayScore: away }
+    } else if (externalId.startsWith("baseball_")) {
+      const gameId = externalId.replace("baseball_", "")
+      const data = await fetchApiSports(`${BASEBALL_URL}/games?id=${gameId}`)
+      const item = data.response?.[0]
+      const home = item?.scores?.home?.total
+      const away = item?.scores?.away?.total
+      if (home !== null && home !== undefined && away !== null && away !== undefined) return { homeScore: home, awayScore: away }
+    } else if (externalId.startsWith("basketball_")) {
+      const gameId = externalId.replace("basketball_", "")
+      const data = await fetchApiSports(`${BASKETBALL_URL}/games?id=${gameId}`)
+      const item = data.response?.[0]
+      const home = item?.scores?.home?.total
+      const away = item?.scores?.away?.total
+      if (home !== null && home !== undefined && away !== null && away !== undefined) return { homeScore: home, awayScore: away }
+    }
+  } catch (_) { /* fall through */ }
+  return null
 }
 
 function hasValidResolveSecret(request: NextRequest) {
@@ -274,8 +304,27 @@ export async function POST(request: NextRequest) {
 
       if (!eventRow) { skipped += 1; continue }
 
+      const betType: string = (bet as any).bet_type
       const isFinished = (eventRow.status || "").toLowerCase() === "finished"
-      if (!isFinished || eventRow.home_score === null || eventRow.away_score === null) {
+      if (!isFinished) {
+        skipped += 1; continue
+      }
+
+      // For direct/exact_score bets: try fetching scores on-demand if null
+      if ((eventRow.home_score === null || eventRow.away_score === null) &&
+          (betType === "direct" || betType === "exact_score")) {
+        const scores = await fetchScoresOnDemand(eventRow.external_id || "")
+        if (scores) {
+          await supabase.from("events").update({
+            home_score: scores.homeScore,
+            away_score: scores.awayScore,
+          }).eq("id", eventRow.id)
+          eventRow.home_score = scores.homeScore
+          eventRow.away_score = scores.awayScore
+        }
+      }
+
+      if (eventRow.home_score === null || eventRow.away_score === null) {
         skipped += 1; continue
       }
 
@@ -284,8 +333,6 @@ export async function POST(request: NextRequest) {
         creator_selection: (bet as any).creator_selection,
         selection: (bet as any).selection,
       })
-
-      const betType: string = (bet as any).bet_type
       const betForResolver = {
         creator_id: (bet as any).creator_id as string,
         acceptor_id: (bet as any).acceptor_id as string,
