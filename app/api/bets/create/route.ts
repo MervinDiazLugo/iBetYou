@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
 
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
-      .select("id, sport")
+      .select("id, sport, status")
       .eq("id", eventId)
       .single()
 
@@ -76,6 +76,10 @@ export async function POST(request: NextRequest) {
         { error: "Event not found" },
         { status: 404 }
       )
+    }
+
+    if (eventRow.status === "postponed") {
+      return NextResponse.json({ error: "Este evento fue pospuesto y no acepta nuevas apuestas" }, { status: 400 })
     }
 
     if (footballOnlyBetTypes.has(betType) && eventRow.sport !== "football") {

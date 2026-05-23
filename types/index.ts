@@ -24,7 +24,7 @@ export interface Event {
   home_logo?: string
   away_logo?: string
   start_time: string
-  status: 'scheduled' | 'live' | 'finished'
+  status: 'scheduled' | 'live' | 'finished' | 'postponed'
   home_score?: number
   away_score?: number
   league: string

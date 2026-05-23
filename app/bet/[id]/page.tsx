@@ -602,6 +602,11 @@ export default function BetDetailPage() {
                 minute: "2-digit",
               })}
             </CardDescription>
+            {bet.event.status === "postponed" && (
+              <div className="mt-2 rounded-md border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-sm font-medium text-yellow-700 dark:text-yellow-300">
+                ⚠️ Este evento fue pospuesto o cancelado
+              </div>
+            )}
             {(hasEventScore || bet.event.status) && (
               <CardDescription>
                 Marcador: {bet.event.home_team} {bet.event.home_score ?? "-"} - {bet.event.away_score ?? "-"} {bet.event.away_team}

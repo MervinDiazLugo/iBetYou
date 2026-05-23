@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
+import { cancelBetsForEvent } from "@/lib/cancel-bets-for-event"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const API_KEY = process.env.API_FOOTBALL_KEY!
@@ -43,6 +44,7 @@ function mapStatus(short?: string): string {
   if (!short) return "scheduled"
   if (["FT", "AOT", "FIN"].includes(short)) return "finished"
   if (["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "Q1", "Q2", "Q3", "Q4", "OT"].includes(short)) return "live"
+  if (["PST", "POST", "CANC", "ABD", "SUSP", "INT", "WO", "AWD"].includes(short)) return "postponed"
   return "scheduled"
 }
 
@@ -127,7 +129,7 @@ export async function GET(request: NextRequest) {
 
   for (const bet of activeBets || []) {
     const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
-    if (!event || event.status === "finished") continue
+    if (!event || event.status === "finished" || event.status === "postponed") continue
 
     const startMs = new Date(event.start_time).getTime()
     if (startMs + WINDOW_MIN_MS > now) continue  // less than 2h since start
@@ -197,6 +199,7 @@ export async function GET(request: NextRequest) {
 
   // 4. Update events in DB
   const justFinished: Array<{ id: number; hasFirstScorer: boolean; externalId: string }> = []
+  const justPostponed: number[] = []
   let updated = 0
 
   for (const event of eventMap.values()) {
@@ -225,6 +228,10 @@ export async function GET(request: NextRequest) {
 
     if (score.status === "finished") {
       justFinished.push({ id: event.id, hasFirstScorer: event.hasFirstScorer, externalId: event.external_id })
+    }
+
+    if (score.status === "postponed") {
+      justPostponed.push(event.id)
     }
   }
 
@@ -459,16 +466,26 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // Cancel all active bets on events that just became postponed/cancelled
+  for (const eventId of justPostponed) {
+    try {
+      await cancelBetsForEvent(supabase, eventId)
+    } catch (e: any) {
+      apiErrors.push(`cancel-postponed/event_${eventId}: ${e.message}`)
+    }
+  }
+
   // Cancel open bets on expired/finished events and refund creators
   const cleanupResult = await cleanupExpiredOpenBets(supabase, "system")
 
-  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, metaFixed: metaFixedEvents.length, scoreFixed: scoreFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
+  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, postponed: justPostponed.length, metaFixed: metaFixedEvents.length, scoreFixed: scoreFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
 
   return NextResponse.json({
     success: true,
     eventsInWindow: eventMap.size,
     updated,
     justFinished: justFinished.length,
+    postponed: justPostponed.length,
     metaFixed: metaFixedEvents.length,
     scoreFixed: scoreFixedEvents.length,
     resolvedEvents,
