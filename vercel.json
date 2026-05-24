@@ -9,6 +9,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/sync-predictions",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/cron/auto-bets",
       "schedule": "0 7 * * *"
     }

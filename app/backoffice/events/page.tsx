@@ -62,6 +62,17 @@ interface SavedEvent {
   featured?: boolean
   metadata?: {
     venue?: { name?: string; city?: string }
+    predictions?: {
+      percent?: { home?: string; draw?: string; away?: string }
+      advice?: string | null
+      winner?: string | null
+      home_form?: string | null
+      away_form?: string | null
+      home_goals_avg?: string | null
+      away_goals_avg?: string | null
+      home_league_form?: string | null
+      away_league_form?: string | null
+    }
   }
 }
 
@@ -69,7 +80,7 @@ export default function BackofficeEvents() {
   const searchParams = useSearchParams()
   const dateFromRef = useRef<HTMLInputElement | null>(null)
   const dateToRef = useRef<HTMLInputElement | null>(null)
-  const [view, setView] = useState<'external' | 'saved'>('saved')
+  const [view, setView] = useState<'external' | 'saved' | 'featured'>('saved')
   const [externalEvents, setExternalEvents] = useState<ExternalEvent[]>([])
   const [externalError, setExternalError] = useState<string | null>(null)
   const [savedEvents, setSavedEvents] = useState<SavedEvent[]>([])
@@ -861,6 +872,13 @@ export default function BackofficeEvents() {
           <Check className="h-4 w-4 mr-2" />
           Eventos Guardados
         </Button>
+        <Button
+          variant={view === 'featured' ? 'default' : 'ghost'}
+          onClick={() => setView('featured')}
+        >
+          <Star className="h-4 w-4 mr-2 text-amber-400" />
+          Destacados ({savedEvents.filter(e => e.featured).length})
+        </Button>
       </div>
 
       {/* External Events View */}
@@ -1075,6 +1093,94 @@ export default function BackofficeEvents() {
           )}
         </>
       )}
+
+      {/* Featured Events View */}
+      {view === 'featured' && (() => {
+        const featured = savedEvents.filter(e => e.featured)
+        const withPredictions = featured.filter(e => e.metadata?.predictions?.percent)
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-muted-foreground">{featured.length} eventos destacados · {withPredictions.length} con predicciones</span>
+              {featured.length > 0 && featured.length > withPredictions.length && (
+                <span className="text-xs text-amber-400">{featured.length - withPredictions.length} sin estadísticas — usa &quot;Predicciones ⭐&quot; para actualizarlas</span>
+              )}
+            </div>
+            {featured.length === 0 ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No hay eventos destacados. Usa &quot;Auto-Destacar IA&quot; para seleccionarlos.</CardContent></Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {featured.map(event => {
+                  const pred = event.metadata?.predictions
+                  const hasPred = !!(pred?.percent)
+                  return (
+                    <Card key={event.id} className="border-amber-400/40 overflow-hidden">
+                      <div className="h-0.5 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500" />
+                      <CardContent className="pt-3 pb-3 px-4 space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-sm">{getSportIcon(event.sport)}</span>
+                              <span className="text-xs text-muted-foreground truncate">{event.league}</span>
+                              <Badge className="text-[9px] px-1 py-0 bg-amber-400/15 text-amber-400 border-amber-400/30 h-4" variant="outline">⭐</Badge>
+                            </div>
+                            <p className="font-medium text-sm leading-tight">{event.home_team} vs {event.away_team}</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(event.start_time).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' })}
+                              {' · '}
+                              <Badge variant={event.status === 'live' ? 'default' : 'outline'} className="text-[9px] px-1 py-0 h-4">{event.status}</Badge>
+                            </p>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-amber-400 flex-shrink-0"
+                            onClick={() => handleToggleFeatured(event.id, true)}
+                            title="Quitar destacado"
+                          >
+                            <Star className="h-3.5 w-3.5" fill="currentColor" />
+                          </Button>
+                        </div>
+                        {hasPred ? (
+                          <div className="space-y-2 border-t pt-2">
+                            <div className="flex gap-1 text-xs">
+                              <div className="flex-1 text-center">
+                                <div className="font-bold text-blue-400">{pred!.percent?.home ?? '-'}</div>
+                                <div className="text-[10px] text-muted-foreground truncate">{event.home_team.split(' ').slice(-1)[0]}</div>
+                              </div>
+                              <div className="flex-1 text-center">
+                                <div className="font-bold text-gray-400">{pred!.percent?.draw ?? '-'}</div>
+                                <div className="text-[10px] text-muted-foreground">Empate</div>
+                              </div>
+                              <div className="flex-1 text-center">
+                                <div className="font-bold text-orange-400">{pred!.percent?.away ?? '-'}</div>
+                                <div className="text-[10px] text-muted-foreground truncate">{event.away_team.split(' ').slice(-1)[0]}</div>
+                              </div>
+                            </div>
+                            {(pred!.home_form || pred!.away_form) && (
+                              <div className="flex gap-2 text-[10px] text-muted-foreground">
+                                {pred!.home_form && <span>Local: <span className="font-mono text-foreground">{pred!.home_form}</span></span>}
+                                {pred!.away_form && <span>Visita: <span className="font-mono text-foreground">{pred!.away_form}</span></span>}
+                              </div>
+                            )}
+                            {pred!.advice && (
+                              <p className="text-[10px] text-amber-300 border-t pt-1">💡 {pred!.advice}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="border-t pt-2 text-xs text-muted-foreground">
+                            {event.sport === 'football' ? '⚠️ Sin predicciones — pulsa "Predicciones ⭐" para obtenerlas' : 'ℹ️ Predicciones solo disponibles para fútbol'}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Saved Events View */}
       {view === 'saved' && (
