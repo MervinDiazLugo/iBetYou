@@ -276,15 +276,10 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "refresh_featured_predictions") {
-      if (!API_FOOTBALL_KEY || !API_FOOTBALL_URL) {
-        return NextResponse.json({ error: "API not configured" }, { status: 500 })
-      }
-
-      const { data: featuredEvents, error: fetchErr } = await supabase
+      const { data: allFeatured, error: fetchErr } = await supabase
         .from("events")
-        .select("id, external_id, metadata")
+        .select("id, external_id, sport, league, home_team, away_team, metadata")
         .eq("featured", true)
-        .eq("sport", "football")
         .in("status", ["scheduled", "live"])
 
       if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
@@ -292,47 +287,39 @@ export async function POST(request: NextRequest) {
       let fetched = 0
       const errors: string[] = []
 
-      for (const ev of featuredEvents || []) {
-        if (!ev.external_id?.startsWith("football_")) continue
-        const fixtureId = ev.external_id.replace("football_", "")
-        try {
-          const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
-          const raw = data.response?.[0]
-          if (!raw) continue
-
-          const pred = raw.predictions
-          const home = raw.teams?.home
-          const away = raw.teams?.away
-          const predictions = {
-            percent: pred?.percent ?? null,
-            advice: pred?.advice ?? null,
-            winner: pred?.winner?.name ?? null,
-            home_form: home?.last_5?.form ?? null,
-            away_form: away?.last_5?.form ?? null,
-            home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
-            away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
-            home_league_form: home?.league?.form ?? null,
-            away_league_form: away?.league?.form ?? null,
-            comparison: raw.comparison ?? null,
-            h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
-              date: m.fixture?.date?.split("T")[0] ?? null,
-              home: m.teams?.home?.name ?? null,
-              away: m.teams?.away?.name ?? null,
-              home_score: m.goals?.home ?? null,
-              away_score: m.goals?.away ?? null,
-            })),
+      // Football: fetch from api-sports.io
+      if (API_FOOTBALL_KEY && API_FOOTBALL_URL) {
+        const footballEvents = (allFeatured || []).filter(e => (e as any).sport === "football" && e.external_id?.startsWith("football_"))
+        for (const ev of footballEvents) {
+          const fixtureId = ev.external_id!.replace("football_", "")
+          try {
+            const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+            const raw = data.response?.[0]
+            if (!raw) continue
+            const pred = raw.predictions
+            const home = raw.teams?.home
+            const away = raw.teams?.away
+            const predictions = {
+              percent: pred?.percent ?? null, advice: pred?.advice ?? null, winner: pred?.winner?.name ?? null,
+              home_form: home?.last_5?.form ?? null, away_form: away?.last_5?.form ?? null,
+              home_goals_avg: home?.last_5?.goals?.for?.average ?? null, away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+              home_league_form: home?.league?.form ?? null, away_league_form: away?.league?.form ?? null,
+              comparison: raw.comparison ?? null,
+              h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+                date: m.fixture?.date?.split("T")[0] ?? null, home: m.teams?.home?.name ?? null,
+                away: m.teams?.away?.name ?? null, home_score: m.goals?.home ?? null, away_score: m.goals?.away ?? null,
+              })),
+            }
+            await supabase.from("events").update({ metadata: { ...(ev.metadata || {}), predictions } }).eq("id", ev.id)
+            fetched++
+          } catch (e: any) {
+            errors.push(`${ev.external_id}: ${e.message}`)
           }
-          await supabase.from("events")
-            .update({ metadata: { ...(ev.metadata || {}), predictions } })
-            .eq("id", ev.id)
-          fetched++
-        } catch (e: any) {
-          errors.push(`${ev.external_id}: ${e.message}`)
         }
       }
 
-      // AI predictions for featured non-football events (or football events without API predictions)
-      const needsAiPred = (featuredEvents || []).filter(e => !(e as any).metadata?.predictions?.percent)
+      // AI predictions for all remaining events without predictions (baseball, basketball, football without API data)
+      const needsAiPred = (allFeatured || []).filter(e => !(e as any).metadata?.predictions?.percent)
       if (needsAiPred.length > 0) {
         const aiPreds = await generateAiPredictions(needsAiPred as any)
         for (const [eventId, prediction] of aiPreds) {
@@ -342,7 +329,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      return NextResponse.json({ success: true, fetched, errors, total: featuredEvents?.length ?? 0 })
+      return NextResponse.json({ success: true, fetched, errors, total: allFeatured?.length ?? 0 })
     }
 
     if (action === "run_auto_featured") {
