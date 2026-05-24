@@ -107,6 +107,8 @@ export default function BackofficeEvents() {
   const [loadingMorePast, setLoadingMorePast] = useState(false)
   const [pastLoaded, setPastLoaded] = useState(false)
   const EVENTS_PAGE_SIZE = 50
+  const [featuredPanel, setFeaturedPanel] = useState<SavedEvent[]>([])
+  const [loadingFeatured, setLoadingFeatured] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; onConfirm: () => void } | null>(null)
   const [scoreDialog, setScoreDialog] = useState<{ eventId: number; homeTeam: string; awayTeam: string } | null>(null)
   const [scoreForm, setScoreForm] = useState({ home_score: "", away_score: "", status: "finished" })
@@ -293,6 +295,19 @@ export default function BackofficeEvents() {
     setSavedExternalIds(ids)
   }, [savedEvents, pastEvents])
 
+  async function fetchFeaturedPanel() {
+    setLoadingFeatured(true)
+    try {
+      const res = await authFetch('/api/admin/events?featured=true&limit=20')
+      const data = await res.json()
+      setFeaturedPanel((data.events || []).filter((e: SavedEvent) => e.featured))
+    } catch {
+      showToast('Error al cargar eventos destacados', 'error')
+    } finally {
+      setLoadingFeatured(false)
+    }
+  }
+
   useEffect(() => {
     if (view === 'saved') {
       fetchSavedEvents(0)
@@ -300,6 +315,9 @@ export default function BackofficeEvents() {
       setPastTotal(0)
       setPastPage(0)
       setPastLoaded(false)
+    }
+    if (view === 'featured') {
+      fetchFeaturedPanel()
     }
   }, [view, sport])
 
@@ -439,6 +457,7 @@ export default function BackofficeEvents() {
       })
       if (res.ok) {
         setSavedEvents(prev => prev.map(e => e.id === id ? { ...e, featured: !currentFeatured } : e))
+        fetchFeaturedPanel()
       } else {
         const data = await res.json()
         showToast(data.error || 'Error al actualizar', 'error')
@@ -594,6 +613,7 @@ export default function BackofficeEvents() {
         const msg = data.message || `IA destacó ${data.featured?.length ?? 0} eventos, ${data.predictionsFetched} predicciones`
         showToast(msg, 'success')
         fetchSavedEvents(0)
+        fetchFeaturedPanel()
       } else {
         showToast(data.error || 'Error al ejecutar auto-featured', 'error')
       }
@@ -614,6 +634,7 @@ export default function BackofficeEvents() {
         const errMsg = data.errors?.length ? ` (${data.errors.length} errores)` : ''
         showToast(`Predicciones actualizadas: ${data.fetched}/${data.total}${errMsg}`, data.errors?.length ? 'error' : 'success')
         fetchSavedEvents(0)
+        fetchFeaturedPanel()
       } else {
         showToast(data.error || 'Error al actualizar predicciones', 'error')
       }
@@ -877,7 +898,7 @@ export default function BackofficeEvents() {
           onClick={() => setView('featured')}
         >
           <Star className="h-4 w-4 mr-2 text-amber-400" />
-          Destacados ({savedEvents.filter(e => e.featured).length})
+          Destacados ({featuredPanel.length})
         </Button>
       </div>
 
@@ -1096,7 +1117,7 @@ export default function BackofficeEvents() {
 
       {/* Featured Events View */}
       {view === 'featured' && (() => {
-        const featured = savedEvents.filter(e => e.featured)
+        const featured = featuredPanel
         const withPredictions = featured.filter(e => e.metadata?.predictions?.percent)
         return (
           <div className="space-y-4">
@@ -1106,7 +1127,9 @@ export default function BackofficeEvents() {
                 <span className="text-xs text-amber-400">{featured.length - withPredictions.length} sin estadísticas — usa &quot;Predicciones ⭐&quot; para actualizarlas</span>
               )}
             </div>
-            {featured.length === 0 ? (
+            {loadingFeatured ? (
+              <Card><CardContent className="py-8 text-center text-muted-foreground">Cargando eventos destacados...</CardContent></Card>
+            ) : featured.length === 0 ? (
               <Card><CardContent className="py-8 text-center text-muted-foreground">No hay eventos destacados. Usa &quot;Auto-Destacar IA&quot; para seleccionarlos.</CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

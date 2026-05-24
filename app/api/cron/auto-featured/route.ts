@@ -66,32 +66,41 @@ export async function GET(request: NextRequest) {
     start_time: e.start_time,
   }))
 
+  const footballCount = events.filter(e => e.sport === "football").length
+  const basketballCount = events.filter(e => e.sport === "basketball").length
+  const baseballCount = events.filter(e => e.sport === "baseball").length
+
   const prompt = `You are curating featured events for iBetYou, a Venezuelan P2P sports betting platform.
 
-Select the ${MAX_FEATURED} most compelling upcoming events for Venezuelan sports fans to bet on.
+Select exactly ${MAX_FEATURED} events from the list below.
 
-MANDATORY — always include if present, regardless of other criteria:
-- FIFA World Cup (any stage)
-- UEFA Champions League (any stage)
-- UEFA Europa League knockout rounds
-- Copa América
-- Copa Libertadores (knockout rounds especially)
-- Copa Sudamericana (knockout rounds especially)
-- FIFA World Cup Qualifiers (CONMEBOL)
-- NBA Playoffs / Finals
-- MLB (regular season AND playoffs — always include at least one MLB game if available)
+HARD SPORT CAPS — you MUST respect these limits regardless of availability:
+- football (soccer): minimum 4, maximum 8 (if ${footballCount} available)
+- baseball (MLB): maximum 5
+- basketball (NBA): minimum 1 (if available), maximum 4
 
-After mandatory events, fill remaining slots by prioritizing:
-- Top domestic leagues: Premier League, La Liga, Bundesliga, Serie A, Ligue 1
-- High-profile derbies and rivalry matches
-- Matches involving top global clubs (Real Madrid, Barcelona, Manchester City, Liverpool, etc.)
-- Variety across sports when available
-- Cultural relevance: Venezuelan fans follow South American football closely
+MANDATORY FOOTBALL — always include these if present:
+- UEFA Champions League, UEFA Europa League knockouts
+- Copa América, Copa Libertadores knockouts, Copa Sudamericana knockouts
+- FIFA World Cup / Qualifiers (CONMEBOL)
+- Premier League, La Liga, Bundesliga, Serie A matches involving top clubs
+
+MANDATORY OTHER SPORTS — always include if present:
+- NBA Playoffs / Finals games
+- At least 1 MLB game (but no more than 5 total)
+
+FOOTBALL SELECTION PRIORITY (fill football slots with):
+1. Top clubs: Real Madrid, Barcelona, Man City, Liverpool, Arsenal, PSG, Bayern, Juventus
+2. High-profile derbies and rivalry matches
+3. Any Premier League, La Liga, Bundesliga, Serie A, Ligue 1 game
+4. Venezuelan fans follow South American football closely — weight Copa Libertadores
+
+Available: ${footballCount} football, ${basketballCount} basketball, ${baseballCount} baseball
 
 Upcoming events (next ${LOOKAHEAD_DAYS} days):
 ${JSON.stringify(eventList, null, 2)}
 
-Respond with ONLY a JSON array of the selected event IDs. Example: [123, 456, 789]
+Respond with ONLY a JSON array of exactly ${MAX_FEATURED} event IDs. Example: [123, 456, 789]
 No explanation. No markdown. Just the raw JSON array.`
 
   let selectedIds: number[] = []
