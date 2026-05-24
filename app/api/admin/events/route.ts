@@ -563,43 +563,48 @@ export async function PATCH(request: NextRequest) {
     const { error } = await supabase.from("events").update({ featured }).eq("id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // When featuring a football event, fetch predictions immediately so stats show up in the UI
-    if (featured && API_FOOTBALL_URL) {
-      const { data: ev } = await supabase.from("events").select("external_id, metadata, sport").eq("id", id).single()
-      if (ev?.sport === "football" && ev.external_id?.startsWith("football_")) {
-        const fixtureId = ev.external_id.replace("football_", "")
-        try {
-          const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
-          const raw = data.response?.[0]
-          if (raw) {
-            const pred = raw.predictions
-            const home = raw.teams?.home
-            const away = raw.teams?.away
-            const predictions = {
-              percent: pred?.percent ?? null,
-              advice: pred?.advice ?? null,
-              winner: pred?.winner?.name ?? null,
-              home_form: home?.last_5?.form ?? null,
-              away_form: away?.last_5?.form ?? null,
-              home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
-              away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
-              home_league_form: home?.league?.form ?? null,
-              away_league_form: away?.league?.form ?? null,
-              comparison: raw.comparison ?? null,
-              h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
-                date: m.fixture?.date?.split("T")[0] ?? null,
-                home: m.teams?.home?.name ?? null,
-                away: m.teams?.away?.name ?? null,
-                home_score: m.goals?.home ?? null,
-                away_score: m.goals?.away ?? null,
-              })),
+    // When starring an event, fetch/generate predictions immediately
+    if (featured) {
+      const { data: ev } = await supabase.from("events").select("id, external_id, metadata, sport, league, home_team, away_team").eq("id", id).single()
+      if (ev) {
+        let gotApiPredictions = false
+
+        // Football: try api-sports.io first
+        if (ev.sport === "football" && ev.external_id?.startsWith("football_") && API_FOOTBALL_URL) {
+          const fixtureId = ev.external_id.replace("football_", "")
+          try {
+            const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
+            const raw = data.response?.[0]
+            if (raw) {
+              const pred = raw.predictions
+              const home = raw.teams?.home
+              const away = raw.teams?.away
+              const predictions = {
+                percent: pred?.percent ?? null, advice: pred?.advice ?? null, winner: pred?.winner?.name ?? null,
+                home_form: home?.last_5?.form ?? null, away_form: away?.last_5?.form ?? null,
+                home_goals_avg: home?.last_5?.goals?.for?.average ?? null, away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
+                home_league_form: home?.league?.form ?? null, away_league_form: away?.league?.form ?? null,
+                comparison: raw.comparison ?? null,
+                h2h: (raw.h2h ?? []).slice(0, 5).map((m: any) => ({
+                  date: m.fixture?.date?.split("T")[0] ?? null, home: m.teams?.home?.name ?? null,
+                  away: m.teams?.away?.name ?? null, home_score: m.goals?.home ?? null, away_score: m.goals?.away ?? null,
+                })),
+              }
+              await supabase.from("events").update({ metadata: { ...(ev.metadata || {}), predictions } }).eq("id", id)
+              gotApiPredictions = true
             }
-            await supabase.from("events")
-              .update({ metadata: { ...(ev.metadata || {}), predictions } })
-              .eq("id", id)
+          } catch (predErr) {
+            console.error("Failed to fetch predictions for featured event", id, predErr)
           }
-        } catch (predErr) {
-          console.error("Failed to fetch predictions for featured event", id, predErr)
+        }
+
+        // Fallback to AI predictions (baseball, basketball, or football without API data)
+        if (!gotApiPredictions && !(ev.metadata as any)?.predictions?.percent) {
+          const aiPreds = await generateAiPredictions([ev as any])
+          const aiPred = aiPreds.get(ev.id)
+          if (aiPred) {
+            await supabase.from("events").update({ metadata: { ...(ev.metadata || {}), predictions: aiPred } }).eq("id", id)
+          }
         }
       }
     }
