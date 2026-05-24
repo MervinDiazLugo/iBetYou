@@ -1026,10 +1026,12 @@ function HomeContent() {
                               </div>
                             )}
                           </div>
+                          {event.metadata.predictions.percent.draw && (
                           <div className="flex-1 rounded-md bg-gray-500/10 border border-gray-500/20 py-1.5 text-center">
                             <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Empate</div>
                             <div className="text-sm font-bold text-gray-300">{event.metadata.predictions.percent.draw}</div>
                           </div>
+                          )}
                           <div className="flex-1 rounded-md bg-orange-500/10 border border-orange-500/20 py-1.5 text-center">
                             <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Visita</div>
                             <div className="text-sm font-bold text-orange-300">{event.metadata.predictions.percent.away}</div>

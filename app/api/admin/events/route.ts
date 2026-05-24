@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { generateAiPredictions } from "@/lib/ai-predictions"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL
@@ -330,6 +331,17 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // AI predictions for featured non-football events (or football events without API predictions)
+      const needsAiPred = (featuredEvents || []).filter(e => !(e as any).metadata?.predictions?.percent)
+      if (needsAiPred.length > 0) {
+        const aiPreds = await generateAiPredictions(needsAiPred as any)
+        for (const [eventId, prediction] of aiPreds) {
+          const ev = (featuredEvents || []).find(e => e.id === eventId)
+          await supabase.from("events").update({ metadata: { ...((ev as any).metadata || {}), predictions: prediction } }).eq("id", eventId)
+          fetched++
+        }
+      }
+
       return NextResponse.json({ success: true, fetched, errors, total: featuredEvents?.length ?? 0 })
     }
 
@@ -477,7 +489,18 @@ No explanation. No markdown. Just the raw JSON array.`
         }
       }
 
-      return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
+      // AI predictions for events still missing them (baseball, basketball, football without API data)
+      const selectedEventsAll = events.filter(e => selectedIds.includes(e.id))
+      const needsAi = selectedEventsAll.filter(e => !(e.metadata as any)?.predictions?.percent)
+      const aiPredictions = await generateAiPredictions(needsAi)
+      let aiPredictionsFetched = 0
+      for (const [eventId, prediction] of aiPredictions) {
+        const ev = selectedEventsAll.find(e => e.id === eventId)
+        await supabase.from("events").update({ metadata: { ...(ev?.metadata || {}), predictions: prediction } }).eq("id", eventId)
+        aiPredictionsFetched++
+      }
+
+      return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
     }
 
     return NextResponse.json({ error: "Invalid action" }, { status: 400 })

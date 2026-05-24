@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
+import { generateAiPredictions } from "@/lib/ai-predictions"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
@@ -228,7 +229,23 @@ No explanation. No markdown. Just the raw JSON array.`
     }
   }
 
-  console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
+  // Generate AI predictions for selected events still missing them (baseball, basketball, football without API data)
+  const selectedEventsForAi = selectedEvents.filter(e => {
+    const existing = (e.metadata as any)?.predictions
+    return !existing?.percent
+  })
+  const aiPredictions = await generateAiPredictions(selectedEventsForAi)
+  let aiPredictionsFetched = 0
+  for (const [eventId, prediction] of aiPredictions) {
+    const ev = selectedEvents.find(e => e.id === eventId)
+    const existingMd = (ev?.metadata as any) || {}
+    await supabase.from("events")
+      .update({ metadata: { ...existingMd, predictions: prediction } })
+      .eq("id", eventId)
+    aiPredictionsFetched++
+  }
 
-  return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, predictionErrors })
+  console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
+
+  return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
 }
