@@ -323,7 +323,7 @@ export async function POST(request: NextRequest) {
       if (needsAiPred.length > 0) {
         const aiPreds = await generateAiPredictions(needsAiPred as any)
         for (const [eventId, prediction] of aiPreds) {
-          const ev = (featuredEvents || []).find(e => e.id === eventId)
+          const ev = (allFeatured || []).find((e: any) => e.id === eventId)
           await supabase.from("events").update({ metadata: { ...((ev as any).metadata || {}), predictions: prediction } }).eq("id", eventId)
           fetched++
         }
