@@ -423,7 +423,18 @@ No explanation. No markdown. Just the raw JSON array.`
         const parsed: unknown = JSON.parse(match[0])
         if (!Array.isArray(parsed)) throw new Error("Not an array")
         const validIds = new Set(events.map(e => e.id))
-        selectedIds = (parsed as unknown[]).map(v => Number(v)).filter(id => Number.isFinite(id) && validIds.has(id)).slice(0, MAX_FEATURED)
+        const rawIds = (parsed as unknown[]).map(v => Number(v)).filter(id => Number.isFinite(id) && validIds.has(id))
+        const evMap = new Map(events.map(e => [e.id, e]))
+        const ftIds = rawIds.filter(id => evMap.get(id)?.sport === "football").slice(0, 8)
+        const bkIds = rawIds.filter(id => evMap.get(id)?.sport === "basketball").slice(0, 4)
+        const bbIds = rawIds.filter(id => evMap.get(id)?.sport === "baseball").slice(0, 5)
+        let enforcedIds = [...ftIds, ...bkIds, ...bbIds]
+        if (enforcedIds.length < MAX_FEATURED) {
+          const included = new Set(enforcedIds)
+          const extra = events.filter(e => e.sport === "football" && !included.has(e.id)).slice(0, MAX_FEATURED - enforcedIds.length).map(e => e.id)
+          enforcedIds = [...enforcedIds, ...extra]
+        }
+        selectedIds = enforcedIds.slice(0, MAX_FEATURED)
       } catch (e: any) {
         return NextResponse.json({ error: `Failed to parse Claude response: ${e.message}` }, { status: 500 })
       }

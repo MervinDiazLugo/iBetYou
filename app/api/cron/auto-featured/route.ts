@@ -137,10 +137,28 @@ No explanation. No markdown. Just the raw JSON array.`
     if (!Array.isArray(parsed)) throw new Error("Not an array")
 
     const validIds = new Set(events.map(e => e.id))
-    selectedIds = (parsed as unknown[])
+    const rawIds = (parsed as unknown[])
       .map(v => Number(v))
       .filter(id => Number.isFinite(id) && validIds.has(id))
-      .slice(0, MAX_FEATURED)
+
+    // Enforce sport caps regardless of what Claude returns
+    const eventMap = new Map(events.map(e => [e.id, e]))
+    const football = rawIds.filter(id => eventMap.get(id)?.sport === "football").slice(0, 8)
+    const basketball = rawIds.filter(id => eventMap.get(id)?.sport === "basketball").slice(0, 4)
+    const baseball = rawIds.filter(id => eventMap.get(id)?.sport === "baseball").slice(0, 5)
+    let enforcedIds = [...football, ...basketball, ...baseball]
+
+    // If under MAX_FEATURED, fill with football events not already selected
+    if (enforcedIds.length < MAX_FEATURED) {
+      const included = new Set(enforcedIds)
+      const extra = events
+        .filter(e => e.sport === "football" && !included.has(e.id))
+        .slice(0, MAX_FEATURED - enforcedIds.length)
+        .map(e => e.id)
+      enforcedIds = [...enforcedIds, ...extra]
+    }
+
+    selectedIds = enforcedIds.slice(0, MAX_FEATURED)
   } catch (e: any) {
     return NextResponse.json({ error: `Failed to parse Claude response: ${e.message}` }, { status: 500 })
   }
