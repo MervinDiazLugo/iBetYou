@@ -1719,8 +1719,10 @@ function HomeContent() {
             : houseBetSelection !== null
         )
         return (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-md flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border/80 rounded-xl shadow-[0_8px_48px_rgba(0,0,0,0.6)] ring-1 ring-yellow-500/15 w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden">
+              <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent" />
+              <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="font-bold text-lg">Apostar vs. Casa</h2>
                 <button
@@ -1918,6 +1920,7 @@ function HomeContent() {
               >
                 {houseBetSubmitting ? "Procesando..." : "Confirmar apuesta"}
               </Button>
+            </div>
             </div>
           </div>
         )

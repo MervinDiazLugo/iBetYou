@@ -14,8 +14,8 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div 
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+      <div
+        className="absolute inset-0 bg-black/75 backdrop-blur-md"
         onClick={() => onOpenChange(false)}
       />
       <div className="relative z-10 w-full max-w-2xl max-h-[92vh] overflow-y-auto px-3 sm:px-4">
@@ -27,7 +27,8 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
 
 export function DialogContent({ children, onClose }: { children: React.ReactNode; onClose?: () => void }) {
   return (
-    <div className="relative bg-card border border-border rounded-lg shadow-2xl">
+    <div className="relative bg-card border border-border/80 rounded-xl shadow-[0_8px_48px_rgba(0,0,0,0.6)] ring-1 ring-white/8 overflow-hidden">
+      <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-primary/60 to-transparent" />
       {onClose && (
         <button
           onClick={onClose}
