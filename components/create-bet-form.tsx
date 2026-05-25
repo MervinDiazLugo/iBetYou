@@ -315,8 +315,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         ]
       case "run_line":
         return [
-          { id: "home_rl", label: `${selectedEvent.home_team} -1.5 (gana por 2+ carreras)`, value: "home_rl" },
-          { id: "away_rl", label: `${selectedEvent.away_team} +1.5 (gana o pierde por 1)`, value: "away_rl" },
+          { id: "home_rl", label: selectedEvent.home_team, sublabel: "Gana por 2 o más carreras", value: "home_rl" },
+          { id: "away_rl", label: selectedEvent.away_team, sublabel: "Gana el partido o pierde por 1", value: "away_rl" },
         ]
       case "total_runs":
         return [
@@ -647,18 +647,23 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   </div>
                 </div>
               ) : (
-                <div className={`grid gap-2 ${["score_margin", "total_runs"].includes(betType) ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
-                  {getBetOptions().map((option) => (
-                    <Button
-                      key={option.id}
-                      type="button"
-                      variant={betSelection === option.value ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setBetSelection(option.value)}
-                    >
-                      {option.label}
-                    </Button>
-                  ))}
+                <div className={`grid gap-2 ${["score_margin", "total_runs", "run_line"].includes(betType) ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
+                  {getBetOptions().map((option) => {
+                    const sub = (option as any).sublabel as string | undefined
+                    return (
+                      <Button
+                        key={option.id}
+                        type="button"
+                        variant={betSelection === option.value ? "default" : "outline"}
+                        size="sm"
+                        className={sub ? "h-auto py-2.5 flex flex-col items-center gap-0.5" : ""}
+                        onClick={() => setBetSelection(option.value)}
+                      >
+                        <span className={sub ? "font-semibold text-sm leading-tight" : ""}>{option.label}</span>
+                        {sub && <span className="text-xs font-normal opacity-75 leading-tight">{sub}</span>}
+                      </Button>
+                    )
+                  })}
                 </div>
               )}
             </div>

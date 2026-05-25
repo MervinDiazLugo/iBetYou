@@ -181,7 +181,7 @@ export default function ComoJugarPage() {
             <BetTypeCard
               icon="⚔️"
               title="Directa"
-              tag="Simétrica"
+              tag="Simétrica · Fútbol / Basketball / Béisbol"
               tagColor="bg-blue-500/10 text-blue-400"
               description="Apostás al ganador del partido (o empate si aplica). El aceptante apuesta por el resultado contrario. Ambos ponen la misma cantidad en juego."
               example="Partido: River vs. Boca. Monto: $20 cada uno."
@@ -189,8 +189,8 @@ export default function ComoJugarPage() {
                 { label: "Creador apuesta:", value: "Gana River" },
                 { label: "Aceptante apuesta:", value: "No gana River (Boca o empate)" },
                 { label: "Pozo total:", value: "$40" },
-                { label: "Si gana River → recibe el creador:", value: "+$20 neto · $40 total", highlight: "green" },
-                { label: "Si no gana River → recibe el aceptante:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Si gana River → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Si no gana River → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
                 { label: "Fee creador (3%):", value: "-$0.60", highlight: "red" },
                 { label: "Fee aceptante (3%):", value: "-$0.60", highlight: "red" },
               ]}
@@ -199,7 +199,7 @@ export default function ComoJugarPage() {
             <BetTypeCard
               icon="⏱️"
               title="Medio Tiempo"
-              tag="Simétrica"
+              tag="Simétrica · Solo Fútbol"
               tagColor="bg-blue-500/10 text-blue-400"
               description="Igual que Directa pero el resultado que importa es el del primer tiempo, no el partido completo. El partido puede terminar distinto."
               example="Partido: Real Madrid vs. Barça. Monto: $15 cada uno."
@@ -217,9 +217,9 @@ export default function ComoJugarPage() {
             <BetTypeCard
               icon="🥅"
               title="Primer Anotador"
-              tag="Simétrica"
+              tag="Simétrica · Solo Fútbol"
               tagColor="bg-blue-500/10 text-blue-400"
-              description="El creador elige quién anotará primero. El aceptante apuesta a que no será ese jugador o equipo. Ambos arriesgan el mismo monto base."
+              description="El creador elige quién anotará primero. El aceptante apuesta a que no será ese equipo. Ambos arriesgan el mismo monto base."
               example="Creador apuesta $10 a que Boca anota primero."
               rows={[
                 { label: "Creador apuesta:", value: "$10 (Boca anota primero)" },
@@ -229,6 +229,60 @@ export default function ComoJugarPage() {
                 { label: "Si anota otro → aceptante gana:", value: "+$10 neto · $20 total", highlight: "green" },
                 { label: "Fee creador (3%):", value: "-$0.30", highlight: "red" },
                 { label: "Fee aceptante (3%):", value: "-$0.30", highlight: "red" },
+              ]}
+            />
+
+            <BetTypeCard
+              icon="📐"
+              title="Run Line"
+              tag="Simétrica · Solo Béisbol"
+              tagColor="bg-orange-500/10 text-orange-400"
+              description="Apuesta de handicap. El creador elige un equipo y apuesta a que gana por 2 o más carreras. El aceptante apuesta a que ese equipo gana por 1 o pierde. No hay decimales en béisbol — el marcador siempre es en números enteros."
+              example="Pittsburgh Pirates vs Chicago Cubs. Monto: $20 cada uno."
+              rows={[
+                { label: "Creador apuesta:", value: "Pirates — gana por 2 o más carreras" },
+                { label: "Aceptante apuesta:", value: "Cubs — gana el partido o pierde por 1 carrera" },
+                { label: "Pozo total:", value: "$40" },
+                { label: "Si Pirates gana 5-3 (dif. 2+) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Si Cubs gana o Pirates gana 4-3 → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Fee creador (3%):", value: "-$0.60", highlight: "red" },
+                { label: "Fee aceptante (3%):", value: "-$0.60", highlight: "red" },
+              ]}
+            />
+
+            <BetTypeCard
+              icon="🔢"
+              title="Total Carreras"
+              tag="Simétrica · Solo Béisbol"
+              tagColor="bg-orange-500/10 text-orange-400"
+              description="Apuesta al total de carreras sumadas entre ambos equipos al final del partido, sin importar quién gane. No es sobre un equipo en particular — es sobre el número total del juego."
+              example="Pittsburgh Pirates vs Chicago Cubs. Monto: $20 cada uno."
+              rows={[
+                { label: "Creador apuesta:", value: "Más de 8 carreras totales" },
+                { label: "Aceptante apuesta:", value: "Menos de 8 carreras totales" },
+                { label: "Pozo total:", value: "$40" },
+                { label: "Si el marcador es 5-4 (9 carreras) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Si el marcador es 4-3 (7 carreras) → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Fee creador (3%):", value: "-$0.60", highlight: "red" },
+                { label: "Fee aceptante (3%):", value: "-$0.60", highlight: "red" },
+              ]}
+            />
+
+            <BetTypeCard
+              icon="📏"
+              title="Margen de Victoria"
+              tag="Simétrica · Solo Basketball"
+              tagColor="bg-purple-500/10 text-purple-400"
+              description="Apostás a que un equipo gana por un rango específico de puntos. El aceptante apuesta a que ese margen no se cumple (el equipo gana por más, por menos, o pierde)."
+              example="Lakers vs Celtics. Creador apuesta $20 a que Lakers gana por 6-10 puntos."
+              rows={[
+                { label: "Creador apuesta:", value: "Lakers gana por 6 a 10 puntos" },
+                { label: "Aceptante apuesta:", value: "Lakers NO gana por ese margen" },
+                { label: "Pozo total:", value: "$40" },
+                { label: "Si Lakers gana 108-100 (8 puntos) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Si Lakers gana por 2 o por 15+ → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
+                { label: "Fee creador (3%):", value: "-$0.60", highlight: "red" },
+                { label: "Fee aceptante (3%):", value: "-$0.60", highlight: "red" },
               ]}
             />
           </div>
