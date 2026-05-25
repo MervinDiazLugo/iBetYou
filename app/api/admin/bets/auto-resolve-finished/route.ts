@@ -254,6 +254,57 @@ function resolveFirstScorer(
   }
 }
 
+// ─── run_line ─────────────────────────────────────────────────────────────────
+
+function resolveRunLine(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const margin = event.home_score - event.away_score // positive = home leads
+
+  let creatorWins: boolean
+  if (creatorSelection === "home_rl") {
+    creatorWins = margin >= 2          // home covers -1.5: wins by 2+
+  } else if (creatorSelection === "away_rl") {
+    creatorWins = margin <= 1          // away covers +1.5: away wins OR home wins by exactly 1
+  } else {
+    return null
+  }
+
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `run_line: selección "${creatorSelection}", resultado ${event.home_score}-${event.away_score} (margen ${margin})`,
+  }
+}
+
+// ─── total_runs ───────────────────────────────────────────────────────────────
+
+function resolveTotalRuns(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const parts = creatorSelection.split("_")
+  if (parts.length !== 2) return null
+  const direction = parts[0]
+  const threshold = Number(parts[1])
+  if (!Number.isFinite(threshold)) return null
+
+  const total = event.home_score + event.away_score
+  if (total === threshold) return null  // push — skip, refund via manual resolution
+
+  let creatorWins: boolean
+  if (direction === "over")       creatorWins = total > threshold
+  else if (direction === "under") creatorWins = total < threshold
+  else return null
+
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `total_runs: selección "${creatorSelection}", total ${total} carreras (${event.home_score}+${event.away_score})`,
+  }
+}
+
 // ─── score_margin ─────────────────────────────────────────────────────────────
 
 function resolveScoreMargin(
@@ -293,7 +344,7 @@ function resolveScoreMargin(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "score_margin", "half_time", "first_scorer"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -347,9 +398,9 @@ export async function POST(request: NextRequest) {
         skipped += 1; continue
       }
 
-      // For direct/exact_score bets: try fetching scores on-demand if null
+      // For score-based bets: try fetching scores on-demand if null
       if ((eventRow.home_score === null || eventRow.away_score === null) &&
-          (betType === "direct" || betType === "exact_score")) {
+          (betType === "direct" || betType === "exact_score" || betType === "run_line" || betType === "total_runs")) {
         const scores = await fetchScoresOnDemand(eventRow.external_id || "")
         if (scores) {
           await supabase.from("events").update({
@@ -381,6 +432,10 @@ export async function POST(request: NextRequest) {
         resolution = resolveDirect(creatorSelection, eventRow, betForResolver)
       } else if (betType === "exact_score") {
         resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "run_line") {
+        resolution = resolveRunLine(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "total_runs") {
+        resolution = resolveTotalRuns(creatorSelection, eventRow, betForResolver)
       } else if (betType === "score_margin") {
         resolution = resolveScoreMargin(creatorSelection, eventRow, betForResolver)
       } else if (betType === "half_time") {
