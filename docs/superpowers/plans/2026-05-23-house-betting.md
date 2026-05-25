@@ -294,8 +294,8 @@ export function calcExactScoreOdds(
   const lambdaAway = parseFloat(metadata?.predictions?.away_goals_avg ?? "0")
 
   if (!Number.isFinite(lambdaHome) || !Number.isFinite(lambdaAway) || lambdaHome <= 0 || lambdaAway <= 0) {
-    // Fallback: use safe fixed odds when goal averages unavailable
-    return 18.0
+    // No goal averages → can't price exact_score safely; caller must reject the bet
+    return null
   }
 
   const prob = poissonPmf(score.home, lambdaHome) * poissonPmf(score.away, lambdaAway)
@@ -513,14 +513,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
+    // run_line priced at 50/50 (1.82x) — only valid for MLB where that holds empirically.
+    // LATAM leagues (LVBP, etc.) can be highly unbalanced, making 1.82x -EV for the house.
+    const MLB_LEAGUE_KEYWORDS = ["mlb", "major league baseball", "american league", "national league"]
+    const isMLBLeague = MLB_LEAGUE_KEYWORDS.some(kw => eventRow.league?.toLowerCase().includes(kw))
+
     const ALLOWED_BET_TYPES: Record<string, string[]> = {
       football:   ["direct", "exact_score"],
       basketball: ["direct", "score_margin"],
-      baseball:   ["direct", "exact_score", "run_line", "total_runs"],
+      baseball:   isMLBLeague
+        ? ["direct", "exact_score", "run_line", "total_runs"]
+        : ["direct", "exact_score", "total_runs"],  // run_line excluded for non-MLB
     }
     const allowedForSport = ALLOWED_BET_TYPES[eventRow.sport] ?? ["direct"]
     if (!allowedForSport.includes(betType)) {
-      return NextResponse.json({ error: `Casa no acepta "${betType}" para ${eventRow.sport}` }, { status: 400 })
+      const hint = betType === "run_line" && eventRow.sport === "baseball" && !isMLBLeague
+        ? "Run Line solo está disponible para ligas MLB"
+        : `Casa no acepta "${betType}" para ${eventRow.sport}`
+      return NextResponse.json({ error: hint }, { status: 400 })
     }
 
     const stake = Number(rawAmount)
@@ -959,7 +969,16 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.liability - a.liability)
       .slice(0, 20)
 
-    return NextResponse.json({ ...balances, ...summary, top_exposure: topExposure })
+    const LOW_BALANCE_THRESHOLD = 500_000
+    const alerts: string[] = []
+    if (balances.balance_fantasy < LOW_BALANCE_THRESHOLD) {
+      alerts.push(`Casa fantasy baja (${balances.balance_fantasy.toLocaleString()} tokens). Recarga recomendada.`)
+    }
+    if (balances.balance_real < LOW_BALANCE_THRESHOLD) {
+      alerts.push(`Casa real baja (${balances.balance_real.toLocaleString()} iBY). Recarga recomendada.`)
+    }
+
+    return NextResponse.json({ ...balances, ...summary, top_exposure: topExposure, alerts })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
@@ -1051,6 +1070,53 @@ Find the existing block (around line 406–492) that starts with `const totalPri
 ```typescript
       const isHouseBet = Boolean((bet as any).house_bet)
       const betMode = (bet as any).mode ?? "fantasy"
+
+      // Push scenario: total_runs exact threshold — no winner, return stakes
+      // winnerId is null when resolver explicitly signals a push (resolveTotalRuns returns null)
+      if (winnerId === null) {
+        if (dryRun) {
+          results.push({ bet_id: (bet as any).id, bet_type: betType, status: "would_push", reason })
+          continue
+        }
+        const { error: pushErr } = await supabase
+          .from("bets")
+          .update({ status: "cancelled", resolved_at: new Date().toISOString() })
+          .eq("id", (bet as any).id)
+          .in("status", ["taken"])
+        if (!pushErr) {
+          const stake = Number((bet as any).amount || 0)
+          const houseRisk = Number((bet as any).potential_payout || 0) - stake
+          // Return stake to user
+          try { await payoutToMode(supabase, (bet as any).creator_id, stake, betMode) } catch (_) {}
+          // Return reserved liability to house
+          try { await houseWalletCredit(supabase, houseRisk, betMode) } catch (_) {}
+          await supabase.from("arbitration_decisions").insert({
+            bet_id: (bet as any).id,
+            action: `auto_resolve_push_${betType}`,
+            previous_status: (bet as any).status,
+            new_status: "cancelled",
+            decided_winner_id: null,
+            reason,
+            details: { bet_type: betType, house_bet: isHouseBet, push: true },
+            decided_by: decidedBy,
+            source: "system",
+          })
+          await createNotifications([{
+            userId: (bet as any).creator_id,
+            type: "bet_cancelled",
+            title: "Apuesta devuelta (empate técnico)",
+            body: `Tu apuesta de ${betType} terminó en empate técnico. Tu stake fue devuelto.`,
+            betId: (bet as any).id,
+            mode: betMode,
+          }], supabase)
+          resolved += 1
+          results.push({ bet_id: (bet as any).id, bet_type: betType, status: "pushed", reason })
+        } else {
+          failed += 1
+          results.push({ bet_id: (bet as any).id, status: "failed", reason: pushErr.message })
+        }
+        continue
+      }
 
       if (dryRun) {
         resolved += 1
@@ -1299,6 +1365,7 @@ interface HouseWalletData {
   active_real: number
   reserved_liability_fantasy: number
   reserved_liability_real: number
+  alerts: string[]
   top_exposure: Array<{
     event_id: number
     match: string
@@ -1362,6 +1429,14 @@ export default function HouseWalletPage() {
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
       <h1 className="text-2xl font-bold">Wallet de la Casa</h1>
+
+      {data?.alerts && data.alerts.length > 0 && (
+        <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 space-y-1">
+          {data.alerts.map((a, i) => (
+            <p key={i} className="text-sm text-red-500 font-medium">⚠️ {a}</p>
+          ))}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-muted-foreground">Cargando...</p>
@@ -1844,6 +1919,12 @@ git commit -m "feat: house bet button and modal in marketplace for featured even
 - ✅ Backoffice management → Tasks 6, 8
 - ✅ Payment ordering invariant respected → Task 5 (user deducted before bet insert, rollback on failure)
 - ✅ No fee for house bets (edge is the revenue) → Task 5 (`fee_amount: 0`)
+
+**Risk mitigations applied:**
+- ✅ exact_score fallback removed → `calcExactScoreOdds` returns `null` when `home_goals_avg`/`away_goals_avg` absent; Task 5 rejects bet with 400 instead of pricing at unsafe 18x
+- ✅ run_line restricted to MLB leagues → checked via `eventRow.league` keywords; non-MLB baseball only gets `direct`, `exact_score`, `total_runs`
+- ✅ total_runs push handled → `winnerId === null` branch in Task 7 cancels bet, returns stake to user, returns reserved liability to house, notifies user
+- ✅ Low balance alerts → Task 6 GET compares balances against `LOW_BALANCE_THRESHOLD = 500_000` and returns `alerts[]`; Task 8 page renders red banner when alerts present
 
 **Type consistency:**
 - `houseWalletDebit` / `houseWalletCredit` / `getHouseWalletBalances` — consistent across Tasks 3, 5, 6, 7
