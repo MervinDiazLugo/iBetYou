@@ -37,7 +37,6 @@ export default function GroupsPage() {
   const [showJoin, setShowJoin] = useState(false)
   const [createName, setCreateName] = useState("")
   const [createSport, setCreateSport] = useState("")
-  const [joinGroupId, setJoinGroupId] = useState("")
   const [joinCode, setJoinCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -86,10 +85,10 @@ export default function GroupsPage() {
   }
 
   async function handleJoin() {
-    if (!joinGroupId.trim() || !joinCode.trim()) return
+    if (!joinCode.trim()) return
     setSubmitting(true)
     try {
-      const res = await authFetch(`/api/groups/${joinGroupId.trim()}/join`, {
+      const res = await authFetch("/api/groups/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: joinCode.trim() }),
@@ -98,7 +97,6 @@ export default function GroupsPage() {
       if (!res.ok) { showToast(data.error || "Error al unirse al grupo", "error"); return }
       showToast(`Te uniste a ${data.group_name}`, "success")
       setShowJoin(false)
-      setJoinGroupId("")
       setJoinCode("")
       loadGroups()
     } finally {
@@ -157,13 +155,7 @@ export default function GroupsPage() {
         <div className="mb-4 p-4 border rounded-lg bg-card space-y-3">
           <h3 className="font-semibold">Unirse a un grupo</h3>
           <input
-            className="w-full border rounded px-3 py-2 text-sm bg-background"
-            placeholder="ID del grupo (UUID)"
-            value={joinGroupId}
-            onChange={(e) => setJoinGroupId(e.target.value)}
-          />
-          <input
-            className="w-full border rounded px-3 py-2 text-sm bg-background uppercase"
+            className="w-full border rounded px-3 py-2 text-sm bg-background font-mono tracking-widest uppercase"
             placeholder="Código de invitación (ej: AB3XYZ)"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
@@ -171,7 +163,7 @@ export default function GroupsPage() {
           />
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setShowJoin(false)}>Cancelar</Button>
-            <Button size="sm" onClick={handleJoin} disabled={submitting || !joinGroupId.trim() || !joinCode.trim()}>
+            <Button size="sm" onClick={handleJoin} disabled={submitting || joinCode.trim().length < 6}>
               {submitting ? "Uniéndose..." : "Unirse"}
             </Button>
           </div>
