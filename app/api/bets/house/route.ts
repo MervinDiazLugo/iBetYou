@@ -57,28 +57,12 @@ export async function POST(request: NextRequest) {
     const numericEventId = Number(eventId)
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
-      .select("id, sport, status, featured, metadata, updated_at, league")
+      .select("id, sport, status, featured, metadata, league")
       .eq("id", numericEventId)
       .maybeSingle()
 
-    if (eventError) {
-      console.error("[house-bet] event query error", { eventId: numericEventId, error: eventError })
-      return NextResponse.json({ error: "Event not found", debug: eventError.code, eventId: numericEventId }, { status: 404 })
-    }
-    if (!eventRow) {
-      // Diagnostic: check if ANY event exists to confirm DB access and find what ids exist
-      const { data: sampleEvents } = await supabase
-        .from("events")
-        .select("id, featured, status, home_team, away_team")
-        .eq("featured", true)
-        .limit(5)
-      console.error("[house-bet] event not found", { eventId: numericEventId, featuredSample: sampleEvents })
-      return NextResponse.json({
-        error: "Event not found",
-        debug: "no_row",
-        eventId: numericEventId,
-        featuredEvents: sampleEvents?.map(e => ({ id: e.id, status: e.status, match: `${e.home_team} vs ${e.away_team}` })) ?? [],
-      }, { status: 404 })
+    if (eventError || !eventRow) {
+      return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
 
     // Validate event is featured
@@ -96,18 +80,6 @@ export async function POST(request: NextRequest) {
         { error: "Este evento no acepta nuevas apuestas" },
         { status: 400 }
       )
-    }
-
-    // Stale prediction gate (direct bets only)
-    if (betType === "direct") {
-      const updatedAt = new Date(eventRow.updated_at)
-      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000)
-      if (updatedAt < fortyEightHoursAgo) {
-        return NextResponse.json(
-          { error: "Las predicciones de este evento no están actualizadas. Intenta más tarde." },
-          { status: 400 }
-        )
-      }
     }
 
     // League keyword checks

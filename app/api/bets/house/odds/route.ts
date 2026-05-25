@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
   const { data: event, error } = await supabase
     .from("events")
     .select("sport, metadata, featured, status")
-    .eq("id", eventId)
+    .eq("id", Number(eventId))
     .single()
 
   if (error || !event) {
