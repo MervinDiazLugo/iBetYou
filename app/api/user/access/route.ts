@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
-import { canCountryUseRealMoney } from "@/lib/country-access"
+import { canCountryUseRealMoney, canCountryUseGroups } from "@/lib/country-access"
 
 export async function GET(request: NextRequest) {
   const userId = await getAuthenticatedUserId(request)
-  if (!userId) return NextResponse.json({ canUseRealMoney: false, country: null })
+  if (!userId) return NextResponse.json({ canUseRealMoney: false, canUseGroups: true, country: null })
 
   const supabase = createAdminSupabaseClient()
   const { data: profile } = await supabase
@@ -15,7 +15,10 @@ export async function GET(request: NextRequest) {
     .single()
 
   const country = profile?.country ?? null
-  const canUseRealMoney = await canCountryUseRealMoney(country)
+  const [canUseRealMoney, canUseGroups] = await Promise.all([
+    canCountryUseRealMoney(country),
+    canCountryUseGroups(country),
+  ])
 
-  return NextResponse.json({ canUseRealMoney, country })
+  return NextResponse.json({ canUseRealMoney, canUseGroups, country })
 }

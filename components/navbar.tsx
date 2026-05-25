@@ -13,10 +13,9 @@ import { useMode } from "@/components/mode-provider"
 import { useCountryAccess } from "@/hooks/use-country-access"
 import { formatCurrency } from "@/lib/utils"
 
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/", label: "Marketplace" },
   { href: "/my-bets", label: "Mis Apuestas" },
-  { href: "/groups", label: "Grupos" },
   { href: "/leaderboard", label: "Leaderboard" },
 ]
 
@@ -34,7 +33,10 @@ export function Navbar() {
   const userMenuRef = useRef<HTMLDivElement | null>(null)
   const supabase = createBrowserSupabaseClient()
   const { mode } = useMode()
-  const { canUseRealMoney } = useCountryAccess()
+  const { canUseRealMoney, canUseGroups } = useCountryAccess()
+  const navItems = canUseGroups !== false
+    ? [BASE_NAV_ITEMS[0], BASE_NAV_ITEMS[1], { href: "/groups", label: "Grupos" }, BASE_NAV_ITEMS[2]]
+    : BASE_NAV_ITEMS
 
   const displayName =
     menuNickname?.trim() || user?.nickname?.trim() || user?.email?.split("@")[0] || ""
@@ -128,7 +130,7 @@ export function Navbar() {
 
             {/* Center: Nav tabs — desktop */}
             <div className="hidden md:flex items-stretch flex-1 justify-center gap-0">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
@@ -355,7 +357,7 @@ export function Navbar() {
 
             {/* Nav links */}
             <div className="flex-1 overflow-y-auto p-3 space-y-0.5">
-              {NAV_ITEMS.map((item) => (
+              {navItems.map((item) => (
                 <Link
                   key={item.href}
                   href={item.href}
