@@ -106,11 +106,16 @@ export function calcTotalRunsOdds(selection: string): number | null {
   return TOTAL_RUNS_ODDS[selection] ?? null
 }
 
+// Probabilities per team per margin (50/50 baseline, conditional on that team winning):
+// +1-5: ~33% of wins → ~16.5% overall → fair ~6.1x → with 10% edge: 5.5x
+// +6-10: ~28% of wins → ~14% overall → fair ~7.1x → with 10% edge: 6.5x
+// +11-15: ~19% of wins → ~9.5% overall → fair ~10.5x → with 10% edge: 9.5x
+// +16+: ~20% of wins → ~10% overall → fair ~10.0x → with 10% edge: 9.0x
 const SCORE_MARGIN_ODDS: Record<string, number> = {
-  "1_5":    4.1,
-  "6_10":   4.5,
-  "11_15":  5.7,
-  "16plus": 4.1,
+  "1_5":    5.5,
+  "6_10":   6.5,
+  "11_15":  9.5,
+  "16plus": 9.0,
 }
 
 export function calcScoreMarginOdds(selection: string): number | null {
