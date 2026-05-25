@@ -1723,18 +1723,76 @@ function HomeContent() {
             <div className="bg-card border border-border/80 rounded-xl shadow-[0_8px_48px_rgba(0,0,0,0.6)] ring-1 ring-yellow-500/15 w-full max-w-md max-h-[90vh] overflow-y-auto overflow-x-hidden">
               <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent" />
               <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-bold text-lg">Vs. la casa</h2>
+              {/* Header */}
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="secondary" className="text-[10px]">
+                      {getSportIcon(sport)} {houseBetModal.event.league}
+                    </Badge>
+                    <Badge variant="outline" className={`text-[10px] ${mode === "real" ? "border-green-500/40 text-green-400" : "border-violet-500/40 text-violet-400"}`}>
+                      {mode === "real" ? "💵 Real" : "🎮 Fantasy"}
+                    </Badge>
+                    <span className="text-[10px] text-muted-foreground">
+                      {new Date(houseBetModal.event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
+                    </span>
+                  </div>
+                  <h2 className="font-bold text-lg">🏦 Vs. la casa</h2>
+                </div>
                 <button
                   onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore("") }}
-                  className="text-muted-foreground hover:text-foreground text-xl leading-none"
+                  className="text-muted-foreground hover:text-foreground text-xl leading-none shrink-0 mt-1"
                 >
                   ✕
                 </button>
               </div>
-              <p className="text-sm text-muted-foreground">
-                {houseBetModal.event.home_team} vs {houseBetModal.event.away_team}
-              </p>
+              {/* Team VS layout */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 text-center">
+                  {houseBetModal.event.home_logo
+                    ? <img src={houseBetModal.event.home_logo} alt={houseBetModal.event.home_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                    : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold text-lg">{houseBetModal.event.home_team.slice(0,1)}</div>
+                  }
+                  <div className="text-sm font-bold leading-tight">{houseBetModal.event.home_team}</div>
+                </div>
+                <div className="text-base font-bold text-muted-foreground shrink-0">VS</div>
+                <div className="flex-1 text-center">
+                  {houseBetModal.event.away_logo
+                    ? <img src={houseBetModal.event.away_logo} alt={houseBetModal.event.away_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                    : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold text-lg">{houseBetModal.event.away_team.slice(0,1)}</div>
+                  }
+                  <div className="text-sm font-bold leading-tight">{houseBetModal.event.away_team}</div>
+                </div>
+              </div>
+              {/* Prediction widget */}
+              {(houseBetModal.event.metadata as any)?.predictions?.percent && (() => {
+                const pct = (houseBetModal.event.metadata as any).predictions.percent
+                const pred = (houseBetModal.event.metadata as any).predictions
+                return (
+                  <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
+                    <div className="text-xs font-semibold text-blue-300">🤖 Predicción</div>
+                    <div className="flex gap-2">
+                      <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 p-2 text-center">
+                        <div className="text-[10px] text-muted-foreground truncate mb-0.5">{houseBetModal.event.home_team}</div>
+                        <div className="text-lg font-bold text-blue-300">{pct.home}</div>
+                        {pred.home_league_form && <div className="flex gap-0.5 justify-center mt-1"><FormDots form={pred.home_league_form} /></div>}
+                      </div>
+                      {pct.draw && (
+                        <div className="flex-1 rounded-md bg-gray-500/10 border border-gray-500/20 p-2 text-center">
+                          <div className="text-[10px] text-muted-foreground mb-0.5">Empate</div>
+                          <div className="text-lg font-bold text-gray-300">{pct.draw}</div>
+                        </div>
+                      )}
+                      <div className="flex-1 rounded-md bg-orange-500/10 border border-orange-500/20 p-2 text-center">
+                        <div className="text-[10px] text-muted-foreground truncate mb-0.5">{houseBetModal.event.away_team}</div>
+                        <div className="text-lg font-bold text-orange-300">{pct.away}</div>
+                        {pred.away_league_form && <div className="flex gap-0.5 justify-center mt-1"><FormDots form={pred.away_league_form} /></div>}
+                      </div>
+                    </div>
+                    {pred.advice && <p className="text-xs text-center text-amber-300/80 leading-snug">💡 {translateAdvice(pred.advice)}</p>}
+                  </div>
+                )
+              })()}
               {/* Bet type tabs */}
               <div className="flex gap-2 flex-wrap">
                 {houseBetTypes.map(bt => (
@@ -1863,19 +1921,43 @@ function HomeContent() {
                   ))}
                 </div>
               )}
-              {/* Amount */}
-              <div className="space-y-1">
-                <label className="text-sm font-medium">Monto (máx. 100,000)</label>
-                <input
-                  type="number"
-                  value={houseBetAmount}
-                  onChange={e => setHouseBetAmount(e.target.value)}
-                  placeholder="0"
-                  min={1}
-                  max={100000}
-                  className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
-                />
-              </div>
+              {/* Amount slider */}
+              {(() => {
+                const walletBal = mode === "real" ? balance.real : balance.fantasy
+                const maxAmt = Math.min(100000, Math.max(1, Math.floor(walletBal)))
+                const stakeNum = Number(houseBetAmount) || 0
+                return (
+                  <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">Monto</span>
+                      <span className="text-lg font-semibold">{stakeNum > 0 ? stakeNum.toLocaleString() : "0"}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={1}
+                      max={maxAmt}
+                      step={1}
+                      value={stakeNum > 0 ? Math.min(stakeNum, maxAmt) : 1}
+                      onChange={e => setHouseBetAmount(e.target.value)}
+                      className="w-full"
+                      style={{ accentColor: "#eab308" }}
+                    />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>1</span>
+                      <span>{maxAmt.toLocaleString()}</span>
+                    </div>
+                    <input
+                      type="number"
+                      value={houseBetAmount}
+                      onChange={e => setHouseBetAmount(e.target.value)}
+                      placeholder="0"
+                      min={1}
+                      max={100000}
+                      className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+                    />
+                  </div>
+                )
+              })()}
               {(() => {
                 const stake = Number(houseBetAmount)
                 const walletBal = mode === "real" ? balance.real : balance.fantasy
@@ -1913,45 +1995,54 @@ function HomeContent() {
                   </div>
                 )
               })()}
-              <Button
-                className="w-full"
-                disabled={!canSubmit}
-                onClick={async () => {
-                  setHouseBetSubmitting(true)
-                  try {
-                    const { data: { session } } = await supabase.auth.getSession()
-                    if (!session) { showToast("Inicia sesión para apostar", "error"); return }
-                    const selectionValue = houseBetType === "exact_score" ? houseBetExactScore : houseBetSelection
-                    const res = await fetch("/api/bets/house", {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${session.access_token}`,
-                      },
-                      body: JSON.stringify({
-                        userId: session.user.id,
-                        eventId: houseBetModal.event.id,
-                        betType: houseBetType,
-                        selection: selectionValue,
-                        amount: Number(houseBetAmount),
-                        mode,
-                      }),
-                    })
-                    const json = await res.json()
-                    if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
-                    showToast("¡Apuesta creada contra la casa!", "success")
-                    setHouseBetModal(null)
-                    setHouseBetSelection(null)
-                    setHouseBetExactScore("")
-                    setHouseBetAmount("")
-                    window.dispatchEvent(new Event("wallet:updated"))
-                  } finally {
-                    setHouseBetSubmitting(false)
-                  }
-                }}
-              >
-                {houseBetSubmitting ? "Procesando..." : "Confirmar apuesta"}
-              </Button>
+              <div className="flex gap-2 pt-1">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetAmount("") }}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-1 bg-yellow-500 hover:bg-yellow-400 text-black font-semibold"
+                  disabled={!canSubmit}
+                  onClick={async () => {
+                    setHouseBetSubmitting(true)
+                    try {
+                      const { data: { session } } = await supabase.auth.getSession()
+                      if (!session) { showToast("Inicia sesión para apostar", "error"); return }
+                      const selectionValue = houseBetType === "exact_score" ? houseBetExactScore : houseBetSelection
+                      const res = await fetch("/api/bets/house", {
+                        method: "POST",
+                        headers: {
+                          "Content-Type": "application/json",
+                          "Authorization": `Bearer ${session.access_token}`,
+                        },
+                        body: JSON.stringify({
+                          userId: session.user.id,
+                          eventId: houseBetModal.event.id,
+                          betType: houseBetType,
+                          selection: selectionValue,
+                          amount: Number(houseBetAmount),
+                          mode,
+                        }),
+                      })
+                      const json = await res.json()
+                      if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
+                      showToast("¡Apuesta creada contra la casa!", "success")
+                      setHouseBetModal(null)
+                      setHouseBetSelection(null)
+                      setHouseBetExactScore("")
+                      setHouseBetAmount("")
+                      window.dispatchEvent(new Event("wallet:updated"))
+                    } finally {
+                      setHouseBetSubmitting(false)
+                    }
+                  }}
+                >
+                  {houseBetSubmitting ? "Procesando..." : "Confirmar"}
+                </Button>
+              </div>
             </div>
             </div>
           </div>
