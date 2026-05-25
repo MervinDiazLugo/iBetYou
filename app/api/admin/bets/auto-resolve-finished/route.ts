@@ -183,11 +183,20 @@ function resolveDirect(
   bet: { creator_id: string; acceptor_id: string }
 ): { winnerId: string; reason: string } | null {
   const sel = creatorSelection.toLowerCase().trim()
-  const homeNorm = (event.home_team || "").toLowerCase().trim()
-  const awayNorm = (event.away_team || "").toLowerCase().trim()
 
-  const choseDraw = ["empate", "draw", "tie"].includes(sel)
-  const { choseHome, choseAway } = choseDraw ? { choseHome: false, choseAway: false } : fuzzyMatchTeam(sel, homeNorm, awayNorm)
+  // House bet keywords resolve directly — "home"/"away"/"draw" never match team names via fuzzy
+  let choseHome = sel === "home"
+  let choseAway = sel === "away"
+  const choseDraw = ["empate", "draw", "tie", "draw"].includes(sel)
+
+  if (!choseHome && !choseAway && !choseDraw) {
+    // P2P bet: fuzzy-match against team names
+    const homeNorm = (event.home_team || "").toLowerCase().trim()
+    const awayNorm = (event.away_team || "").toLowerCase().trim()
+    const fuzzy = fuzzyMatchTeam(sel, homeNorm, awayNorm)
+    choseHome = fuzzy.choseHome
+    choseAway = fuzzy.choseAway
+  }
 
   if (!choseDraw && !choseHome && !choseAway) return null
 
@@ -435,6 +444,7 @@ export async function POST(request: NextRequest) {
       .select(`
         id, event_id, creator_id, acceptor_id, amount, multiplier,
         status, bet_type, creator_selection, selection, mode, group_id,
+        house_bet, house_odds, potential_payout,
         event:events(id, external_id, status, home_score, away_score, home_team, away_team, metadata)
       `)
       .in("bet_type", betTypes)
