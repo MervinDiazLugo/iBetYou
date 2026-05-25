@@ -9,6 +9,7 @@ import Link from "next/link"
 import { Users, Plus, LogIn, Coins } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Navbar } from "@/components/navbar"
 
 interface GroupSummary {
   id: string
@@ -104,9 +105,11 @@ export default function GroupsPage() {
     }
   }
 
-  if (!user) return <div className="p-8 text-center text-muted-foreground">Inicia sesión para ver tus grupos</div>
+  if (!user) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Inicia sesión para ver tus grupos</div></>
 
   return (
+    <>
+    <Navbar />
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -207,5 +210,6 @@ export default function GroupsPage() {
         </div>
       )}
     </div>
+    </>
   )
 }

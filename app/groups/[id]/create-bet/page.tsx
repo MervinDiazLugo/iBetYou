@@ -9,6 +9,7 @@ import { useToast } from "@/components/toast"
 import { Button } from "@/components/ui/button"
 import { ChevronLeft } from "lucide-react"
 import Link from "next/link"
+import { Navbar } from "@/components/navbar"
 
 interface EventRow {
   id: number
@@ -105,10 +106,12 @@ export default function CreateGroupBetPage() {
     }
   }
 
-  if (!user) return <div className="p-8 text-center">Inicia sesión para continuar</div>
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando...</div>
+  if (!user) return <><Navbar /><div className="p-8 text-center">Inicia sesión para continuar</div></>
+  if (loading) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Cargando...</div></>
 
   return (
+    <>
+    <Navbar />
     <div className="container mx-auto px-4 py-6 max-w-xl">
       <Link href={`/groups/${groupId}`} className="text-sm text-muted-foreground flex items-center gap-1 mb-4 hover:text-foreground">
         <ChevronLeft className="w-4 h-4" /> Volver al grupo
@@ -186,5 +189,6 @@ export default function CreateGroupBetPage() {
         </>
       )}
     </div>
+    </>
   )
 }

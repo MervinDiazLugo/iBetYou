@@ -63,7 +63,7 @@ export default function HouseWalletPage() {
       const res = await authFetch("/api/admin/house-wallet", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode, amount: parsed, operation }),
+        body: JSON.stringify({ mode, amount: parsed, action: operation }),
       })
       const json = await res.json()
       if (!res.ok) { showToast(json.error || "Error", "error"); return }

@@ -12,6 +12,7 @@ import {
   Users, Trophy, Coins, ChevronLeft, Calendar
 } from "lucide-react"
 import Link from "next/link"
+import { Navbar } from "@/components/navbar"
 
 interface GroupDetail {
   id: string; name: string; code: string; sport: string | null; league: string | null; status: string
@@ -136,11 +137,13 @@ export default function GroupPage() {
   const todayUTC = new Date().toISOString().split("T")[0]
   const alreadyGrantedToday = myWallet.last_daily_grant === todayUTC
 
-  if (!user) return <div className="p-8 text-center text-muted-foreground">Inicia sesión para ver este grupo</div>
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Cargando grupo...</div>
-  if (!group) return <div className="p-8 text-center text-muted-foreground">Grupo no encontrado</div>
+  if (!user) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Inicia sesión para ver este grupo</div></>
+  if (loading) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Cargando grupo...</div></>
+  if (!group) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Grupo no encontrado</div></>
 
   return (
+    <>
+    <Navbar />
     <div className="container mx-auto px-4 py-6 max-w-3xl">
       <div className="mb-4">
         <Link href="/groups" className="text-sm text-muted-foreground flex items-center gap-1 mb-3 hover:text-foreground">
@@ -277,5 +280,6 @@ export default function GroupPage() {
         </div>
       )}
     </div>
+    </>
   )
 }
