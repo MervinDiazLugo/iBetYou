@@ -16,6 +16,7 @@ import { formatCurrency } from "@/lib/utils"
 const NAV_ITEMS = [
   { href: "/", label: "Marketplace" },
   { href: "/my-bets", label: "Mis Apuestas" },
+  { href: "/groups", label: "Grupos" },
   { href: "/leaderboard", label: "Leaderboard" },
 ]
 
