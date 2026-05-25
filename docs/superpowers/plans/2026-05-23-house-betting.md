@@ -99,6 +99,15 @@ Exposure limit: `MAX_EXACT_EXPOSURE` (200k) per selection per event.
 - [ ] **Step 1: Run migration in Supabase SQL console**
 
 ```sql
+-- Split house betting flag into per-mode columns
+ALTER TABLE country_configs
+  ADD COLUMN IF NOT EXISTS house_betting_fantasy_enabled boolean NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS house_betting_real_enabled boolean NOT NULL DEFAULT false;
+-- Migrate any existing house_betting_enabled = true rows to both modes
+UPDATE country_configs SET house_betting_fantasy_enabled = true, house_betting_real_enabled = true WHERE house_betting_enabled = true;
+-- Drop old column (optional, can keep for backwards-compat)
+-- ALTER TABLE country_configs DROP COLUMN IF EXISTS house_betting_enabled;
+
 -- Add house bet columns to bets
 ALTER TABLE bets
   ADD COLUMN IF NOT EXISTS house_bet boolean NOT NULL DEFAULT false,
@@ -594,9 +603,10 @@ export async function POST(request: NextRequest) {
     if (profile?.betting_blocked_until && new Date(profile.betting_blocked_until) > new Date()) {
       return NextResponse.json({ error: `No puedes apostar hasta ${new Date(profile.betting_blocked_until).toLocaleString("es-ES")}` }, { status: 403 })
     }
-    const houseAllowed = await canCountryUseHouseBetting(profile?.country ?? null)
+    const houseAllowed = await canCountryUseHouseBetting(profile?.country ?? null, betMode)
     if (!houseAllowed) {
-      return NextResponse.json({ error: "Las apuestas contra la Casa no están habilitadas en tu país" }, { status: 403 })
+      const modeLabel = betMode === "real" ? "Real" : "Fantasy"
+      return NextResponse.json({ error: `Las apuestas contra la Casa en modo ${modeLabel} no están habilitadas en tu país` }, { status: 403 })
     }
 
     if (betMode === "real") {
@@ -2070,6 +2080,7 @@ git commit -m "feat: house bet button and modal in marketplace for featured even
 - ✅ exact_score fallback removed → `calcExactScoreOdds` returns `null` when `home_goals_avg`/`away_goals_avg` absent; Task 5 rejects bet with 400 instead of pricing at unsafe 18x
 - ✅ run_line restricted to MLB leagues → checked via `eventRow.league` keywords; non-MLB baseball only gets `direct`, `exact_score`, `total_runs`
 - ✅ score_margin restricted to NBA leagues → same keyword check; non-NBA basketball only gets `direct`
+- ✅ house betting per-mode → `canCountryUseHouseBetting(country, mode)` checks `house_betting_fantasy_enabled` or `house_betting_real_enabled` independently; DB migration adds both columns; countries page has separate toggles per mode
 - ✅ total_runs push handled → `winnerId === null` branch in Task 7 cancels bet, returns stake to user, returns reserved liability to house, notifies user
 - ✅ Low balance alerts → Task 6 GET compares balances against `LOW_BALANCE_THRESHOLD = 500_000` and returns `alerts[]`; Task 8 page renders red banner when alerts present
 - ✅ `bet_created` → corrected to `bet_taken` (valid notification type per schema)
