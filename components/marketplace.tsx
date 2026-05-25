@@ -1876,11 +1876,43 @@ function HomeContent() {
                   className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
                 />
               </div>
-              {Number(houseBetAmount) > 0 && activeOdds !== null && (
-                <p className="text-sm text-green-500 font-medium">
-                  Ganancia potencial: {(Number(houseBetAmount) * activeOdds).toFixed(0)} tokens
-                </p>
-              )}
+              {(() => {
+                const stake = Number(houseBetAmount)
+                const walletBal = mode === "real" ? balance.real : balance.fantasy
+                const totalPayout = activeOdds !== null && stake > 0 ? Math.floor(stake * activeOdds) : null
+                const netProfit = totalPayout !== null ? totalPayout - stake : null
+                return (
+                  <div className="rounded-lg border border-border/60 bg-muted/30 p-3 space-y-2 text-sm">
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Balance disponible</span>
+                      <span className={stake > walletBal ? "text-red-500 font-medium" : "font-medium text-foreground"}>
+                        {walletBal.toLocaleString()} tokens
+                      </span>
+                    </div>
+                    {stake > 0 && activeOdds !== null && (
+                      <>
+                        <div className="border-t border-border/40" />
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Tu apuesta</span>
+                          <span className="font-medium">{stake.toLocaleString()} tokens</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Cuota</span>
+                          <span className="font-medium text-yellow-500">{activeOdds.toFixed(2)}x</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-muted-foreground">Ganancia neta</span>
+                          <span className="font-medium text-green-500">+{netProfit!.toLocaleString()} tokens</span>
+                        </div>
+                        <div className="flex justify-between border-t border-border/40 pt-2">
+                          <span className="font-semibold">Total si ganas</span>
+                          <span className="font-bold text-green-400">{totalPayout!.toLocaleString()} tokens</span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
               <Button
                 className="w-full"
                 disabled={!canSubmit}
