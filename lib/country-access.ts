@@ -25,3 +25,14 @@ export async function canCountryUseHouseBetting(
     .single()
   return (data as any)?.[field] === true
 }
+
+export async function canCountryUseGroups(country: string | null): Promise<boolean> {
+  if (!country) return false
+  const supabase = createAdminSupabaseClient()
+  const { data } = await supabase
+    .from("country_configs")
+    .select("groups_enabled")
+    .eq("country_code", country)
+    .single()
+  return data?.groups_enabled === true
+}

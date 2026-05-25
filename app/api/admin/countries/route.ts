@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
   const { data, error } = await supabase
     .from("country_configs")
-    .select("country_code, country_name, real_money_enabled, house_betting_fantasy_enabled, house_betting_real_enabled, created_at")
+    .select("country_code, country_name, real_money_enabled, house_betting_fantasy_enabled, house_betting_real_enabled, groups_enabled, created_at")
     .order("country_name")
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
       real_money_enabled: body.real_money_enabled ?? false,
       house_betting_fantasy_enabled: body.house_betting_fantasy_enabled ?? false,
       house_betting_real_enabled: body.house_betting_real_enabled ?? false,
+      groups_enabled: body.groups_enabled ?? true,
     })
     .select()
     .single()
@@ -51,7 +52,7 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "country_code requerido" }, { status: 400 })
   }
 
-  const ALLOWED_FIELDS = ["real_money_enabled", "house_betting_fantasy_enabled", "house_betting_real_enabled"] as const
+  const ALLOWED_FIELDS = ["real_money_enabled", "house_betting_fantasy_enabled", "house_betting_real_enabled", "groups_enabled"] as const
   const updates: Record<string, boolean> = {}
   for (const field of ALLOWED_FIELDS) {
     if (typeof body[field] === "boolean") updates[field] = body[field]

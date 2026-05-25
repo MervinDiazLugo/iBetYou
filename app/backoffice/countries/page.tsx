@@ -14,10 +14,11 @@ interface CountryConfig {
   real_money_enabled: boolean
   house_betting_fantasy_enabled: boolean
   house_betting_real_enabled: boolean
+  groups_enabled: boolean
   created_at: string
 }
 
-type ToggleField = "real_money_enabled" | "house_betting_fantasy_enabled" | "house_betting_real_enabled"
+type ToggleField = "real_money_enabled" | "house_betting_fantasy_enabled" | "house_betting_real_enabled" | "groups_enabled"
 
 const LATAM_PRESETS = [
   { code: "Venezuela", name: "Venezuela" },
@@ -91,6 +92,7 @@ export default function CountriesPage() {
         real_money_enabled: "Modo Real",
         house_betting_fantasy_enabled: "Casa Fantasy",
         house_betting_real_enabled: "Casa Real",
+        groups_enabled: "Grupos",
       }
       showToast(`${labels[field]} ${!current ? "habilitado" : "deshabilitado"} para ${country_code}`, "success")
     } else {
@@ -147,11 +149,12 @@ export default function CountriesPage() {
 
       {/* Country list */}
       <div className="rounded-xl border border-border overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center px-4 py-2 border-b border-border bg-secondary/30 text-xs font-medium text-muted-foreground gap-4">
+        <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center px-4 py-2 border-b border-border bg-secondary/30 text-xs font-medium text-muted-foreground gap-4">
           <span>País</span>
           <span className="text-center">Real (iBY)</span>
           <span className="text-center">Casa Fantasy</span>
           <span className="text-center">Casa Real</span>
+          <span className="text-center">Grupos</span>
           <span />
         </div>
         {loading ? (
@@ -163,7 +166,7 @@ export default function CountriesPage() {
         ) : (
           <div className="divide-y divide-border">
             {countries.map(c => (
-              <div key={c.country_code} className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center px-4 py-3 gap-4">
+              <div key={c.country_code} className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center px-4 py-3 gap-4">
                 <div className="min-w-0">
                   <div className="font-medium text-sm">{c.country_name}</div>
                   <div className="text-xs text-muted-foreground font-mono">{c.country_code}</div>
@@ -211,6 +214,21 @@ export default function CountriesPage() {
                   </button>
                   <Badge variant="outline" className={`text-[9px] py-0 px-1 ${c.house_betting_real_enabled ? "bg-orange-500/10 text-orange-600 border-orange-500/30" : "bg-secondary text-muted-foreground"}`}>
                     {c.house_betting_real_enabled ? "ON" : "OFF"}
+                  </Badge>
+                </div>
+
+                {/* Grupos toggle */}
+                <div className="flex flex-col items-center gap-1">
+                  <button
+                    type="button"
+                    title={c.groups_enabled ? "Deshabilitar Grupos" : "Habilitar Grupos"}
+                    onClick={() => toggleField(c.country_code, "groups_enabled", c.groups_enabled)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${c.groups_enabled ? "bg-purple-500" : "bg-muted"}`}
+                  >
+                    <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${c.groups_enabled ? "translate-x-4.5" : "translate-x-1"}`} />
+                  </button>
+                  <Badge variant="outline" className={`text-[9px] py-0 px-1 ${c.groups_enabled ? "bg-purple-500/10 text-purple-600 border-purple-500/30" : "bg-secondary text-muted-foreground"}`}>
+                    {c.groups_enabled ? "ON" : "OFF"}
                   </Badge>
                 </div>
 

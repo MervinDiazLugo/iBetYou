@@ -210,7 +210,7 @@ export function Navbar() {
                         </div>
 
                         {/* Balances */}
-                        <div className="p-3 border-b border-border grid grid-cols-2 gap-2">
+                        <div className={`p-3 border-b border-border grid gap-2 ${canUseRealMoney ? "grid-cols-2" : "grid-cols-1"}`}>
                           <div className={`rounded-lg p-2.5 border ${mode === "fantasy" ? "bg-blue-500/10 border-blue-500/30" : "bg-secondary/40 border-border/50"}`}>
                             <div className="flex items-center gap-1.5 mb-1">
                               <Wallet className="h-3 w-3 text-blue-400" />
@@ -219,14 +219,16 @@ export function Navbar() {
                             </div>
                             <div className="font-bold text-sm">{formatCurrency(balance.fantasy)}</div>
                           </div>
-                          <div className={`rounded-lg p-2.5 border ${mode === "real" ? "bg-amber-500/10 border-amber-500/30" : "bg-secondary/40 border-border/50"}`}>
-                            <div className="flex items-center gap-1.5 mb-1">
-                              <Coins className="h-3 w-3 text-amber-400" />
-                              <span className="text-[10px] text-muted-foreground">iBY</span>
-                              {mode === "real" && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded leading-none py-0.5">activo</span>}
+                          {canUseRealMoney && (
+                            <div className={`rounded-lg p-2.5 border ${mode === "real" ? "bg-amber-500/10 border-amber-500/30" : "bg-secondary/40 border-border/50"}`}>
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Coins className="h-3 w-3 text-amber-400" />
+                                <span className="text-[10px] text-muted-foreground">iBY</span>
+                                {mode === "real" && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded leading-none py-0.5">activo</span>}
+                              </div>
+                              <div className="font-bold text-sm text-amber-400">{formatCurrency(ibcBalance)}</div>
                             </div>
-                            <div className="font-bold text-sm text-amber-400">{formatCurrency(ibcBalance)}</div>
-                          </div>
+                          )}
                         </div>
 
                         {/* Nav links */}
@@ -336,15 +338,17 @@ export function Navbar() {
                     <div className="text-xs text-muted-foreground truncate">{user.email}</div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className={`grid gap-2 ${canUseRealMoney ? "grid-cols-2" : "grid-cols-1"}`}>
                   <div className="rounded-lg bg-secondary/60 px-2.5 py-2 border border-border/60">
                     <div className="text-[10px] text-muted-foreground flex items-center gap-1"><Wallet className="h-3 w-3 text-blue-400" /> Fantasy</div>
                     <div className="font-bold text-sm mt-0.5">{formatCurrency(balance.fantasy)}</div>
                   </div>
-                  <div className="rounded-lg bg-secondary/60 px-2.5 py-2 border border-border/60">
-                    <div className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3 text-amber-400" /> iBY</div>
-                    <div className="font-bold text-sm text-amber-400 mt-0.5">{formatCurrency(ibcBalance)}</div>
-                  </div>
+                  {canUseRealMoney && (
+                    <div className="rounded-lg bg-secondary/60 px-2.5 py-2 border border-border/60">
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3 text-amber-400" /> iBY</div>
+                      <div className="font-bold text-sm text-amber-400 mt-0.5">{formatCurrency(ibcBalance)}</div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

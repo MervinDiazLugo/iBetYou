@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
+import { canCountryUseGroups } from "@/lib/country-access"
 
 function generateCode(): string {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
@@ -53,9 +54,12 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminSupabaseClient()
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", userId).single()
+  const { data: profile } = await supabase.from("profiles").select("role, country").eq("id", userId).single()
   if (profile?.role === "backoffice_admin") {
     return NextResponse.json({ error: "Los admins no pueden crear grupos" }, { status: 403 })
+  }
+  if (!(await canCountryUseGroups(profile?.country ?? null))) {
+    return NextResponse.json({ error: "Los grupos no están disponibles en tu país" }, { status: 403 })
   }
 
   const { name, sport, league } = await request.json() as { name?: string; sport?: string | null; league?: string | null }
