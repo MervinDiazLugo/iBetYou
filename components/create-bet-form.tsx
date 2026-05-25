@@ -315,8 +315,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         ]
       case "run_line":
         return [
-          { id: "home_rl", label: `${selectedEvent.home_team} -1.5`, value: "home_rl" },
-          { id: "away_rl", label: `${selectedEvent.away_team} +1.5`, value: "away_rl" },
+          { id: "home_rl", label: `${selectedEvent.home_team} -1.5 (gana por 2+ carreras)`, value: "home_rl" },
+          { id: "away_rl", label: `${selectedEvent.away_team} +1.5 (gana o pierde por 1)`, value: "away_rl" },
         ]
       case "total_runs":
         return [
@@ -610,6 +610,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           {selectedEvent && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Tu Selección</label>
+              {betType === "total_runs" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  📊 Apuesta al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
+                </p>
+              )}
+              {betType === "run_line" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  📐 <strong>Run Line</strong> es una apuesta de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras para que tu apuesta sea ganadora. El equipo con <strong>+1.5</strong> te da como ganador si ese equipo gana el juego <em>o</em> pierde por solo 1 carrera.
+                </p>
+              )}
               {betType === "exact_score" ? (
                 <div className="flex items-center justify-center gap-4">
                   <div className="text-center">
