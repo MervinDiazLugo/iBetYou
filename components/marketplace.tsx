@@ -57,8 +57,8 @@ const SCORE_MARGIN_OPTIONS = [
 ]
 
 const SCORE_MARGIN_ODDS_MAP: Record<string, number> = {
-  home_1_5: 4.1, home_6_10: 4.5, home_11_15: 5.7, home_16plus: 4.1,
-  away_1_5: 4.1, away_6_10: 4.5, away_11_15: 5.7, away_16plus: 4.1,
+  home_1_5: 5.5, home_6_10: 6.5, home_11_15: 9.5, home_16plus: 9.0,
+  away_1_5: 5.5, away_6_10: 6.5, away_11_15: 9.5, away_16plus: 9.0,
 }
 
 const TOTAL_RUNS_OPTIONS = [
@@ -187,6 +187,7 @@ function HomeContent() {
   const [houseBetModal, setHouseBetModal] = useState<{
     event: Event
     odds: { home: number; draw?: number; away: number } | null
+    runLineOdds: { home_rl: number; away_rl: number } | null
   } | null>(null)
   const [houseBetSelection, setHouseBetSelection] = useState<string | null>(null)
   const [houseBetExactScore, setHouseBetExactScore] = useState("")
@@ -643,7 +644,19 @@ function HomeContent() {
         }
       }
     }
-    setHouseBetModal({ event, odds })
+    let runLineOdds: { home_rl: number; away_rl: number } | null = null
+    if (percent) {
+      const homeWinProb = parseFloat(String(percent.home).replace("%", "")) / 100
+      if (homeWinProb > 0 && homeWinProb < 1) {
+        const pHomeRL = homeWinProb * 0.68
+        const pAwayRL = 1 - pHomeRL
+        runLineOdds = {
+          home_rl: parseFloat((1 / (pHomeRL * 1.10)).toFixed(2)),
+          away_rl: parseFloat((1 / (pAwayRL * 1.10)).toFixed(2)),
+        }
+      }
+    }
+    setHouseBetModal({ event, odds, runLineOdds })
     setHouseBetSelection(null)
     setHouseBetExactScore("")
     setHouseBetAmount("")
@@ -658,7 +671,10 @@ function HomeContent() {
       if (houseBetSelection === "draw") return houseBetModal.odds.draw ?? null
     }
     if (houseBetType === "score_margin") return SCORE_MARGIN_ODDS_MAP[houseBetSelection] ?? null
-    if (houseBetType === "run_line") return 1.82
+    if (houseBetType === "run_line") {
+      if (!houseBetModal.runLineOdds) return null
+      return houseBetSelection === "home_rl" ? houseBetModal.runLineOdds.home_rl : houseBetModal.runLineOdds.away_rl
+    }
     if (houseBetType === "total_runs") return TOTAL_RUNS_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
     if (houseBetType === "exact_score") return houseBetSelectionOdds
     return null
@@ -1891,25 +1907,30 @@ function HomeContent() {
               )}
               {/* Run line */}
               {houseBetType === "run_line" && (
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { value: "home_rl", label: `${houseBetModal.event.home_team} -1.5` },
-                    { value: "away_rl", label: `${houseBetModal.event.away_team} +1.5` },
-                  ].map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setHouseBetSelection(opt.value)}
-                      className={`rounded-lg border p-3 text-center transition-colors ${
-                        houseBetSelection === opt.value
-                          ? "border-yellow-500 bg-yellow-500/10"
-                          : "border-border hover:border-yellow-400"
-                      }`}
-                    >
-                      <div className="text-xs text-muted-foreground">{opt.label}</div>
-                      <div className="font-bold text-yellow-500">1.82x</div>
-                    </button>
-                  ))}
-                </div>
+                houseBetModal.runLineOdds ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "home_rl", label: houseBetModal.event.home_team, sub: "Gana por 2+ carreras", odds: houseBetModal.runLineOdds.home_rl },
+                      { value: "away_rl", label: houseBetModal.event.away_team, sub: "Gana o pierde por 1", odds: houseBetModal.runLineOdds.away_rl },
+                    ].map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setHouseBetSelection(opt.value)}
+                        className={`rounded-lg border p-3 text-center transition-colors ${
+                          houseBetSelection === opt.value
+                            ? "border-yellow-500 bg-yellow-500/10"
+                            : "border-border hover:border-yellow-400"
+                        }`}
+                      >
+                        <div className="text-[11px] font-semibold truncate">{opt.label}</div>
+                        <div className="text-[10px] text-muted-foreground mb-1">{opt.sub}</div>
+                        <div className="font-bold text-yellow-500">{opt.odds.toFixed(2)}x</div>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Este evento no tiene predicciones para calcular run line.</p>
+                )
               )}
               {/* Total runs */}
               {houseBetType === "total_runs" && (

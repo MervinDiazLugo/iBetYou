@@ -84,11 +84,23 @@ export function calcExactScoreOdds(
   return parseFloat(Math.min(odds, MAX_EXACT_SCORE_ODDS).toFixed(2))
 }
 
-const RUN_LINE_ODDS = 1.82
+// ~68% of MLB wins are by 2+ runs (blowout rate)
+const BLOWOUT_RATE = 0.68
 
-export function calcRunLineOdds(selection: string): number | null {
+export function calcRunLineOdds(selection: string, homeWinProb: number): number | null {
   if (selection !== "home_rl" && selection !== "away_rl") return null
-  return RUN_LINE_ODDS
+  if (!Number.isFinite(homeWinProb) || homeWinProb <= 0 || homeWinProb >= 1) return null
+  const pHomeRL = homeWinProb * BLOWOUT_RATE
+  const pAwayRL = 1 - pHomeRL
+  const prob = selection === "home_rl" ? pHomeRL : pAwayRL
+  return parseFloat((1 / (prob * HOUSE_EDGE)).toFixed(2))
+}
+
+export function calcRunLineOddsAll(homeWinProb: number): { home_rl: number; away_rl: number } | null {
+  const home = calcRunLineOdds("home_rl", homeWinProb)
+  const away = calcRunLineOdds("away_rl", homeWinProb)
+  if (home === null || away === null) return null
+  return { home_rl: home, away_rl: away }
 }
 
 const TOTAL_RUNS_ODDS: Record<string, number> = {

@@ -255,7 +255,12 @@ export async function POST(request: NextRequest) {
         )
       }
     } else if (betType === "run_line") {
-      houseOdds = calcRunLineOdds(String(selection))
+      const percent = metadata?.predictions?.percent
+      if (!percent) {
+        return NextResponse.json({ error: "No hay predicciones disponibles para este evento" }, { status: 400 })
+      }
+      const homeWinProb = parseFloat(String(percent.home).replace("%", "")) / 100
+      houseOdds = calcRunLineOdds(String(selection), homeWinProb)
       if (houseOdds === null) {
         return NextResponse.json(
           { error: "Selección inválida para run line (debe ser 'home_rl' o 'away_rl')" },

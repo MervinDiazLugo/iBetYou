@@ -5,6 +5,7 @@ import {
   calcExactScoreOdds,
   calcScoreMarginOdds,
   calcRunLineOdds,
+  calcRunLineOddsAll,
   calcTotalRunsOdds,
 } from "@/lib/house-odds"
 
@@ -60,10 +61,17 @@ export async function GET(request: NextRequest) {
   }
 
   if (betType === "run_line") {
-    if (!selection) return NextResponse.json({ error: "selection required" }, { status: 400 })
-    const odds = calcRunLineOdds(selection)
-    if (odds === null) return NextResponse.json({ error: "Invalid selection" }, { status: 400 })
-    return NextResponse.json({ betType: "run_line", selection, odds })
+    const percent = (event.metadata as any)?.predictions?.percent
+    if (!percent) return NextResponse.json({ error: "No predictions available" }, { status: 400 })
+    const homeWinProb = parseFloat(String(percent.home).replace("%", "")) / 100
+    if (selection) {
+      const odds = calcRunLineOdds(selection, homeWinProb)
+      if (odds === null) return NextResponse.json({ error: "Invalid selection" }, { status: 400 })
+      return NextResponse.json({ betType: "run_line", selection, odds })
+    }
+    const allOdds = calcRunLineOddsAll(homeWinProb)
+    if (!allOdds) return NextResponse.json({ error: "Cannot compute run line odds" }, { status: 400 })
+    return NextResponse.json({ betType: "run_line", odds: allOdds })
   }
 
   if (betType === "total_runs") {
