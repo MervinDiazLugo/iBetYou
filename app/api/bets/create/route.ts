@@ -1,4 +1,4 @@
-﻿import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
+import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
 import { canCountryUseRealMoney } from "@/lib/country-access"
@@ -6,11 +6,12 @@ import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode } = await request.json()
+    const { userId, eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode, group_id } = await request.json()
     if (rawMode !== "real" && rawMode !== "fantasy" && rawMode !== undefined && rawMode !== null) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
     }
-    const betMode = rawMode === "real" ? "real" : "fantasy"
+    const isGroupBet = typeof group_id === "string" && group_id.length > 0
+    const betMode = isGroupBet ? "fantasy" : (rawMode === "real" ? "real" : "fantasy")
     const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
 
     const authHeader = request.headers.get("authorization")
@@ -53,8 +54,6 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ error: "El monto debe ser un número positivo" }, { status: 400 })
     }
-    // Fee is always recalculated server-side — never trust the client-provided value
-    const fee = amount * 0.03
 
     if (betType === "exact_score" && multiplier !== undefined) {
       const parsedMultiplier = Number(multiplier)
@@ -148,10 +147,46 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get user wallet and validate balance — route by mode
+    // --- Group bet validation ---
+    let groupRow: { id: string; sport: string | null; league: string | null; status: string } | null = null
+    if (isGroupBet) {
+      const { data: gMembership } = await supabase
+        .from("group_members")
+        .select("role")
+        .eq("group_id", group_id)
+        .eq("user_id", user.id)
+        .maybeSingle()
+      if (!gMembership) {
+        return NextResponse.json({ error: "No eres miembro de este grupo" }, { status: 403 })
+      }
+      const { data: gRow } = await supabase
+        .from("groups")
+        .select("id, sport, league, status")
+        .eq("id", group_id)
+        .single()
+      if (!gRow) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 })
+      if (gRow.status === "archived") {
+        return NextResponse.json({ error: "Este grupo está archivado" }, { status: 400 })
+      }
+      if (gRow.sport && eventRow.sport !== gRow.sport) {
+        return NextResponse.json({ error: "Este evento no coincide con el deporte del grupo" }, { status: 400 })
+      }
+      groupRow = gRow
+    }
+
+    // --- Wallet operations ---
+    const fee = isGroupBet ? 0 : amount * 0.03
     const totalNeeded = amount + fee
-    let currentBalance: number
-    if (betMode === "real") {
+
+    if (isGroupBet) {
+      const { ensureDailyGrant, deductFromGroupWallet } = await import("@/lib/group-wallet-utils")
+      await ensureDailyGrant(supabase, group_id, user.id)
+      try {
+        await deductFromGroupWallet(supabase, group_id, user.id, totalNeeded)
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 400 })
+      }
+    } else if (betMode === "real") {
       const { data: ibcWallet, error: ibcErr } = await supabase
         .from("iby_wallets")
         .select("balance, balance_blocked")
@@ -164,25 +199,7 @@ export async function POST(request: NextRequest) {
       if (available < totalNeeded) {
         return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
       }
-      currentBalance = Number(ibcWallet.balance)
-    } else {
-      const { data: wallet, error: walletError } = await supabase
-        .from("wallets")
-        .select("balance_fantasy")
-        .eq("user_id", user.id)
-        .single()
-      if (walletError || !wallet) {
-        return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
-      }
-      if (wallet.balance_fantasy < totalNeeded) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
-      }
-      currentBalance = wallet.balance_fantasy
-    }
-
-    // Deduct from wallet — payment ordering invariant: update wallet before creating bet
-    // Optimistic lock (.eq on balance) prevents double-spend on concurrent requests
-    if (betMode === "real") {
+      const currentBalance = Number(ibcWallet.balance)
       const { data: ibcUpdated, error: walletUpdateError } = await supabase
         .from("iby_wallets")
         .update({ balance: currentBalance - totalNeeded })
@@ -196,6 +213,18 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
       }
     } else {
+      const { data: wallet, error: walletError } = await supabase
+        .from("wallets")
+        .select("balance_fantasy")
+        .eq("user_id", user.id)
+        .single()
+      if (walletError || !wallet) {
+        return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
+      }
+      if (wallet.balance_fantasy < totalNeeded) {
+        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+      }
+      const currentBalance = wallet.balance_fantasy
       const { data: fantasyUpdated, error: walletUpdateError } = await supabase
         .from("wallets")
         .update({ balance_fantasy: currentBalance - totalNeeded })
@@ -227,20 +256,23 @@ export async function POST(request: NextRequest) {
         creator_selection: selection.selection || "",
         status: "open",
         mode: betMode,
+        group_id: isGroupBet ? group_id : null,
       })
       .select()
       .single()
 
     if (betError) {
       try {
-        await payoutToMode(supabase, user.id, totalNeeded, betMode)
+        if (isGroupBet) {
+          const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
+          await creditGroupWallet(supabase, group_id, user.id, totalNeeded)
+        } else {
+          await payoutToMode(supabase, user.id, totalNeeded, betMode)
+        }
       } catch (rollbackErr) {
         console.error("REFUND_FAILED", { userId: user.id, amount: totalNeeded, betMode, error: rollbackErr })
       }
-      return NextResponse.json(
-        { error: `Failed to create bet: ${betError.message}` },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: `Failed to create bet: ${betError.message}` }, { status: 400 })
     }
 
     // Record transaction
@@ -248,7 +280,7 @@ export async function POST(request: NextRequest) {
       .from("transactions")
       .insert({
         user_id: user.id,
-        token_type: betMode === "real" ? "iBY" : "fantasy",
+        token_type: isGroupBet ? "group_fantasy" : (betMode === "real" ? "iBY" : "fantasy"),
         amount: -totalNeeded,
         operation: "bet_created",
         reference_id: bet.id,

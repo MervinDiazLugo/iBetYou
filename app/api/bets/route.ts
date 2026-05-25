@@ -40,25 +40,27 @@ export async function GET(request: NextRequest) {
       // Debug: get all bets
     } else if (type === 'my_open' && userId) {
       // User's open bets (created by user, still open - waiting for someone to take)
-      query = query.eq('creator_id', userId).eq('status', 'open')
+      query = query.eq('creator_id', userId).eq('status', 'open').is('group_id', null)
     } else if (type === 'my_created_taken' && userId) {
       // User created these bets and someone else took them (en curso - el creador ve esto)
-      query = query.eq('creator_id', userId).eq('status', 'taken')
+      query = query.eq('creator_id', userId).eq('status', 'taken').is('group_id', null)
     } else if (type === 'my_taken' && userId) {
       // Bets that the user took from others (en curso - el acceptor ve esto)
-      query = query.eq('acceptor_id', userId).eq('status', 'taken')
+      query = query.eq('acceptor_id', userId).eq('status', 'taken').is('group_id', null)
     } else if (type === 'my_active' && userId) {
       // User's active bets: open (created by user, waiting) OR taken (user is creator or acceptor)
-      query = query.or(`and(creator_id.eq.${userId},status.eq.open),and(creator_id.eq.${userId},status.eq.taken),and(acceptor_id.eq.${userId},status.eq.taken)`)
+      query = query
+        .or(`and(creator_id.eq.${userId},status.eq.open),and(creator_id.eq.${userId},status.eq.taken),and(acceptor_id.eq.${userId},status.eq.taken)`)
+        .is('group_id', null)
     } else if (type === 'taken') {
-      // All taken bets (for cloning) - exclude user's own bets
-      query = query.eq('status', 'taken')
+      // All taken bets (for cloning) - exclude user's own bets and group bets
+      query = query.eq('status', 'taken').is('group_id', null)
       if (userId) {
         query = query.neq('creator_id', userId)
       }
     } else {
-      // Marketplace: only open bets where user is NOT the creator
-      query = query.eq('status', 'open')
+      // Marketplace: only open, non-group bets where user is NOT the creator
+      query = query.eq('status', 'open').is('group_id', null)
       if (userId) {
         query = query.neq('creator_id', userId)
       }
