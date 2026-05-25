@@ -84,7 +84,8 @@ Exposure limit: `MAX_EXACT_EXPOSURE` (200k) per selection per event.
 | Create | `app/api/bets/house/odds/route.ts` | GET — dynamic odds for exact_score via Claude |
 | Create | `app/api/admin/house-wallet/route.ts` | GET view + PATCH fund/withdraw + per-event exposure |
 | Modify | `types/index.ts` | Extend Bet + add HouseWallet interface |
-| Modify | `app/api/admin/bets/auto-resolve-finished/route.ts` | House bet resolution branch |
+| Modify | `app/api/admin/bets/auto-resolve-finished/route.ts` | House bet resolution + event-cancelled sweep |
+| Modify | `app/api/admin/bets/route.ts` | Cancel action must refund house wallet reservation |
 | Modify | `components/marketplace.tsx` | House bet button + modal on featured cards |
 | Modify | `app/backoffice/house-wallet/page.tsx` (create) | Admin house wallet management page |
 
@@ -518,18 +519,26 @@ export async function POST(request: NextRequest) {
     const MLB_LEAGUE_KEYWORDS = ["mlb", "major league baseball", "american league", "national league"]
     const isMLBLeague = MLB_LEAGUE_KEYWORDS.some(kw => eventRow.league?.toLowerCase().includes(kw))
 
+    // score_margin calibrated against NBA margin distribution — LATAM basketball leagues differ significantly.
+    const NBA_LEAGUE_KEYWORDS = ["nba", "national basketball association", "nba g league", "nba 2"]
+    const isNBALeague = NBA_LEAGUE_KEYWORDS.some(kw => eventRow.league?.toLowerCase().includes(kw))
+
     const ALLOWED_BET_TYPES: Record<string, string[]> = {
       football:   ["direct", "exact_score"],
-      basketball: ["direct", "score_margin"],
+      basketball: isNBALeague
+        ? ["direct", "score_margin"]
+        : ["direct"],  // score_margin excluded for non-NBA (LNB, BSL, etc.)
       baseball:   isMLBLeague
         ? ["direct", "exact_score", "run_line", "total_runs"]
         : ["direct", "exact_score", "total_runs"],  // run_line excluded for non-MLB
     }
     const allowedForSport = ALLOWED_BET_TYPES[eventRow.sport] ?? ["direct"]
     if (!allowedForSport.includes(betType)) {
-      const hint = betType === "run_line" && eventRow.sport === "baseball" && !isMLBLeague
-        ? "Run Line solo está disponible para ligas MLB"
-        : `Casa no acepta "${betType}" para ${eventRow.sport}`
+      let hint = `Casa no acepta "${betType}" para ${eventRow.sport}`
+      if (betType === "run_line" && eventRow.sport === "baseball" && !isMLBLeague)
+        hint = "Run Line solo está disponible para ligas MLB"
+      if (betType === "score_margin" && eventRow.sport === "basketball" && !isNBALeague)
+        hint = "Margen de victoria solo está disponible para ligas NBA"
       return NextResponse.json({ error: hint }, { status: 400 })
     }
 
@@ -545,7 +554,7 @@ export async function POST(request: NextRequest) {
 
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
-      .select("id, sport, status, featured, metadata")
+      .select("id, sport, status, featured, metadata, updated_at, league")
       .eq("id", eventId)
       .single()
 
@@ -557,6 +566,17 @@ export async function POST(request: NextRequest) {
     }
     if (eventRow.status === "finished" || eventRow.status === "cancelled" || eventRow.status === "postponed") {
       return NextResponse.json({ error: "Este evento no acepta nuevas apuestas" }, { status: 400 })
+    }
+    // Reject direct bets when prediction data is stale (> 48h old) — stale odds can give users +EV
+    const PREDICTION_FRESHNESS_HOURS = 48
+    if (betType === "direct") {
+      const updatedAt = eventRow.updated_at ? new Date(eventRow.updated_at) : null
+      const ageHours = updatedAt ? (Date.now() - updatedAt.getTime()) / 3_600_000 : Infinity
+      if (ageHours > PREDICTION_FRESHNESS_HOURS) {
+        return NextResponse.json({
+          error: "Las predicciones de este evento no están actualizadas. Intenta más tarde.",
+        }, { status: 400 })
+      }
     }
 
     const { data: profile } = await supabase
@@ -743,7 +763,7 @@ export async function POST(request: NextRequest) {
 
     await createNotification({
       userId: user.id,
-      type: "bet_created",
+      type: "bet_taken",
       title: "Apuesta vs. Casa creada",
       body: `Apostaste ${stake.toLocaleString("es-ES")} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}. Ganancia potencial: ${potentialPayout.toFixed(0)}.`,
       betId: bet.id,
@@ -1340,6 +1360,132 @@ git commit -m "feat: handle house bet resolution in auto-resolve-finished"
 
 ---
 
+## Task 7b: Patch admin cancel + event-cancelled auto-refund for house bets
+
+**Files:**
+- Modify: `app/api/admin/bets/route.ts` — cancel block must refund house wallet
+- Modify: `app/api/admin/bets/auto-resolve-finished/route.ts` — add query for cancelled/postponed events
+
+### Part A — admin cancel refunds house wallet
+
+- [ ] **Step 1: Find cancel block in `app/api/admin/bets/route.ts`**
+
+Search for `action: "cancel"` in the PATCH handler. The existing block updates `bets.status = "cancelled"` and credits the user's stake via `payoutToMode`. Wrap it so house bets also reclaim their reserved liability.
+
+Add **after** the existing `payoutToMode` call for the user stake refund:
+
+```typescript
+// If house bet, return reserved liability to house wallet
+if ((betRow as any).house_bet) {
+  const stake = Number((betRow as any).amount || 0)
+  const potentialPayout = Number((betRow as any).potential_payout || 0)
+  const houseRisk = potentialPayout - stake
+  const betMode = (betRow as any).mode ?? "fantasy"
+  if (houseRisk > 0) {
+    try {
+      await houseWalletCredit(supabase, houseRisk, betMode)
+    } catch (creditErr) {
+      // Log but don't fail — bet is already cancelled, user already refunded
+      console.error("HOUSE_WALLET_CREDIT_ON_CANCEL_FAILED", { betId: betRow.id, houseRisk, error: creditErr })
+    }
+  }
+}
+```
+
+Also add import at top of file if not already present:
+```typescript
+import { houseWalletCredit } from "@/lib/house-wallet"
+```
+
+- [ ] **Step 2: TypeScript compile check**
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+```
+
+### Part B — auto-cancel house bets when event is cancelled/postponed
+
+- [ ] **Step 3: Add event-cancelled sweep to `auto-resolve-finished`**
+
+In `app/api/admin/bets/auto-resolve-finished/route.ts`, add a new section **before** the main event loop. This runs once per invocation and cleans up stranded house bets whose events were cancelled or postponed:
+
+```typescript
+// ── Sweep: cancel house bets for cancelled/postponed events ──────────────────
+const { data: strandedBets } = await supabase
+  .from("bets")
+  .select("id, creator_id, amount, potential_payout, mode, event_id, bet_type")
+  .eq("house_bet", true)
+  .eq("status", "taken")
+  .in("event_id",
+    supabase
+      .from("events")
+      .select("id")
+      .in("status", ["cancelled", "postponed"])
+  )
+
+for (const sb of strandedBets || []) {
+  const stake = Number(sb.amount || 0)
+  const potentialPayout = Number(sb.potential_payout || 0)
+  const houseRisk = potentialPayout - stake
+  const betMode = (sb as any).mode ?? "fantasy"
+
+  const { error: cancelErr } = await supabase
+    .from("bets")
+    .update({ status: "cancelled", resolved_at: new Date().toISOString() })
+    .eq("id", sb.id)
+    .eq("status", "taken") // idempotent guard
+
+  if (cancelErr) {
+    console.error("STRANDED_HOUSE_BET_CANCEL_FAILED", { betId: sb.id, error: cancelErr })
+    continue
+  }
+
+  // Return stake to user
+  try { await payoutToMode(supabase, sb.creator_id, stake, betMode) } catch (_) {}
+  // Return reserved liability to house
+  if (houseRisk > 0) {
+    try { await houseWalletCredit(supabase, houseRisk, betMode) } catch (_) {}
+  }
+
+  await supabase.from("arbitration_decisions").insert({
+    bet_id: sb.id,
+    action: "auto_cancel_event_cancelled",
+    previous_status: "taken",
+    new_status: "cancelled",
+    decided_winner_id: null,
+    reason: "Evento cancelado o pospuesto — stake devuelto automáticamente",
+    details: { house_bet: true, bet_type: sb.bet_type, event_id: sb.event_id },
+    decided_by: "system",
+    source: "system",
+  })
+
+  await createNotifications([{
+    userId: sb.creator_id,
+    type: "bet_cancelled",
+    title: "Apuesta cancelada — evento pospuesto",
+    body: "Tu stake fue devuelto porque el evento fue cancelado o pospuesto.",
+    betId: sb.id,
+    mode: betMode,
+  }], supabase)
+}
+// ─────────────────────────────────────────────────────────────────────────────
+```
+
+- [ ] **Step 4: TypeScript compile check**
+
+```bash
+npx tsc --noEmit 2>&1 | head -20
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add app/api/admin/bets/route.ts app/api/admin/bets/auto-resolve-finished/route.ts
+git commit -m "fix: refund house wallet on admin cancel + auto-cancel house bets for cancelled events"
+```
+
+---
+
 ## Task 8: Backoffice house wallet page
 
 **Files:**
@@ -1923,8 +2069,13 @@ git commit -m "feat: house bet button and modal in marketplace for featured even
 **Risk mitigations applied:**
 - ✅ exact_score fallback removed → `calcExactScoreOdds` returns `null` when `home_goals_avg`/`away_goals_avg` absent; Task 5 rejects bet with 400 instead of pricing at unsafe 18x
 - ✅ run_line restricted to MLB leagues → checked via `eventRow.league` keywords; non-MLB baseball only gets `direct`, `exact_score`, `total_runs`
+- ✅ score_margin restricted to NBA leagues → same keyword check; non-NBA basketball only gets `direct`
 - ✅ total_runs push handled → `winnerId === null` branch in Task 7 cancels bet, returns stake to user, returns reserved liability to house, notifies user
 - ✅ Low balance alerts → Task 6 GET compares balances against `LOW_BALANCE_THRESHOLD = 500_000` and returns `alerts[]`; Task 8 page renders red banner when alerts present
+- ✅ `bet_created` → corrected to `bet_taken` (valid notification type per schema)
+- ✅ Stale prediction gate → Task 5 rejects `direct` bets when `events.updated_at` > 48h old
+- ✅ Admin cancel refunds house wallet → Task 7b Part A: `houseWalletCredit(houseRisk)` after existing user stake refund
+- ✅ Event cancelled/postponed → Task 7b Part B: sweep in `auto-resolve-finished` cancels stranded house bets, refunds stake + liability
 
 **Type consistency:**
 - `houseWalletDebit` / `houseWalletCredit` / `getHouseWalletBalances` — consistent across Tasks 3, 5, 6, 7
