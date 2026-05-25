@@ -47,7 +47,19 @@ export default function HouseWalletPage() {
     setLoading(true)
     try {
       const res = await authFetch("/api/admin/house-wallet")
-      if (res.ok) setData(await res.json())
+      if (res.ok) {
+        const json = await res.json()
+        setData({
+          balance_fantasy: json.balances?.balance_fantasy ?? 0,
+          balance_real: json.balances?.balance_real ?? 0,
+          active_fantasy: json.openBetsCount ?? 0,
+          active_real: 0,
+          reserved_liability_fantasy: json.exposure?.fantasy ?? 0,
+          reserved_liability_real: json.exposure?.real ?? 0,
+          alerts: json.alerts || [],
+          top_exposure: json.top_exposure || [],
+        })
+      }
     } finally {
       setLoading(false)
     }
@@ -69,7 +81,7 @@ export default function HouseWalletPage() {
       if (!res.ok) { showToast(json.error || "Error", "error"); return }
       showToast(`${operation === "fund" ? "Fondos añadidos" : "Retiro realizado"} correctamente`, "success")
       setAmount("")
-      await loadData()
+      loadData()
     } finally {
       setSubmitting(false)
     }
