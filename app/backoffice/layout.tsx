@@ -18,6 +18,7 @@ import {
   Gift,
   Banknote,
   Globe,
+  Building2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -33,6 +34,7 @@ const navigation = [
   { name: "Referidos", href: "/backoffice/referrals", icon: Gift },
   { name: "Retiros", href: "/backoffice/withdrawals", icon: Banknote },
   { name: "Acceso por País", href: "/backoffice/countries", icon: Globe },
+  { name: "Wallet Casa", href: "/backoffice/house-wallet", icon: Building2 },
 ]
 
 export default function BackofficeLayout({
