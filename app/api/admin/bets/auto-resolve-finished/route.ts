@@ -438,7 +438,7 @@ export async function POST(request: NextRequest) {
         event:events(id, external_id, status, home_score, away_score, home_team, away_team, metadata)
       `)
       .in("bet_type", betTypes)
-      .in("status", ["taken", "disputed"])
+      .in("status", ["taken", "disputed", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor"])
       .limit(2000)
 
     if (hasEventFilter) query = query.eq("event_id", eventId)
@@ -582,7 +582,7 @@ export async function POST(request: NextRequest) {
         .from("bets")
         .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
         .eq("id", (bet as any).id)
-        .in("status", ["taken", "disputed"])
+        .in("status", ["taken", "disputed", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor"])
         .is("resolved_at", null)
         .select("id")
         .single()
