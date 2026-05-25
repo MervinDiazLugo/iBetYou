@@ -159,16 +159,36 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
     }
 
+    // Group bet: validate taker is a member of the group
+    if ((bet as any).group_id) {
+      const { data: gMembership } = await supabase
+        .from("group_members")
+        .select("role")
+        .eq("group_id", (bet as any).group_id)
+        .eq("user_id", effectiveUserId)
+        .maybeSingle()
+      if (!gMembership) {
+        return NextResponse.json({ error: "Solo los miembros del grupo pueden tomar esta apuesta" }, { status: 403 })
+      }
+    }
+
     // Only exact score bets are asymmetric.
     const isAsymmetric = bet.bet_type === 'exact_score'
     const betMode = bet.mode === "real" ? "real" : "fantasy"
     const acceptorStake = isAsymmetric ? Number(bet.amount) * Math.max(1, Number(bet.multiplier) || 1) : Number(bet.amount)
-    const acceptorFee = acceptorStake * 0.03
+    const acceptorFee = (bet as any).group_id ? 0 : acceptorStake * 0.03
     const totalNeeded = acceptorStake + acceptorFee
 
-    // Validate user has sufficient balance — route by bet mode
-    let takerBalance: number
-    if (betMode === "real") {
+    // Deduct from taker wallet — group bets use group wallet; regular bets use main wallet
+    if ((bet as any).group_id) {
+      const { ensureDailyGrant, deductFromGroupWallet } = await import("@/lib/group-wallet-utils")
+      await ensureDailyGrant(supabase, (bet as any).group_id, effectiveUserId)
+      try {
+        await deductFromGroupWallet(supabase, (bet as any).group_id, effectiveUserId, totalNeeded)
+      } catch (err: any) {
+        return NextResponse.json({ error: err.message }, { status: 400 })
+      }
+    } else if (betMode === "real") {
       const { data: ibcWallet } = await supabase
         .from("iby_wallets")
         .select("balance, balance_blocked")
@@ -181,7 +201,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (available < totalNeeded) {
         return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
       }
-      takerBalance = Number(ibcWallet.balance)
+      const takerBalance = Number(ibcWallet.balance)
+      const { data: ibcUpdated, error: ibcUpdateError } = await supabase
+        .from("iby_wallets")
+        .update({ balance: takerBalance - totalNeeded })
+        .eq("user_id", effectiveUserId)
+        .eq("balance", takerBalance)
+        .select("user_id")
+      if (ibcUpdateError) {
+        return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
+      }
+      if (!ibcUpdated || ibcUpdated.length === 0) {
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
     } else {
       const { data: wallet } = await supabase
         .from("wallets")
@@ -194,36 +226,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       if (wallet.balance_fantasy < totalNeeded) {
         return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
       }
-      takerBalance = wallet.balance_fantasy
-    }
-
-    // Deduct from taker's wallet — optimistic lock prevents double-spend on concurrent requests
-    let walletDeductError: any
-    let walletDeductRows: any[] | null = null
-    if (betMode === "real") {
-      const { data, error } = await supabase
-        .from("iby_wallets")
-        .update({ balance: takerBalance - totalNeeded })
-        .eq("user_id", effectiveUserId)
-        .eq("balance", takerBalance)
-        .select("user_id")
-      walletDeductError = error
-      walletDeductRows = data
-    } else {
-      const { data, error } = await supabase
+      const takerBalance = wallet.balance_fantasy
+      const { data: fantasyUpdated, error: fantasyUpdateError } = await supabase
         .from("wallets")
         .update({ balance_fantasy: takerBalance - totalNeeded })
         .eq("user_id", effectiveUserId)
         .eq("balance_fantasy", takerBalance)
         .select("user_id")
-      walletDeductError = error
-      walletDeductRows = data
-    }
-    if (walletDeductError) {
-      return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
-    }
-    if (!walletDeductRows || walletDeductRows.length === 0) {
-      return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      if (fantasyUpdateError) {
+        return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
+      }
+      if (!fantasyUpdated || fantasyUpdated.length === 0) {
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
     }
 
     // Mark bet as taken — .eq("status", "open") acts as optimistic lock:
@@ -238,7 +253,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     if (updateError || !updatedBet) {
       try {
-        await payoutToMode(supabase, effectiveUserId, totalNeeded, betMode)
+        if ((bet as any).group_id) {
+          const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
+          await creditGroupWallet(supabase, (bet as any).group_id, effectiveUserId, totalNeeded)
+        } else {
+          await payoutToMode(supabase, effectiveUserId, totalNeeded, betMode)
+        }
       } catch (rollbackErr) {
         console.error("REFUND_FAILED", { userId: effectiveUserId, amount: totalNeeded, betMode, error: rollbackErr })
       }
@@ -251,7 +271,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // Record transaction for taker
     await supabase.from("transactions").insert({
       user_id: effectiveUserId,
-      token_type: betMode === "real" ? "ibc" : "fantasy",
+      token_type: (bet as any).group_id ? "group_fantasy" : (betMode === "real" ? "ibc" : "fantasy"),
       amount: -totalNeeded,
       operation: "bet_taken",
       reference_id: betId,
