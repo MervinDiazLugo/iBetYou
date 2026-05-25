@@ -426,6 +426,7 @@ import { calcDirectOdds, calcExactScoreOdds, oddsForOutcome, DirectOutcome, MAX_
 import { houseWalletDebit } from "@/lib/house-wallet"
 import { payoutToMode } from "@/lib/wallet-utils"
 import { createNotification } from "@/lib/notifications"
+import { canCountryUseHouseBetting } from "@/lib/country-access"
 
 const MAX_STAKE = 100_000
 
@@ -499,6 +500,11 @@ export async function POST(request: NextRequest) {
     if (profile?.betting_blocked_until && new Date(profile.betting_blocked_until) > new Date()) {
       return NextResponse.json({ error: `No puedes apostar hasta ${new Date(profile.betting_blocked_until).toLocaleString("es-ES")}` }, { status: 403 })
     }
+    const houseAllowed = await canCountryUseHouseBetting(profile?.country ?? null)
+    if (!houseAllowed) {
+      return NextResponse.json({ error: "Las apuestas contra la Casa no están habilitadas en tu país" }, { status: 403 })
+    }
+
     if (betMode === "real") {
       const allowed = await canCountryUseRealMoney(profile?.country ?? null)
       if (!allowed) {

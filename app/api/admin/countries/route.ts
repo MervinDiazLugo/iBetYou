@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
   const { data, error } = await supabase
     .from("country_configs")
-    .select("country_code, country_name, real_money_enabled, created_at")
+    .select("country_code, country_name, real_money_enabled, house_betting_enabled, created_at")
     .order("country_name")
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
       country_code: body.country_code,
       country_name: body.country_name,
       real_money_enabled: body.real_money_enabled ?? false,
+      house_betting_enabled: body.house_betting_enabled ?? false,
     })
     .select()
     .single()
@@ -45,14 +46,21 @@ export async function PATCH(request: NextRequest) {
   if (!auth.authorized) return auth.response
 
   const body = await request.json().catch(() => null)
-  if (!body?.country_code || typeof body?.real_money_enabled !== "boolean") {
-    return NextResponse.json({ error: "country_code y real_money_enabled requeridos" }, { status: 400 })
+  if (!body?.country_code) {
+    return NextResponse.json({ error: "country_code requerido" }, { status: 400 })
   }
+  if (typeof body.real_money_enabled !== "boolean" && typeof body.house_betting_enabled !== "boolean") {
+    return NextResponse.json({ error: "real_money_enabled o house_betting_enabled requerido" }, { status: 400 })
+  }
+
+  const updates: Record<string, boolean> = {}
+  if (typeof body.real_money_enabled === "boolean") updates.real_money_enabled = body.real_money_enabled
+  if (typeof body.house_betting_enabled === "boolean") updates.house_betting_enabled = body.house_betting_enabled
 
   const supabase = createAdminSupabaseClient()
   const { error } = await supabase
     .from("country_configs")
-    .update({ real_money_enabled: body.real_money_enabled })
+    .update(updates)
     .eq("country_code", body.country_code)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
