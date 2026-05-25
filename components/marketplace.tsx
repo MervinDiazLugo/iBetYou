@@ -1087,12 +1087,7 @@ function HomeContent() {
               {visibleFeatured.map((event) => (
                 <Card
                   key={`featured-${event.id}`}
-                  className="overflow-hidden cursor-pointer border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all group"
-                  onClick={() => {
-                    if (!user) { window.location.href = '/login'; return }
-                    setSelectedEventForBet(event)
-                    setShowCreateModal(true)
-                  }}
+                  className="overflow-hidden border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all"
                 >
                   <div className="h-1 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500" />
                   <CardContent className="pt-4 pb-3 px-4">
@@ -1166,20 +1161,30 @@ function HomeContent() {
                         )}
                       </div>
                     )}
-                    {(event.metadata as any)?.predictions?.percent && (
-                      <div className="mt-2" onClick={e => e.stopPropagation()}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 text-xs h-7"
-                          onClick={() => openHouseBetModal(event)}
-                        >
-                          🏦 Apostar vs. Casa
-                        </Button>
-                      </div>
-                    )}
-                    <div className="text-center text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                      Haz clic para crear apuesta P2P
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-8"
+                        onClick={() => {
+                          if (!user) { window.location.href = '/login'; return }
+                          setSelectedEventForBet(event)
+                          setShowCreateModal(true)
+                        }}
+                      >
+                        🤝 Apostar P2P
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
+                        onClick={() => {
+                          if (!user) { window.location.href = '/login'; return }
+                          openHouseBetModal(event)
+                        }}
+                      >
+                        🏦 vs. Casa
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
