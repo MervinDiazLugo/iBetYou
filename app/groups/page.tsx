@@ -38,6 +38,9 @@ export default function GroupsPage() {
   const [showJoin, setShowJoin] = useState(false)
   const [createName, setCreateName] = useState("")
   const [createSport, setCreateSport] = useState("")
+  const [createLeague, setCreateLeague] = useState("")
+  const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
+  const [leaguesLoading, setLeaguesLoading] = useState(false)
   const [joinCode, setJoinCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -64,6 +67,21 @@ export default function GroupsPage() {
 
   useEffect(() => { if (user) loadGroups() }, [user])
 
+  useEffect(() => {
+    setCreateLeague("")
+    if (!createSport) { setAvailableLeagues([]); return }
+    setLeaguesLoading(true)
+    fetch("/api/events/list")
+      .then(r => r.json())
+      .then(d => {
+        const leagues = [...new Set<string>(
+          (d.events || []).filter((e: { sport: string; league: string }) => e.sport === createSport).map((e: { league: string }) => e.league).filter(Boolean)
+        )].sort() as string[]
+        setAvailableLeagues(leagues)
+      })
+      .finally(() => setLeaguesLoading(false))
+  }, [createSport])
+
   async function handleCreate() {
     if (!createName.trim()) return
     setSubmitting(true)
@@ -71,7 +89,7 @@ export default function GroupsPage() {
       const res = await authFetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: createName.trim(), sport: createSport || null }),
+        body: JSON.stringify({ name: createName.trim(), sport: createSport || null, league: createLeague || null }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Error al crear grupo", "error"); return }
@@ -79,6 +97,7 @@ export default function GroupsPage() {
       setShowCreate(false)
       setCreateName("")
       setCreateSport("")
+      setCreateLeague("")
       loadGroups()
     } finally {
       setSubmitting(false)
@@ -145,6 +164,17 @@ export default function GroupsPage() {
             <option value="basketball">Basketball</option>
             <option value="baseball">Béisbol</option>
           </select>
+          {createSport && (
+            <select
+              className="w-full border rounded px-3 py-2 text-sm bg-background"
+              value={createLeague}
+              onChange={(e) => setCreateLeague(e.target.value)}
+              disabled={leaguesLoading}
+            >
+              <option value="">Todos los torneos</option>
+              {availableLeagues.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          )}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancelar</Button>
             <Button size="sm" onClick={handleCreate} disabled={submitting || !createName.trim()}>
@@ -194,7 +224,7 @@ export default function GroupsPage() {
                       {g.status === "archived" && <Badge variant="outline">Archivado</Badge>}
                     </div>
                     <div className="text-sm text-muted-foreground mt-0.5">
-                      {g.sport ? SPORT_LABELS[g.sport] : "Todos los deportes"} · {g.member_count} miembros · Código: <span className="font-mono">{g.code}</span>
+                      {g.sport ? SPORT_LABELS[g.sport] : "Todos los deportes"}{g.league ? ` · ${g.league}` : ""} · {g.member_count} miembros · Código: <span className="font-mono">{g.code}</span>
                     </div>
                   </div>
                   <div className="text-right">

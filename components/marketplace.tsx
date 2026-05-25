@@ -1183,7 +1183,7 @@ function HomeContent() {
                           openHouseBetModal(event)
                         }}
                       >
-                        🏦 vs. Casa
+                        🏦 Vs. la casa
                       </Button>
                     </div>
                   </CardContent>
@@ -1724,7 +1724,7 @@ function HomeContent() {
               <div className="h-0.5 w-full bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent" />
               <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
-                <h2 className="font-bold text-lg">Apostar vs. Casa</h2>
+                <h2 className="font-bold text-lg">Vs. la casa</h2>
                 <button
                   onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore("") }}
                   className="text-muted-foreground hover:text-foreground text-xl leading-none"
