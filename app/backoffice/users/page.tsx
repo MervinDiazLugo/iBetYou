@@ -25,6 +25,7 @@ interface AdminUser {
   false_claim_count?: number | null
   created_at: string
   country?: string | null
+  real_betting_enabled?: boolean | null
 }
 
 export default function BackofficeUsersPage() {
@@ -267,6 +268,7 @@ export default function BackofficeUsersPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">ID</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Rol</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Estado</th>
+              <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Real</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Registro</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Acciones</th>
             </tr>
@@ -274,13 +276,13 @@ export default function BackofficeUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                <td colSpan={7} className="text-center py-12 text-muted-foreground">
                   Cargando usuarios...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                <td colSpan={7} className="text-center py-12 text-muted-foreground">
                   No hay usuarios que coincidan.
                 </td>
               </tr>
@@ -352,6 +354,31 @@ export default function BackofficeUsersPage() {
                           <span className="text-xs text-muted-foreground">Activo</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* Real betting toggle */}
+                    <td className="px-4 py-3 hidden lg:table-cell text-center">
+                      {user.role === "app_user" ? (
+                        <button
+                          type="button"
+                          title={user.real_betting_enabled === false ? "Habilitar apuestas reales" : "Deshabilitar apuestas reales"}
+                          disabled={isLoading}
+                          onClick={() => runAction({
+                            action: "toggle_real_betting",
+                            user_id: user.id,
+                            enabled: user.real_betting_enabled === false,
+                          }, user.id)}
+                          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                            user.real_betting_enabled === false ? "bg-muted" : "bg-green-500"
+                          }`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
+                            user.real_betting_enabled === false ? "translate-x-1" : "translate-x-4.5"
+                          }`} />
+                        </button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
 
                     {/* Registro */}

@@ -91,7 +91,7 @@ export async function POST(request: NextRequest) {
 
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, is_banned, role, betting_blocked_until, country")
+      .select("id, is_banned, role, betting_blocked_until, country, real_betting_enabled")
       .eq("id", user.id)
       .single()
 
@@ -117,6 +117,12 @@ export async function POST(request: NextRequest) {
       if (!allowed) {
         return NextResponse.json(
           { error: "El Modo Real no está habilitado en tu país" },
+          { status: 403 }
+        )
+      }
+      if (profile?.real_betting_enabled === false) {
+        return NextResponse.json(
+          { error: "Las apuestas en Modo Real están deshabilitadas para tu cuenta" },
           { status: 403 }
         )
       }

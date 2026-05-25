@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     let query = supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at, country")
+      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at, country, real_betting_enabled")
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest) {
       nickname,
     } = body as {
       user_id?: string
-      action?: "ban" | "unban" | "set_role" | "promote_by_email" | "create_admin" | "delete"
+      action?: "ban" | "unban" | "set_role" | "promote_by_email" | "create_admin" | "delete" | "toggle_real_betting"
       role?: UserRole
       email?: string
       password?: string
@@ -241,6 +241,23 @@ export async function PATCH(request: NextRequest) {
         .update({ country: country.trim() })
         .eq("id", user_id)
         .select("id, nickname, country")
+        .single()
+
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ success: true, user: data })
+    }
+
+    if (action === "toggle_real_betting") {
+      const { enabled } = body as { enabled?: boolean }
+      if (typeof enabled !== "boolean") {
+        return NextResponse.json({ error: "enabled (boolean) is required" }, { status: 400 })
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update({ real_betting_enabled: enabled })
+        .eq("id", user_id)
+        .select("id, nickname, real_betting_enabled")
         .single()
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
