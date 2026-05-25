@@ -708,12 +708,15 @@ export default function BetDetailPage() {
                     selectionText = `El score será ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}`
                   } else if (bet.bet_type === "direct" || bet.bet_type === "half_time") {
                     selectionText = `Gana ${bet.creator_selection}`
+                  } else {
+                    // House bet types (run_line, total_runs, score_margin) — translate raw selection
+                    selectionText = formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event.home_team, bet.event.away_team)
                   }
 
                   const isTaker = !!user && user.id === bet.acceptor_id
                   const takerWinCondition = bet.bet_type === "exact_score"
                     ? `Tu condición para ganar: que el marcador final NO sea ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}.`
-                    : `Tu condición para ganar: que NO gane ${bet.creator_selection}.`
+                    : `Tu condición para ganar: que NO ocurra — ${selectionText}.`
 
                   return (
                     <>
