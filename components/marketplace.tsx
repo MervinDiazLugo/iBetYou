@@ -45,6 +45,51 @@ const amountRanges = [
   { id: "high", label: "Más de $50", min: 50, max: Number.POSITIVE_INFINITY },
 ]
 
+const SCORE_MARGIN_OPTIONS = [
+  { value: "home_1_5",    labelFn: (home: string, _away: string) => `${home} +1–5` },
+  { value: "home_6_10",   labelFn: (home: string, _away: string) => `${home} +6–10` },
+  { value: "home_11_15",  labelFn: (home: string, _away: string) => `${home} +11–15` },
+  { value: "home_16plus", labelFn: (home: string, _away: string) => `${home} +16+` },
+  { value: "away_1_5",    labelFn: (_home: string, away: string) => `${away} +1–5` },
+  { value: "away_6_10",   labelFn: (_home: string, away: string) => `${away} +6–10` },
+  { value: "away_11_15",  labelFn: (_home: string, away: string) => `${away} +11–15` },
+  { value: "away_16plus", labelFn: (_home: string, away: string) => `${away} +16+` },
+]
+
+const SCORE_MARGIN_ODDS_MAP: Record<string, number> = {
+  home_1_5: 4.1, home_6_10: 4.5, home_11_15: 5.7, home_16plus: 4.1,
+  away_1_5: 4.1, away_6_10: 4.5, away_11_15: 5.7, away_16plus: 4.1,
+}
+
+const TOTAL_RUNS_OPTIONS = [
+  { value: "over_7",   label: "Más de 7",    odds: 1.40 },
+  { value: "under_7",  label: "Menos de 7",  odds: 2.60 },
+  { value: "over_8",   label: "Más de 8",    odds: 1.65 },
+  { value: "under_8",  label: "Menos de 8",  odds: 2.02 },
+  { value: "over_9",   label: "Más de 9",    odds: 2.27 },
+  { value: "under_9",  label: "Menos de 9",  odds: 1.52 },
+  { value: "over_10",  label: "Más de 10",   odds: 3.03 },
+  { value: "under_10", label: "Menos de 10", odds: 1.30 },
+]
+
+function getHouseBetTypes(sport: string): Array<{ id: string; label: string }> {
+  if (sport === "football") return [
+    { id: "direct", label: "Resultado" },
+    { id: "exact_score", label: "Marcador exacto" },
+  ]
+  if (sport === "basketball") return [
+    { id: "direct", label: "Resultado" },
+    { id: "score_margin", label: "Margen" },
+  ]
+  if (sport === "baseball") return [
+    { id: "direct", label: "Resultado" },
+    { id: "run_line", label: "Run Line" },
+    { id: "total_runs", label: "Total carreras" },
+    { id: "exact_score", label: "Marcador exacto" },
+  ]
+  return [{ id: "direct", label: "Resultado" }]
+}
+
 function translateAdvice(advice: string | null | undefined): string {
   if (!advice) return ""
   return advice
@@ -138,6 +183,16 @@ function HomeContent() {
   const [collapsedSports, setCollapsedSports] = useState<Record<string, boolean>>({})
   const [featuredEvents, setFeaturedEvents] = useState<Event[]>([])
   const [selectedLeague, setSelectedLeague] = useState("all")
+  const [houseBetModal, setHouseBetModal] = useState<{
+    event: Event
+    odds: { home: number; draw?: number; away: number } | null
+  } | null>(null)
+  const [houseBetSelection, setHouseBetSelection] = useState<string | null>(null)
+  const [houseBetExactScore, setHouseBetExactScore] = useState("")
+  const [houseBetSelectionOdds, setHouseBetSelectionOdds] = useState<number | null>(null)
+  const [houseBetType, setHouseBetType] = useState<string>("direct")
+  const [houseBetAmount, setHouseBetAmount] = useState("")
+  const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
   const sessionTokenRef = useRef<string | null>(null)
@@ -357,6 +412,28 @@ function HomeContent() {
       .catch(() => {})
   }, [])
 
+  // Debounced exact_score odds fetch for house bet modal
+  useEffect(() => {
+    if (!houseBetModal || houseBetType !== "exact_score") {
+      setHouseBetSelectionOdds(null)
+      return
+    }
+    const valid = /^\d+\s*[-:]\s*\d+$/.test(houseBetExactScore)
+    if (!valid) { setHouseBetSelectionOdds(null); return }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/bets/house/odds?eventId=${houseBetModal.event.id}&betType=exact_score&selection=${encodeURIComponent(houseBetExactScore)}`
+        )
+        if (res.ok) {
+          const json = await res.json()
+          setHouseBetSelectionOdds(Number(json.odds) || null)
+        }
+      } catch (_) {}
+    }, 600)
+    return () => clearTimeout(timer)
+  }, [houseBetExactScore, houseBetType, houseBetModal])
+
   // Load events per sport from API — reset and refetch when search changes
   useEffect(() => {
     const SPORTS_LIST = ["football", "basketball", "baseball"] as const
@@ -543,6 +620,42 @@ function HomeContent() {
   const ownOpenBetsCount = user
     ? inProgressBets.filter((bet) => bet.status === 'open' && bet.creator_id === user.id).length
     : 0
+
+  const openHouseBetModal = (event: Event) => {
+    const percent = (event.metadata as any)?.predictions?.percent
+    let odds: { home: number; draw?: number; away: number } | null = null
+    if (percent) {
+      const home = parseFloat(String(percent.home).replace("%", "")) / 100
+      const away = parseFloat(String(percent.away).replace("%", "")) / 100
+      const draw = percent.draw !== undefined ? parseFloat(String(percent.draw).replace("%", "")) / 100 : undefined
+      if (home > 0 && away > 0) {
+        odds = {
+          home: parseFloat((1 / (home * 1.10)).toFixed(4)),
+          away: parseFloat((1 / (away * 1.10)).toFixed(4)),
+          ...(draw !== undefined && draw > 0 ? { draw: parseFloat((1 / (draw * 1.10)).toFixed(4)) } : {}),
+        }
+      }
+    }
+    setHouseBetModal({ event, odds })
+    setHouseBetSelection(null)
+    setHouseBetExactScore("")
+    setHouseBetAmount("")
+    setHouseBetType("direct")
+  }
+
+  const getActiveHouseOdds = (): number | null => {
+    if (!houseBetModal || !houseBetSelection) return null
+    if (houseBetType === "direct" && houseBetModal.odds) {
+      if (houseBetSelection === "home") return houseBetModal.odds.home
+      if (houseBetSelection === "away") return houseBetModal.odds.away
+      if (houseBetSelection === "draw") return houseBetModal.odds.draw ?? null
+    }
+    if (houseBetType === "score_margin") return SCORE_MARGIN_ODDS_MAP[houseBetSelection] ?? null
+    if (houseBetType === "run_line") return 1.82
+    if (houseBetType === "total_runs") return TOTAL_RUNS_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
+    if (houseBetType === "exact_score") return houseBetSelectionOdds
+    return null
+  }
 
   const getSportIcon = (sport: string) => {
     switch (sport) {
@@ -1053,8 +1166,20 @@ function HomeContent() {
                         )}
                       </div>
                     )}
+                    {(event.metadata as any)?.predictions?.percent && (
+                      <div className="mt-2" onClick={e => e.stopPropagation()}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10 text-xs h-7"
+                          onClick={() => openHouseBetModal(event)}
+                        >
+                          🏦 Apostar vs. Casa
+                        </Button>
+                      </div>
+                    )}
                     <div className="text-center text-[10px] text-amber-400/70 opacity-0 group-hover:opacity-100 transition-opacity mt-1">
-                      Haz clic para crear apuesta
+                      Haz clic para crear apuesta P2P
                     </div>
                   </CardContent>
                 </Card>
@@ -1577,6 +1702,221 @@ function HomeContent() {
           </div>
         )}
       </main>
+
+      {/* House Bet Modal */}
+      {houseBetModal && (() => {
+        const sport = houseBetModal.event.sport
+        const houseBetTypes = getHouseBetTypes(sport)
+        const activeOdds = getActiveHouseOdds()
+        const canSubmit = !houseBetSubmitting && Number(houseBetAmount) > 0 && (
+          houseBetType === "exact_score"
+            ? /^\d+[-:]\d+$/.test(houseBetExactScore) && houseBetSelectionOdds !== null
+            : houseBetSelection !== null
+        )
+        return (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h2 className="font-bold text-lg">Apostar vs. Casa</h2>
+                <button
+                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore("") }}
+                  className="text-muted-foreground hover:text-foreground text-xl leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {houseBetModal.event.home_team} vs {houseBetModal.event.away_team}
+              </p>
+              {/* Bet type tabs */}
+              <div className="flex gap-2 flex-wrap">
+                {houseBetTypes.map(bt => (
+                  <Button
+                    key={bt.id}
+                    variant={houseBetType === bt.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore("") }}
+                  >
+                    {bt.label}
+                  </Button>
+                ))}
+              </div>
+              {/* Direct — outcome buttons */}
+              {houseBetType === "direct" && houseBetModal.odds && (
+                <div className={`grid gap-2 ${houseBetModal.odds.draw !== undefined ? "grid-cols-3" : "grid-cols-2"}`}>
+                  {(["home", "draw", "away"] as const)
+                    .filter(o => o !== "draw" || houseBetModal.odds?.draw !== undefined)
+                    .map(outcome => {
+                      const oddsValue = outcome === "home" ? houseBetModal.odds!.home
+                        : outcome === "away" ? houseBetModal.odds!.away
+                        : houseBetModal.odds!.draw!
+                      const label = outcome === "home" ? houseBetModal.event.home_team
+                        : outcome === "away" ? houseBetModal.event.away_team
+                        : "Empate"
+                      return (
+                        <button
+                          key={outcome}
+                          onClick={() => setHouseBetSelection(outcome)}
+                          className={`rounded-lg border p-3 text-center transition-colors ${
+                            houseBetSelection === outcome
+                              ? "border-yellow-500 bg-yellow-500/10"
+                              : "border-border hover:border-yellow-400"
+                          }`}
+                        >
+                          <div className="text-xs text-muted-foreground truncate">{label}</div>
+                          <div className="font-bold text-yellow-500">{oddsValue.toFixed(2)}x</div>
+                        </button>
+                      )
+                    })}
+                </div>
+              )}
+              {houseBetType === "direct" && !houseBetModal.odds && (
+                <p className="text-sm text-muted-foreground">Este evento no tiene predicciones disponibles.</p>
+              )}
+              {/* Exact score */}
+              {houseBetType === "exact_score" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">
+                    Cuota: {houseBetSelectionOdds !== null
+                      ? `${houseBetSelectionOdds}x`
+                      : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore)
+                        ? "calculando..."
+                        : "ingresa un marcador (ej: 2-1)"}
+                  </p>
+                  <input
+                    type="text"
+                    placeholder="Ej: 2-1"
+                    value={houseBetExactScore}
+                    onChange={e => setHouseBetExactScore(e.target.value)}
+                    className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+                  />
+                </div>
+              )}
+              {/* Score margin */}
+              {houseBetType === "score_margin" && (
+                <div className="grid grid-cols-2 gap-2">
+                  {SCORE_MARGIN_OPTIONS.map(opt => {
+                    const label = opt.labelFn(houseBetModal.event.home_team, houseBetModal.event.away_team)
+                    const odds = SCORE_MARGIN_ODDS_MAP[opt.value]
+                    return (
+                      <button
+                        key={opt.value}
+                        onClick={() => setHouseBetSelection(opt.value)}
+                        className={`rounded-lg border p-2 text-center transition-colors ${
+                          houseBetSelection === opt.value
+                            ? "border-yellow-500 bg-yellow-500/10"
+                            : "border-border hover:border-yellow-400"
+                        }`}
+                      >
+                        <div className="text-xs truncate">{label}</div>
+                        <div className="font-bold text-yellow-500 text-sm">{odds.toFixed(2)}x</div>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {/* Run line */}
+              {houseBetType === "run_line" && (
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: "home_rl", label: `${houseBetModal.event.home_team} -1.5` },
+                    { value: "away_rl", label: `${houseBetModal.event.away_team} +1.5` },
+                  ].map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setHouseBetSelection(opt.value)}
+                      className={`rounded-lg border p-3 text-center transition-colors ${
+                        houseBetSelection === opt.value
+                          ? "border-yellow-500 bg-yellow-500/10"
+                          : "border-border hover:border-yellow-400"
+                      }`}
+                    >
+                      <div className="text-xs text-muted-foreground">{opt.label}</div>
+                      <div className="font-bold text-yellow-500">1.82x</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Total runs */}
+              {houseBetType === "total_runs" && (
+                <div className="grid grid-cols-2 gap-2">
+                  {TOTAL_RUNS_OPTIONS.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => setHouseBetSelection(opt.value)}
+                      className={`rounded-lg border p-2 text-center transition-colors ${
+                        houseBetSelection === opt.value
+                          ? "border-yellow-500 bg-yellow-500/10"
+                          : "border-border hover:border-yellow-400"
+                      }`}
+                    >
+                      <div className="text-xs">{opt.label}</div>
+                      <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {/* Amount */}
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Monto (máx. 100,000)</label>
+                <input
+                  type="number"
+                  value={houseBetAmount}
+                  onChange={e => setHouseBetAmount(e.target.value)}
+                  placeholder="0"
+                  min={1}
+                  max={100000}
+                  className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+                />
+              </div>
+              {Number(houseBetAmount) > 0 && activeOdds !== null && (
+                <p className="text-sm text-green-500 font-medium">
+                  Ganancia potencial: {(Number(houseBetAmount) * activeOdds).toFixed(0)} tokens
+                </p>
+              )}
+              <Button
+                className="w-full"
+                disabled={!canSubmit}
+                onClick={async () => {
+                  setHouseBetSubmitting(true)
+                  try {
+                    const { data: { session } } = await supabase.auth.getSession()
+                    if (!session) { showToast("Inicia sesión para apostar", "error"); return }
+                    const selectionValue = houseBetType === "exact_score" ? houseBetExactScore : houseBetSelection
+                    const res = await fetch("/api/bets/house", {
+                      method: "POST",
+                      headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${session.access_token}`,
+                      },
+                      body: JSON.stringify({
+                        userId: session.user.id,
+                        eventId: houseBetModal.event.id,
+                        betType: houseBetType,
+                        selection: selectionValue,
+                        amount: Number(houseBetAmount),
+                        mode,
+                      }),
+                    })
+                    const json = await res.json()
+                    if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
+                    showToast("¡Apuesta creada contra la casa!", "success")
+                    setHouseBetModal(null)
+                    setHouseBetSelection(null)
+                    setHouseBetExactScore("")
+                    setHouseBetAmount("")
+                    window.dispatchEvent(new Event("wallet:updated"))
+                  } finally {
+                    setHouseBetSubmitting(false)
+                  }
+                }}
+              >
+                {houseBetSubmitting ? "Procesando..." : "Confirmar apuesta"}
+              </Button>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
