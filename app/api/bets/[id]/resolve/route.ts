@@ -80,7 +80,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const { data: bet, error: betError } = await supabase
       .from("bets")
-      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, mode, event:events(start_time, home_team, away_team, home_score, away_score)")
+      .select("id, creator_id, acceptor_id, bet_type, status, amount, multiplier, winner_id, creator_claimed, acceptor_claimed, mode, group_id, event:events(start_time, home_team, away_team, home_score, away_score)")
       .eq("id", betId)
       .single()
 
@@ -272,16 +272,22 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     // Bet confirmed resolved — now pay winner
+    const betGroupId = (bet as any).group_id ?? null
     const betMode = bet.mode ?? "fantasy"
     try {
-      await payoutToMode(supabase, winnerUserId, totalPrize, betMode)
+      if (betGroupId) {
+        const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
+        await creditGroupWallet(supabase, betGroupId, winnerUserId, totalPrize)
+      } else {
+        await payoutToMode(supabase, winnerUserId, totalPrize, betMode)
+      }
     } catch (payoutErr) {
       console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId, betMode, error: payoutErr })
       return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
     }
     await supabase.from("transactions").insert({
       user_id: winnerUserId,
-      token_type: tokenTypeForMode(betMode),
+      token_type: betGroupId ? "group_fantasy" : tokenTypeForMode(betMode),
       amount: totalPrize,
       operation: "bet_won",
       reference_id: betId,

@@ -62,6 +62,7 @@ export async function POST(request: NextRequest) {
         multiplier,
         status,
         mode,
+        group_id,
         event:events(id, home_team, away_team, home_score, away_score, sport)
       `)
       .eq("bet_type", "direct")
@@ -202,8 +203,14 @@ export async function POST(request: NextRequest) {
 
       // Bet confirmed — now pay winner
       const betMode = (bet as any).mode ?? "fantasy"
+      const betGroupId = (bet as any).group_id ?? null
       try {
-        await payoutToMode(supabase, winnerId, totalPrize, betMode)
+        if (betGroupId) {
+          const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
+          await creditGroupWallet(supabase, betGroupId, winnerId, totalPrize)
+        } else {
+          await payoutToMode(supabase, winnerId, totalPrize, betMode)
+        }
       } catch (payoutErr) {
         failed += 1
         console.error("PAYOUT_FAILED", { userId: winnerId, amount: totalPrize, betId: bet.id, betMode, error: payoutErr })
@@ -212,7 +219,7 @@ export async function POST(request: NextRequest) {
       }
       await supabase.from("transactions").insert({
         user_id: winnerId,
-        token_type: tokenTypeForMode(betMode),
+        token_type: betGroupId ? "group_fantasy" : tokenTypeForMode(betMode),
         amount: totalPrize,
         operation: "bet_won_auto_resolved_disputed",
         reference_id: bet.id,
