@@ -957,17 +957,21 @@ function HomeContent() {
         </div>
 
         {/* Eventos Destacados */}
-        {featuredEvents.length > 0 && (
+        {(() => {
+          const visibleFeatured = selectedSport === "all"
+            ? featuredEvents
+            : featuredEvents.filter(e => e.sport === selectedSport)
+          return visibleFeatured.length > 0 ? (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
               <span className="text-xl">⭐</span>
               <h2 className="text-lg sm:text-xl font-bold">Eventos Destacados</h2>
               <Badge className="bg-amber-400/20 text-amber-400 border-amber-400/40 text-xs" variant="outline">
-                {featuredEvents.length}
+                {visibleFeatured.length}
               </Badge>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {featuredEvents.map((event) => (
+              {visibleFeatured.map((event) => (
                 <Card
                   key={`featured-${event.id}`}
                   className="overflow-hidden cursor-pointer border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all group"
@@ -1057,7 +1061,8 @@ function HomeContent() {
               ))}
             </div>
           </div>
-        )}
+          ) : null
+        })()}
 
         {/* Eventos Disponibles */}
         <div className="mb-8">

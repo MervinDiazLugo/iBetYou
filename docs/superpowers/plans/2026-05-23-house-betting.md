@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Let users bet directly against the platform on featured events using prediction-based decimal odds with a 10% house edge, max 100,000 tokens per bet, for both fantasy and real modes, supporting `direct` and `exact_score` bet types.
+**Goal:** Let users bet directly against the platform on featured events using prediction-based decimal odds with a 10% house edge, max 100,000 tokens per bet, for both fantasy and real modes, supporting `direct`, `exact_score`, `score_margin`, `run_line`, and `total_runs` bet types.
 
 **Architecture:** House bets are stored in the existing `bets` table with two new columns (`house_bet boolean`, `house_odds numeric`, `potential_payout numeric`). A new `house_wallet` table holds the platform's reserves. At bet creation the user's stake is deducted and the house pre-reserves its maximum liability (`potential_payout - stake`). On auto-resolution the winner is credited and the house wallet is adjusted accordingly.
 
@@ -26,7 +26,14 @@
 - Baseball: conservative fixed 15x (implied prob 6.7%; true exact score prob ~3–5% → house has edge)
 - Basketball: exact_score not supported → use **`score_margin`** instead (already implemented in P2P system)
 
-**Score margin house odds** (fixed, with 10% edge, based on NBA margin distribution):
+**House bet types per sport:**
+| Sport | Bet types available |
+|---|---|
+| Football | `direct`, `exact_score` |
+| Baseball | `direct`, `exact_score`, `run_line`, `total_runs` |
+| Basketball | `direct`, `score_margin` |
+
+**Score margin house odds** (fixed, 10% edge, NBA margin distribution):
 | Selection | True prob | House odds |
 |---|---|---|
 | Win by 1–5 pts | ~22% | 4.1x |
@@ -34,6 +41,23 @@
 | Win by 11–15 pts | ~16% | 5.7x |
 | Win by 16+ pts | ~22% | 4.1x |
 Exposure limit for score_margin: `MAX_EXACT_EXPOSURE` (200k) per selection per event.
+
+**Run line house odds** (fixed, 10% edge — MLB run line ≈ 50/50 by design):
+- Both sides (`home_rl`, `away_rl`): **1.82x** → `1/(0.50 × 1.10)`
+- Exposure limit: `MAX_DIRECT_EXPOSURE` (500k) per side per event
+
+**Total runs house odds** (fixed table, 10% edge, based on MLB ~8.5 avg runs/game):
+| Selection | True prob | House odds |
+|---|---|---|
+| over_7 | ~65% | 1.40x |
+| under_7 | ~35% | 2.60x |
+| over_8 | ~55% | 1.65x |
+| under_8 | ~45% | 2.02x |
+| over_9 | ~40% | 2.27x |
+| under_9 | ~60% | 1.52x |
+| over_10 | ~30% | 3.03x |
+| under_10 | ~70% | 1.30x |
+Exposure limit: `MAX_EXACT_EXPOSURE` (200k) per selection per event.
 
 **Why not fixed 12x for football:** implies 8.3% probability. Common scores (1-0, 1-1, 2-1) have true prob 10–15% → users get +EV, house loses systematically.
 **Why not Claude:** zero tokens needed — Poisson is deterministic and uses data already in DB.
@@ -197,6 +221,40 @@ function parseScore(selection: string): { home: number; away: number } | null {
  *
  * metadata should contain predictions.home_goals_avg and predictions.away_goals_avg for football.
  */
+// ── Run line odds (baseball) ─────────────────────────────────────────────────
+
+const RUN_LINE_ODDS = 1.82 // MLB run line ≈ 50/50; 1/(0.50 × 1.10)
+
+/**
+ * Returns fixed decimal odds for run_line bets (baseball only).
+ * selection: "home_rl" | "away_rl"
+ */
+export function calcRunLineOdds(selection: string): number | null {
+  if (selection !== "home_rl" && selection !== "away_rl") return null
+  return RUN_LINE_ODDS
+}
+
+// ── Total runs odds (baseball) ────────────────────────────────────────────────
+
+const TOTAL_RUNS_ODDS: Record<string, number> = {
+  over_7: 1.40,
+  under_7: 2.60,
+  over_8: 1.65,
+  under_8: 2.02,
+  over_9: 2.27,
+  under_9: 1.52,
+  over_10: 3.03,
+  under_10: 1.30,
+}
+
+/**
+ * Returns calibrated decimal odds for total_runs bets (baseball only).
+ * selection: "over_7" | "under_7" | "over_8" | "under_8" | "over_9" | "under_9" | "over_10" | "under_10"
+ */
+export function calcTotalRunsOdds(selection: string): number | null {
+  return TOTAL_RUNS_ODDS[selection] ?? null
+}
+
 // ── Score margin odds (basketball) ───────────────────────────────────────────
 
 const SCORE_MARGIN_ODDS: Record<string, number> = {
@@ -422,7 +480,7 @@ git commit -m "feat: extend Bet type with house fields, add HouseWallet interfac
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { canCountryUseRealMoney } from "@/lib/country-access"
-import { calcDirectOdds, calcExactScoreOdds, oddsForOutcome, DirectOutcome, MAX_DIRECT_EXPOSURE, MAX_EXACT_EXPOSURE } from "@/lib/house-odds"
+import { calcDirectOdds, calcExactScoreOdds, calcScoreMarginOdds, calcRunLineOdds, calcTotalRunsOdds, oddsForOutcome, DirectOutcome, MAX_DIRECT_EXPOSURE, MAX_EXACT_EXPOSURE } from "@/lib/house-odds"
 import { houseWalletDebit } from "@/lib/house-wallet"
 import { payoutToMode } from "@/lib/wallet-utils"
 import { createNotification } from "@/lib/notifications"
@@ -455,8 +513,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    if (!["direct", "exact_score"].includes(betType)) {
-      return NextResponse.json({ error: "Casa solo acepta apuestas direct y exact_score" }, { status: 400 })
+    const ALLOWED_BET_TYPES: Record<string, string[]> = {
+      football:   ["direct", "exact_score"],
+      basketball: ["direct", "score_margin"],
+      baseball:   ["direct", "exact_score", "run_line", "total_runs"],
+    }
+    const allowedForSport = ALLOWED_BET_TYPES[eventRow.sport] ?? ["direct"]
+    if (!allowedForSport.includes(betType)) {
+      return NextResponse.json({ error: `Casa no acepta "${betType}" para ${eventRow.sport}` }, { status: 400 })
     }
 
     const stake = Number(rawAmount)
@@ -512,7 +576,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Calculate odds
+    // Calculate odds — must validate event sport before this block
     let houseOdds: number | null = null
 
     if (betType === "direct") {
@@ -528,8 +592,7 @@ export async function POST(request: NextRequest) {
       if (houseOdds === null) {
         return NextResponse.json({ error: `La selección "${selection}" no está disponible para este evento` }, { status: 400 })
       }
-    } else {
-      // exact_score
+    } else if (betType === "exact_score") {
       if (!/^\d+\s*[-:]\s*\d+$/.test(String(selection))) {
         return NextResponse.json({ error: "Formato de marcador inválido. Ejemplo: 2-1" }, { status: 400 })
       }
@@ -537,13 +600,30 @@ export async function POST(request: NextRequest) {
       if (houseOdds === null) {
         return NextResponse.json({ error: "Marcador exacto no disponible para este deporte" }, { status: 400 })
       }
+    } else if (betType === "score_margin") {
+      houseOdds = calcScoreMarginOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json({ error: `Selección de margen inválida: "${selection}"` }, { status: 400 })
+      }
+    } else if (betType === "run_line") {
+      houseOdds = calcRunLineOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json({ error: `Selección de run_line inválida: "${selection}"` }, { status: 400 })
+      }
+    } else if (betType === "total_runs") {
+      houseOdds = calcTotalRunsOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json({ error: `Selección de total_runs inválida: "${selection}"` }, { status: 400 })
+      }
     }
 
     const potentialPayout = parseFloat((stake * houseOdds).toFixed(4))
     const houseRisk = parseFloat((potentialPayout - stake).toFixed(4))
 
     // Exposure limit check — prevent correlated bet concentration per outcome
-    const exposureLimit = betType === "direct" ? MAX_DIRECT_EXPOSURE : MAX_EXACT_EXPOSURE
+    const exposureLimit = betType === "direct" || betType === "run_line"
+      ? MAX_DIRECT_EXPOSURE
+      : MAX_EXACT_EXPOSURE
     const { data: exposureRows } = await supabase
       .from("bets")
       .select("potential_payout, amount")
@@ -717,7 +797,7 @@ Used by the marketplace modal to show odds **before** the user submits. Called w
 ```typescript
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
-import { calcDirectOdds, calcExactScoreOdds } from "@/lib/house-odds"
+import { calcDirectOdds, calcExactScoreOdds, calcScoreMarginOdds, calcRunLineOdds, calcTotalRunsOdds } from "@/lib/house-odds"
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
@@ -754,6 +834,27 @@ export async function GET(request: NextRequest) {
     if (!selection) return NextResponse.json({ error: "Falta la selección" }, { status: 400 })
     const odds = calcExactScoreOdds(ev.sport, selection, ev.metadata as any)
     if (odds === null) return NextResponse.json({ error: "No disponible para este deporte" }, { status: 400 })
+    return NextResponse.json({ odds })
+  }
+
+  if (betType === "score_margin") {
+    if (!selection) return NextResponse.json({ error: "Falta la selección" }, { status: 400 })
+    const odds = calcScoreMarginOdds(selection)
+    if (odds === null) return NextResponse.json({ error: "Selección de margen inválida" }, { status: 400 })
+    return NextResponse.json({ odds })
+  }
+
+  if (betType === "run_line") {
+    if (!selection) return NextResponse.json({ error: "Falta la selección" }, { status: 400 })
+    const odds = calcRunLineOdds(selection)
+    if (odds === null) return NextResponse.json({ error: "Selección de run_line inválida" }, { status: 400 })
+    return NextResponse.json({ odds })
+  }
+
+  if (betType === "total_runs") {
+    if (!selection) return NextResponse.json({ error: "Falta la selección" }, { status: 400 })
+    const odds = calcTotalRunsOdds(selection)
+    if (odds === null) return NextResponse.json({ error: "Selección de total_runs inválida" }, { status: 400 })
     return NextResponse.json({ odds })
   }
 
@@ -1395,24 +1496,43 @@ const [houseBetModal, setHouseBetModal] = useState<{
   event: Event
   odds: { home: number; draw?: number; away: number } | null
 } | null>(null)
-const [houseBetSelection, setHouseBetSelection] = useState<"home" | "draw" | "away" | null>(null)
+const [houseBetSelection, setHouseBetSelection] = useState<string | null>(null)
 const [houseBetExactScore, setHouseBetExactScore] = useState("")
-const [houseBetExactOdds, setHouseBetExactOdds] = useState<number | null>(null)
-const [houseBetType, setHouseBetType] = useState<"direct" | "exact_score">("direct")
+const [houseBetSelectionOdds, setHouseBetSelectionOdds] = useState<number | null>(null)
+const [houseBetType, setHouseBetType] = useState<string>("direct")
 const [houseBetAmount, setHouseBetAmount] = useState("")
 const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
 ```
 
-Also add a `useEffect` that fetches exact_score odds dynamically when the user types a valid score (debounced 600ms):
+Add a helper that returns available bet types per sport:
+```tsx
+function getHouseBetTypes(sport: string): Array<{ id: string; label: string }> {
+  if (sport === "football") return [{ id: "direct", label: "Resultado" }, { id: "exact_score", label: "Marcador exacto" }]
+  if (sport === "basketball") return [{ id: "direct", label: "Resultado" }, { id: "score_margin", label: "Margen" }]
+  if (sport === "baseball") return [
+    { id: "direct", label: "Resultado" },
+    { id: "run_line", label: "Run Line" },
+    { id: "total_runs", label: "Total carreras" },
+    { id: "exact_score", label: "Marcador exacto" },
+  ]
+  return [{ id: "direct", label: "Resultado" }]
+}
+```
+
+Also add a `useEffect` that fetches odds for text-input bet types (exact_score) when the user types a valid score (debounced 600ms):
 
 ```tsx
 useEffect(() => {
-  if (houseBetType !== "exact_score" || !houseBetModal) {
-    setHouseBetExactOdds(null)
+  if (!houseBetModal) { setHouseBetSelectionOdds(null); return }
+
+  // For types with a predefined selection, odds are derived from houseBetModal.odds or fixed tables
+  // Only exact_score requires a dynamic fetch
+  if (houseBetType !== "exact_score") {
+    setHouseBetSelectionOdds(null)
     return
   }
   const validFormat = /^\d+\s*[-:]\s*\d+$/.test(houseBetExactScore)
-  if (!validFormat) { setHouseBetExactOdds(null); return }
+  if (!validFormat) { setHouseBetSelectionOdds(null); return }
 
   const timer = setTimeout(async () => {
     const res = await fetch(
@@ -1420,7 +1540,7 @@ useEffect(() => {
     )
     if (res.ok) {
       const json = await res.json()
-      setHouseBetExactOdds(Number(json.odds) || null)
+      setHouseBetSelectionOdds(Number(json.odds) || null)
     }
   }, 600)
   return () => clearTimeout(timer)
@@ -1463,151 +1583,225 @@ In the section that renders featured event cards, find the existing buttons (e.g
 
 - [ ] **Step 5: Add the house bet modal**
 
-Add this modal component at the end of the JSX, alongside other modals:
+Add this modal component at the end of the JSX, alongside other modals.
+
+`SCORE_MARGIN_OPTIONS` and `TOTAL_RUNS_OPTIONS` are module-level constants — define them above the component:
 
 ```tsx
-{houseBetModal && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-    <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="font-bold text-lg">Apostar vs. Casa</h2>
-        <button onClick={() => setHouseBetModal(null)} className="text-muted-foreground hover:text-foreground">✕</button>
-      </div>
+const SCORE_MARGIN_OPTIONS = [
+  { value: "home_1_5",    label: (home: string) => `${home} +1–5` },
+  { value: "home_6_10",   label: (home: string) => `${home} +6–10` },
+  { value: "home_11_15",  label: (home: string) => `${home} +11–15` },
+  { value: "home_16plus", label: (home: string) => `${home} +16+` },
+  { value: "away_1_5",    label: (_: string, away: string) => `${away} +1–5` },
+  { value: "away_6_10",   label: (_: string, away: string) => `${away} +6–10` },
+  { value: "away_11_15",  label: (_: string, away: string) => `${away} +11–15` },
+  { value: "away_16plus", label: (_: string, away: string) => `${away} +16+` },
+]
 
-      <p className="text-sm text-muted-foreground">
-        {houseBetModal.event.home_team} vs {houseBetModal.event.away_team}
-      </p>
+const TOTAL_RUNS_OPTIONS = [
+  { value: "over_7",  label: "Más de 7",  odds: 1.40 },
+  { value: "under_7", label: "Menos de 7", odds: 2.60 },
+  { value: "over_8",  label: "Más de 8",  odds: 1.65 },
+  { value: "under_8", label: "Menos de 8", odds: 2.02 },
+  { value: "over_9",  label: "Más de 9",  odds: 2.27 },
+  { value: "under_9", label: "Menos de 9", odds: 1.52 },
+  { value: "over_10", label: "Más de 10", odds: 3.03 },
+  { value: "under_10",label: "Menos de 10", odds: 1.30 },
+]
 
-      {/* Bet type toggle */}
-      <div className="flex gap-2">
-        <Button
-          variant={houseBetType === "direct" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setHouseBetType("direct")}
-        >
-          Resultado
-        </Button>
-        <Button
-          variant={houseBetType === "exact_score" ? "default" : "outline"}
-          size="sm"
-          onClick={() => setHouseBetType("exact_score")}
-        >
-          Marcador exacto
-        </Button>
-      </div>
+const SCORE_MARGIN_ODDS_MAP: Record<string, number> = {
+  home_1_5: 4.1, home_6_10: 4.5, home_11_15: 5.7, home_16plus: 4.1,
+  away_1_5: 4.1, away_6_10: 4.5, away_11_15: 5.7, away_16plus: 4.1,
+}
+```
 
-      {houseBetType === "direct" && houseBetModal.odds && (
-        <div className="grid grid-cols-3 gap-2">
-          {(["home", "draw", "away"] as const).map(outcome => {
-            const oddsValue = outcome === "home" ? houseBetModal.odds!.home
-              : outcome === "away" ? houseBetModal.odds!.away
-              : houseBetModal.odds!.draw
-            if (oddsValue === undefined) return null
-            const label = outcome === "home" ? houseBetModal.event.home_team
-              : outcome === "away" ? houseBetModal.event.away_team
-              : "Empate"
-            return (
-              <button
-                key={outcome}
-                onClick={() => setHouseBetSelection(outcome)}
-                className={`rounded-lg border p-3 text-center transition-colors ${houseBetSelection === outcome ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20" : "border-border hover:border-yellow-400"}`}
-              >
-                <div className="text-xs text-muted-foreground truncate">{label}</div>
-                <div className="font-bold text-yellow-600">{oddsValue.toFixed(2)}x</div>
-              </button>
-            )
-          })}
+Helper to get current odds for a selection (used in "potential payout" display):
+
+```tsx
+function getSelectionOdds(
+  houseBetType: string,
+  houseBetSelection: string | null,
+  houseBetModal: { event: Event; odds: { home: number; draw?: number; away: number } | null } | null,
+  houseBetSelectionOdds: number | null
+): number | null {
+  if (!houseBetModal || !houseBetSelection) return null
+  if (houseBetType === "direct" && houseBetModal.odds) {
+    if (houseBetSelection === "home") return houseBetModal.odds.home
+    if (houseBetSelection === "away") return houseBetModal.odds.away
+    if (houseBetSelection === "draw") return houseBetModal.odds.draw ?? null
+  }
+  if (houseBetType === "score_margin") return SCORE_MARGIN_ODDS_MAP[houseBetSelection] ?? null
+  if (houseBetType === "run_line") return 1.82
+  if (houseBetType === "total_runs") return TOTAL_RUNS_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
+  if (houseBetType === "exact_score") return houseBetSelectionOdds
+  return null
+}
+```
+
+Modal JSX:
+
+```tsx
+{houseBetModal && (() => {
+  const sport = houseBetModal.event.sport
+  const houseBetTypes = getHouseBetTypes(sport)
+  const activeOdds = getSelectionOdds(houseBetType, houseBetSelection, houseBetModal, houseBetSelectionOdds)
+  const canSubmit = !houseBetSubmitting && Number(houseBetAmount) > 0 &&
+    (houseBetType === "exact_score"
+      ? /^\d+[-:]\d+$/.test(houseBetExactScore) && houseBetSelectionOdds !== null
+      : houseBetSelection !== null)
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-background rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-bold text-lg">Apostar vs. Casa</h2>
+          <button onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore("") }} className="text-muted-foreground hover:text-foreground">✕</button>
         </div>
-      )}
 
-      {houseBetType === "exact_score" && (
-        <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Cuota: {houseBetExactOdds !== null ? `${houseBetExactOdds}x` : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore) ? "calculando..." : "ingresa un marcador"}
-          </p>
-          <Input
-            placeholder="Ej: 2-1"
-            value={houseBetExactScore}
-            onChange={e => setHouseBetExactScore(e.target.value)}
-          />
-        </div>
-      )}
-
-      <div className="space-y-1">
-        <Label>Monto (máx. 100,000)</Label>
-        <Input
-          type="number"
-          value={houseBetAmount}
-          onChange={e => setHouseBetAmount(e.target.value)}
-          placeholder="0"
-          min={1}
-          max={100000}
-        />
-      </div>
-
-      {houseBetAmount && Number(houseBetAmount) > 0 && (
-        <p className="text-sm text-green-600">
-          Ganancia potencial:{" "}
-          {houseBetType === "direct" && houseBetSelection && houseBetModal.odds
-            ? (Number(houseBetAmount) * (
-                houseBetSelection === "home" ? houseBetModal.odds.home
-                : houseBetSelection === "away" ? houseBetModal.odds.away
-                : houseBetModal.odds.draw ?? 0
-              )).toFixed(0)
-            : houseBetType === "exact_score" && houseBetExactOdds !== null
-            ? (Number(houseBetAmount) * houseBetExactOdds).toFixed(0)
-            : "—"
-          }{" "}tokens
+        <p className="text-sm text-muted-foreground">
+          {houseBetModal.event.home_team} vs {houseBetModal.event.away_team}
         </p>
-      )}
 
-      <Button
-        className="w-full"
-        disabled={
-          houseBetSubmitting ||
-          !houseBetAmount ||
-          Number(houseBetAmount) <= 0 ||
-          (houseBetType === "direct" && !houseBetSelection) ||
-          (houseBetType === "exact_score" && (!houseBetExactScore || houseBetExactOdds === null))
-        }
-        onClick={async () => {
-          setHouseBetSubmitting(true)
-          try {
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session) { showToast("Inicia sesión para apostar", "error"); return }
-            const selection = houseBetType === "direct" ? houseBetSelection : houseBetExactScore
-            const res = await fetch("/api/bets/house", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${session.access_token}`,
-              },
-              body: JSON.stringify({
-                userId: session.user.id,
-                eventId: houseBetModal.event.id,
-                betType: houseBetType,
-                selection,
-                amount: Number(houseBetAmount),
-                mode: selectedMode,
-              }),
-            })
-            const json = await res.json()
-            if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
-            showToast("¡Apuesta creada contra la casa!", "success")
-            setHouseBetModal(null)
-            setHouseBetSelection(null)
-            setHouseBetExactScore("")
-            setHouseBetAmount("")
-          } finally {
-            setHouseBetSubmitting(false)
-          }
-        }}
-      >
-        {houseBetSubmitting ? "Procesando..." : "Confirmar apuesta"}
-      </Button>
+        {/* Bet type tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {houseBetTypes.map(bt => (
+            <Button
+              key={bt.id}
+              variant={houseBetType === bt.id ? "default" : "outline"}
+              size="sm"
+              onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore("") }}
+            >
+              {bt.label}
+            </Button>
+          ))}
+        </div>
+
+        {/* Direct — 2 or 3 outcome buttons */}
+        {houseBetType === "direct" && houseBetModal.odds && (
+          <div className={`grid gap-2 ${houseBetModal.odds.draw !== undefined ? "grid-cols-3" : "grid-cols-2"}`}>
+            {(["home", "draw", "away"] as const).filter(o => o !== "draw" || houseBetModal.odds?.draw !== undefined).map(outcome => {
+              const oddsValue = outcome === "home" ? houseBetModal.odds!.home
+                : outcome === "away" ? houseBetModal.odds!.away
+                : houseBetModal.odds!.draw!
+              const label = outcome === "home" ? houseBetModal.event.home_team
+                : outcome === "away" ? houseBetModal.event.away_team
+                : "Empate"
+              return (
+                <button key={outcome} onClick={() => setHouseBetSelection(outcome)}
+                  className={`rounded-lg border p-3 text-center transition-colors ${houseBetSelection === outcome ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20" : "border-border hover:border-yellow-400"}`}>
+                  <div className="text-xs text-muted-foreground truncate">{label}</div>
+                  <div className="font-bold text-yellow-600">{oddsValue.toFixed(2)}x</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Exact score */}
+        {houseBetType === "exact_score" && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Cuota: {houseBetSelectionOdds !== null ? `${houseBetSelectionOdds}x` : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore) ? "calculando..." : "ingresa un marcador"}
+            </p>
+            <Input placeholder="Ej: 2-1" value={houseBetExactScore} onChange={e => setHouseBetExactScore(e.target.value)} />
+          </div>
+        )}
+
+        {/* Score margin — 8-button grid */}
+        {houseBetType === "score_margin" && (
+          <div className="grid grid-cols-2 gap-2">
+            {SCORE_MARGIN_OPTIONS.map(opt => {
+              const label = opt.label(houseBetModal.event.home_team, houseBetModal.event.away_team)
+              const odds = SCORE_MARGIN_ODDS_MAP[opt.value]
+              return (
+                <button key={opt.value} onClick={() => setHouseBetSelection(opt.value)}
+                  className={`rounded-lg border p-2 text-center transition-colors ${houseBetSelection === opt.value ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20" : "border-border hover:border-yellow-400"}`}>
+                  <div className="text-xs truncate">{label}</div>
+                  <div className="font-bold text-yellow-600 text-sm">{odds.toFixed(2)}x</div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* Run line — 2 buttons */}
+        {houseBetType === "run_line" && (
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { value: "home_rl", label: `${houseBetModal.event.home_team} -1.5` },
+              { value: "away_rl", label: `${houseBetModal.event.away_team} +1.5` },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => setHouseBetSelection(opt.value)}
+                className={`rounded-lg border p-3 text-center transition-colors ${houseBetSelection === opt.value ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20" : "border-border hover:border-yellow-400"}`}>
+                <div className="text-xs text-muted-foreground">{opt.label}</div>
+                <div className="font-bold text-yellow-600">1.82x</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Total runs — 8-button grid */}
+        {houseBetType === "total_runs" && (
+          <div className="grid grid-cols-2 gap-2">
+            {TOTAL_RUNS_OPTIONS.map(opt => (
+              <button key={opt.value} onClick={() => setHouseBetSelection(opt.value)}
+                className={`rounded-lg border p-2 text-center transition-colors ${houseBetSelection === opt.value ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20" : "border-border hover:border-yellow-400"}`}>
+                <div className="text-xs">{opt.label}</div>
+                <div className="font-bold text-yellow-600 text-sm">{opt.odds.toFixed(2)}x</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="space-y-1">
+          <Label>Monto (máx. 100,000)</Label>
+          <Input type="number" value={houseBetAmount} onChange={e => setHouseBetAmount(e.target.value)} placeholder="0" min={1} max={100000} />
+        </div>
+
+        {Number(houseBetAmount) > 0 && activeOdds !== null && (
+          <p className="text-sm text-green-600">
+            Ganancia potencial: {(Number(houseBetAmount) * activeOdds).toFixed(0)} tokens
+          </p>
+        )}
+
+        <Button className="w-full" disabled={!canSubmit}
+          onClick={async () => {
+            setHouseBetSubmitting(true)
+            try {
+              const { data: { session } } = await supabase.auth.getSession()
+              if (!session) { showToast("Inicia sesión para apostar", "error"); return }
+              const selectionValue = houseBetType === "exact_score" ? houseBetExactScore : houseBetSelection
+              const res = await fetch("/api/bets/house", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${session.access_token}` },
+                body: JSON.stringify({
+                  userId: session.user.id,
+                  eventId: houseBetModal.event.id,
+                  betType: houseBetType,
+                  selection: selectionValue,
+                  amount: Number(houseBetAmount),
+                  mode: selectedMode,  // replace with actual mode variable name from marketplace.tsx Step 1 read
+                }),
+              })
+              const json = await res.json()
+              if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
+              showToast("¡Apuesta creada contra la casa!", "success")
+              setHouseBetModal(null)
+              setHouseBetSelection(null)
+              setHouseBetExactScore("")
+              setHouseBetAmount("")
+            } finally {
+              setHouseBetSubmitting(false)
+            }
+          }}
+        >
+          {houseBetSubmitting ? "Procesando..." : "Confirmar apuesta"}
+        </Button>
+      </div>
     </div>
-  </div>
-)}
+  )
+})()}
 ```
 
 **Note:** `selectedMode` refers to whatever variable holds the current fantasy/real mode toggle in `marketplace.tsx`. Read the file in Step 1 to find the actual variable name and adjust accordingly.
