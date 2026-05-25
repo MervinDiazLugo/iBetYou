@@ -6,6 +6,7 @@ import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
+import { houseWalletCredit } from "@/lib/house-wallet"
 
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
@@ -359,6 +360,68 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
 
   try {
+    // Sweep: cancel house bets for cancelled/postponed events
+    const { data: strandedBets } = await supabase
+      .from("bets")
+      .select("id, creator_id, amount, potential_payout, mode, event_id, bet_type")
+      .eq("house_bet", true)
+      .eq("status", "taken")
+
+    // Filter to only those with cancelled/postponed events
+    const strandedEventIds = (strandedBets || []).map(b => b.event_id)
+    let cancelledEventIds: number[] = []
+    if (strandedEventIds.length > 0) {
+      const { data: cancelledEvents } = await supabase
+        .from("events")
+        .select("id")
+        .in("id", strandedEventIds)
+        .in("status", ["cancelled", "postponed"])
+      cancelledEventIds = (cancelledEvents || []).map(e => e.id)
+    }
+
+    for (const sb of (strandedBets || []).filter(b => cancelledEventIds.includes(b.event_id))) {
+      const stake = Number(sb.amount || 0)
+      const potentialPayout = Number(sb.potential_payout || 0)
+      const houseRisk = potentialPayout - stake
+      const betMode = (sb as any).mode ?? "fantasy"
+
+      const { error: cancelErr } = await supabase
+        .from("bets")
+        .update({ status: "cancelled", resolved_at: new Date().toISOString() })
+        .eq("id", sb.id)
+        .eq("status", "taken")
+
+      if (cancelErr) {
+        console.error("STRANDED_HOUSE_BET_CANCEL_FAILED", { betId: sb.id, error: cancelErr })
+        continue
+      }
+
+      try { await payoutToMode(supabase, sb.creator_id, stake, betMode) } catch (_) {}
+      if (houseRisk > 0) {
+        try { await houseWalletCredit(supabase, houseRisk, betMode) } catch (_) {}
+      }
+
+      await supabase.from("arbitration_decisions").insert({
+        bet_id: sb.id,
+        action: "auto_cancel_event_cancelled",
+        previous_status: "taken",
+        new_status: "cancelled",
+        decided_winner_id: null,
+        reason: "Evento cancelado o pospuesto — stake devuelto automáticamente",
+        details: { house_bet: true, bet_type: sb.bet_type, event_id: sb.event_id },
+        decided_by: "system",
+        source: "system",
+      })
+
+      await createNotifications([{
+        userId: sb.creator_id,
+        type: "bet_cancelled",
+        title: "Apuesta cancelada — evento pospuesto",
+        body: "Tu stake fue devuelto porque el evento fue cancelado o pospuesto.",
+        betId: sb.id,
+      }], supabase)
+    }
+
     const body = await request.json().catch(() => ({}))
     const eventId = Number(body?.event_id)
     const hasEventFilter = Number.isFinite(eventId) && eventId > 0
@@ -421,9 +484,11 @@ export async function POST(request: NextRequest) {
         creator_selection: (bet as any).creator_selection,
         selection: (bet as any).selection,
       })
+      const isHouseBet = Boolean((bet as any).house_bet)
       const betForResolver = {
         creator_id: (bet as any).creator_id as string,
-        acceptor_id: (bet as any).acceptor_id as string,
+        // For house bets acceptor is null; use "house" sentinel so resolver returns creator_id when user wins
+        acceptor_id: (isHouseBet ? "house" : (bet as any).acceptor_id) as string,
       }
 
       let resolution: { winnerId: string; reason: string } | null = null
@@ -528,6 +593,93 @@ export async function POST(request: NextRequest) {
         continue
       }
 
+      if (isHouseBet) {
+        const potentialPayout = Number((bet as any).potential_payout || 0)
+        const stake = Number((bet as any).amount || 0)
+        const betMode = (bet as any).mode ?? "fantasy"
+        const userWon = winnerId === (bet as any).creator_id
+
+        if (userWon) {
+          try {
+            await payoutToMode(supabase, winnerId, potentialPayout, betMode)
+          } catch (payoutErr) {
+            failed += 1
+            console.error("HOUSE_BET_PAYOUT_FAILED", { userId: winnerId, amount: potentialPayout, betId: (bet as any).id, error: payoutErr })
+            results.push({ bet_id: (bet as any).id, status: "failed", reason: "User payout failed" })
+            continue
+          }
+          await supabase.from("transactions").insert({
+            user_id: winnerId,
+            token_type: tokenTypeForMode(betMode),
+            amount: potentialPayout,
+            operation: `house_bet_won_${betType}`,
+            reference_id: (bet as any).id,
+          })
+        } else {
+          // User lost — house reclaims reservation + stake (stake was already deducted at creation)
+          try {
+            await houseWalletCredit(supabase, potentialPayout, betMode)
+          } catch (creditErr) {
+            console.error("HOUSE_WALLET_CREDIT_FAILED", { amount: potentialPayout, betId: (bet as any).id, error: creditErr })
+          }
+          await supabase.from("transactions").insert({
+            user_id: (bet as any).creator_id,
+            token_type: tokenTypeForMode(betMode),
+            amount: -stake,
+            operation: `house_bet_lost_${betType}`,
+            reference_id: (bet as any).id,
+          })
+        }
+
+        await supabase.from("arbitration_decisions").insert({
+          bet_id: (bet as any).id,
+          action: `auto_resolve_finished_${betType}`,
+          previous_status: (bet as any).status,
+          new_status: "resolved",
+          decided_winner_id: winnerId,
+          reason,
+          details: {
+            bet_type: betType,
+            house_bet: true,
+            creator_selection: (bet as any).creator_selection,
+            final_score: `${eventRow.home_score}-${eventRow.away_score}`,
+            event_id: (bet as any).event_id,
+            house_odds: (bet as any).house_odds,
+            potential_payout: potentialPayout,
+            user_won: userWon,
+          },
+          decided_by: decidedBy,
+          source: "system",
+        })
+
+        const matchInfo = `${eventRow.home_team} vs ${eventRow.away_team}` +
+          (eventRow.home_score !== null && eventRow.away_score !== null ? ` (${eventRow.home_score}-${eventRow.away_score})` : "")
+
+        await createNotifications([{
+          userId: (bet as any).creator_id,
+          type: userWon ? "bet_resolved_win" : "bet_resolved_loss",
+          title: userWon
+            ? `¡Ganaste ${potentialPayout.toFixed(0)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`
+            : "Perdiste tu apuesta contra la casa",
+          body: matchInfo,
+          betId: (bet as any).id,
+        }], supabase)
+
+        resolved += 1
+        results.push({
+          bet_id: (bet as any).id,
+          bet_type: betType,
+          house_bet: true,
+          status: "resolved",
+          winner_id: winnerId,
+          user_won: userWon,
+          reason,
+          potential_payout: potentialPayout,
+        })
+        continue
+      }
+
+      // ── Standard P2P bet resolution (existing code below, unchanged) ──────────
       const betMode = (bet as any).mode ?? "fantasy"
       try {
         await payoutToMode(supabase, winnerId, totalPrize, betMode)

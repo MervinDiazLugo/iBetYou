@@ -5,6 +5,7 @@ import { createNotifications } from "@/lib/notifications"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
+import { houseWalletCredit } from "@/lib/house-wallet"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -476,6 +477,21 @@ export async function PATCH(request: NextRequest) {
           user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
           operation: 'bet_cancelled_refund', reference_id: bet_id,
         })
+
+        // If house bet, return reserved liability to house wallet
+        if ((betToCancel as any).house_bet) {
+          const stake = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
+          const potentialPayout = Number((betToCancel as any).potential_payout || 0)
+          const houseRisk = potentialPayout - stake
+          const betMode = (betToCancel as any).mode ?? "fantasy"
+          if (houseRisk > 0) {
+            try {
+              await houseWalletCredit(supabase, houseRisk, betMode)
+            } catch (creditErr) {
+              console.error("HOUSE_WALLET_CREDIT_ON_CANCEL_FAILED", { betId: betToCancel.id, houseRisk, error: creditErr })
+            }
+          }
+        }
 
         // Refund acceptor if the bet was already taken
         if (betToCancel.acceptor_id) {
