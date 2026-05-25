@@ -79,7 +79,7 @@ export async function PATCH(request: NextRequest) {
       nickname,
     } = body as {
       user_id?: string
-      action?: "ban" | "unban" | "set_role" | "promote_by_email" | "create_admin" | "delete" | "toggle_real_betting"
+      action?: "ban" | "unban" | "set_role" | "promote_by_email" | "create_admin" | "delete" | "set_country" | "toggle_real_betting"
       role?: UserRole
       email?: string
       password?: string

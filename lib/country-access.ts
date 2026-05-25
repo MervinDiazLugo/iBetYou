@@ -23,5 +23,5 @@ export async function canCountryUseHouseBetting(
     .select(field)
     .eq("country_code", country)
     .single()
-  return data?.[field] === true
+  return (data as any)?.[field] === true
 }
