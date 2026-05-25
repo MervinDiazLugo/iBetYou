@@ -1815,9 +1815,10 @@ function HomeContent() {
                       const oddsValue = outcome === "home" ? houseBetModal.odds!.home
                         : outcome === "away" ? houseBetModal.odds!.away
                         : houseBetModal.odds!.draw!
-                      const label = outcome === "home" ? houseBetModal.event.home_team
+                      const teamName = outcome === "home" ? houseBetModal.event.home_team
                         : outcome === "away" ? houseBetModal.event.away_team
                         : "Empate"
+                      const actionLabel = outcome === "draw" ? "Termina en empate" : `Gana ${teamName}`
                       return (
                         <button
                           key={outcome}
@@ -1828,7 +1829,8 @@ function HomeContent() {
                               : "border-border hover:border-yellow-400"
                           }`}
                         >
-                          <div className="text-xs text-muted-foreground truncate">{label}</div>
+                          <div className="text-[11px] font-semibold truncate leading-tight">{teamName}</div>
+                          <div className="text-[10px] text-muted-foreground mb-1 leading-tight">{actionLabel}</div>
                           <div className="font-bold text-yellow-500">{oddsValue.toFixed(2)}x</div>
                         </button>
                       )
