@@ -150,9 +150,10 @@ function HomeContent() {
   const [activeBets, setActiveBets] = useState<BetWithDetails[]>([])
   const [inProgressBets, setInProgressBets] = useState<BetWithDetails[]>([])
   const [takenBets, setTakenBets] = useState<BetWithDetails[]>([])
-  const [balance, setBalance] = useState<{ fantasy: number; real: number }>({
+  const [balance, setBalance] = useState<{ fantasy: number; real: number; iBY: number }>({
     fantasy: 0,
     real: 0,
+    iBY: 0,
   })
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [cloneBetId, setCloneBetId] = useState<string | null>(null)
@@ -284,10 +285,11 @@ function HomeContent() {
           }
           userIdRef.current = authUser.id
 
-          // Get user profile and wallet
-          const walletRes = await fetch(`/api/wallet?user_id=${authUser.id}`, {
-            headers: authHeaders
-          })
+          // Get user profile, wallet, and iBY wallet in parallel
+          const [walletRes, ibyRes] = await Promise.all([
+            fetch(`/api/wallet?user_id=${authUser.id}`, { headers: authHeaders }),
+            fetch(`/api/iby/wallet`, { headers: authHeaders }),
+          ])
 
           if (walletRes.ok && isMounted) {
             const walletData = await walletRes.json()
@@ -307,9 +309,14 @@ function HomeContent() {
               })
             }
             if (walletData.wallet && isMounted) {
+              const ibyData = ibyRes.ok ? await ibyRes.json() : null
+              const ibyBalance = ibyData?.wallet
+                ? Number(ibyData.wallet.balance) - Number(ibyData.wallet.balance_blocked || 0)
+                : 0
               setBalance({
                 fantasy: walletData.wallet.balance_fantasy,
                 real: walletData.wallet.balance_real,
+                iBY: ibyBalance,
               })
             }
           }
@@ -1925,7 +1932,7 @@ function HomeContent() {
               )}
               {/* Amount slider */}
               {(() => {
-                const walletBal = mode === "real" ? balance.real : balance.fantasy
+                const walletBal = mode === "real" ? balance.iBY : balance.fantasy
                 const maxAmt = Math.min(100000, Math.max(1, Math.floor(walletBal)))
                 const stakeNum = Number(houseBetAmount) || 0
                 return (
@@ -1962,7 +1969,7 @@ function HomeContent() {
               })()}
               {(() => {
                 const stake = Number(houseBetAmount)
-                const walletBal = mode === "real" ? balance.real : balance.fantasy
+                const walletBal = mode === "real" ? balance.iBY : balance.fantasy
                 const totalPayout = activeOdds !== null && stake > 0 ? Math.floor(stake * activeOdds) : null
                 const netProfit = totalPayout !== null ? totalPayout - stake : null
                 return (
