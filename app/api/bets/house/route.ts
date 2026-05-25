@@ -54,14 +54,20 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminSupabaseClient()
 
     // Fetch event
+    const numericEventId = Number(eventId)
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
       .select("id, sport, status, featured, metadata, updated_at, league")
-      .eq("id", eventId)
-      .single()
+      .eq("id", numericEventId)
+      .maybeSingle()
 
-    if (eventError || !eventRow) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (eventError) {
+      console.error("[house-bet] event query error", { eventId: numericEventId, error: eventError })
+      return NextResponse.json({ error: "Event not found", debug: eventError.code }, { status: 404 })
+    }
+    if (!eventRow) {
+      console.error("[house-bet] event not found", { eventId: numericEventId })
+      return NextResponse.json({ error: "Event not found", debug: "no_row", eventId: numericEventId }, { status: 404 })
     }
 
     // Validate event is featured
