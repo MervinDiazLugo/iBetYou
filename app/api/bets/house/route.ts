@@ -63,11 +63,22 @@ export async function POST(request: NextRequest) {
 
     if (eventError) {
       console.error("[house-bet] event query error", { eventId: numericEventId, error: eventError })
-      return NextResponse.json({ error: "Event not found", debug: eventError.code }, { status: 404 })
+      return NextResponse.json({ error: "Event not found", debug: eventError.code, eventId: numericEventId }, { status: 404 })
     }
     if (!eventRow) {
-      console.error("[house-bet] event not found", { eventId: numericEventId })
-      return NextResponse.json({ error: "Event not found", debug: "no_row", eventId: numericEventId }, { status: 404 })
+      // Diagnostic: check if ANY event exists to confirm DB access and find what ids exist
+      const { data: sampleEvents } = await supabase
+        .from("events")
+        .select("id, featured, status, home_team, away_team")
+        .eq("featured", true)
+        .limit(5)
+      console.error("[house-bet] event not found", { eventId: numericEventId, featuredSample: sampleEvents })
+      return NextResponse.json({
+        error: "Event not found",
+        debug: "no_row",
+        eventId: numericEventId,
+        featuredEvents: sampleEvents?.map(e => ({ id: e.id, status: e.status, match: `${e.home_team} vs ${e.away_team}` })) ?? [],
+      }, { status: 404 })
     }
 
     // Validate event is featured
