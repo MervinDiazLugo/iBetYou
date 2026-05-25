@@ -175,7 +175,9 @@ export function Navbar() {
                   </Link>
 
                   <ModeToggle />
-                  <NotificationBell userId={user.id} sessionToken={sessionToken} />
+                  <span className="hidden md:flex">
+                    <NotificationBell userId={user.id} sessionToken={sessionToken} />
+                  </span>
 
                   {/* User dropdown */}
                   <div className="relative" ref={userMenuRef}>
