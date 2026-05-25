@@ -67,6 +67,9 @@ export interface Bet {
   mode: 'fantasy' | 'real'
   status: 'open' | 'taken' | 'pending_resolution' | 'resolved' | 'cancelled' | 'disputed'
   winner_id: string | null
+  house_bet?: boolean
+  house_odds?: number | null
+  potential_payout?: number | null
   created_at: string
   // Joined fields
   event?: Event
@@ -112,4 +115,11 @@ export interface ReferralStats {
     wagering_required: number
   }>
   my_bonus: ReferralBonus | null
+}
+
+export interface HouseWallet {
+  id: number
+  balance_fantasy: number
+  balance_real: number
+  updated_at: string
 }
