@@ -10,6 +10,7 @@ import { Trophy } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { ReferralBonusBanner } from "@/components/referral-bonus-banner"
+import { formatHouseBetTypeLabel, formatHouseSelection } from "@/lib/bet-labels"
 
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
   open: { label: "Abierta", variant: "secondary" },
@@ -22,7 +23,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   disputed: { label: "En disputa", variant: "destructive" },
 }
 
-const betTypeLabels: Record<string, string> = {
+const P2P_BET_TYPE_LABELS: Record<string, string> = {
   direct: "Directa P2P",
   half_time: "Medio Tiempo",
   exact_score: "Resultado Exacto",
@@ -175,9 +176,20 @@ export default function MyBetsPage() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant={statusCfg.variant}>{statusCfg.label}</Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {betTypeLabels[bet.bet_type] || bet.bet_type}
-                        </Badge>
+                        {(bet as any).house_bet ? (
+                          <>
+                            <Badge variant="outline" className="text-xs">
+                              {formatHouseBetTypeLabel(bet.bet_type)}
+                            </Badge>
+                            <Badge className="bg-orange-500/15 text-orange-400 border border-orange-500/30 text-xs">
+                              Vs Casa
+                            </Badge>
+                          </>
+                        ) : (
+                          <Badge variant="outline" className="text-xs">
+                            {P2P_BET_TYPE_LABELS[bet.bet_type] || bet.bet_type}
+                          </Badge>
+                        )}
                         {((bet as any).mode ?? "fantasy") === "real" ? (
                           <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBY</Badge>
                         ) : (
@@ -227,47 +239,88 @@ export default function MyBetsPage() {
                     </div>
 
                     {/* Selections */}
-                    <div className="flex flex-wrap gap-3 p-2 rounded-md bg-muted/40 border border-border/40">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground font-medium">Apuesta creador:</span>
-                        <span className="text-sm font-bold text-green-400">
-                          {bet.creator_selection || "—"}
-                        </span>
-                      </div>
-                      {bet.acceptor && (
+                    {(bet as any).house_bet ? (
+                      <div className="p-3 rounded-md bg-orange-500/5 border border-orange-500/20 space-y-1">
+                        <div className="text-xs text-orange-400 font-semibold uppercase tracking-wide mb-2">
+                          Apuesta contra la Casa
+                        </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground font-medium">Apuesta aceptante:</span>
-                          <span className="text-sm font-bold text-blue-400">
-                            {bet.acceptor_selection || "Contra creador"}
+                          <span className="text-xs text-muted-foreground font-medium">Tu selección:</span>
+                          <span className="text-sm font-bold text-green-400">
+                            {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}
                           </span>
                         </div>
-                      )}
-                    </div>
+                        {(bet as any).house_odds && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-medium">Cuota:</span>
+                            <span className="text-sm font-bold text-orange-400">×{(bet as any).house_odds}</span>
+                          </div>
+                        )}
+                        {(bet as any).potential_payout && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-medium">Ganancia potencial:</span>
+                            <span className="text-sm font-bold text-primary">
+                              {formatCurrency((bet as any).potential_payout)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-3 p-2 rounded-md bg-muted/40 border border-border/40">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground font-medium">Apuesta creador:</span>
+                          <span className="text-sm font-bold text-green-400">
+                            {bet.creator_selection || "—"}
+                          </span>
+                        </div>
+                        {bet.acceptor && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground font-medium">Apuesta aceptante:</span>
+                            <span className="text-sm font-bold text-blue-400">
+                              {bet.acceptor_selection || "Contra creador"}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {/* Participants + amount */}
                     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                       <div className="flex flex-wrap gap-4">
-                        <div>
-                          <span className="text-xs text-muted-foreground">Creador: </span>
-                          <span className="font-medium">{bet.creator?.nickname}</span>
-                        </div>
-                        {bet.acceptor && (
+                        {(bet as any).house_bet ? (
                           <div>
-                            <span className="text-xs text-muted-foreground">Aceptante: </span>
-                            <span className="font-medium">{bet.acceptor.nickname}</span>
+                            <span className="text-xs text-muted-foreground">Jugador: </span>
+                            <span className="font-medium">{bet.creator?.nickname}</span>
+                            <span className="text-xs text-muted-foreground ml-2">vs </span>
+                            <span className="font-medium text-orange-400">La Casa</span>
                           </div>
+                        ) : (
+                          <>
+                            <div>
+                              <span className="text-xs text-muted-foreground">Creador: </span>
+                              <span className="font-medium">{bet.creator?.nickname}</span>
+                            </div>
+                            {bet.acceptor && (
+                              <div>
+                                <span className="text-xs text-muted-foreground">Aceptante: </span>
+                                <span className="font-medium">{bet.acceptor.nickname}</span>
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-primary">
                           {formatCurrency(bet.amount)}
-                          {bet.multiplier > 1 && (
+                          {!((bet as any).house_bet) && bet.multiplier > 1 && (
                             <span className="text-xs text-muted-foreground ml-1">x{bet.multiplier}</span>
                           )}
                         </span>
-                        <Badge variant="outline" className="text-xs">
-                          {isCreator ? "Creador" : "Aceptante"}
-                        </Badge>
+                        {!(bet as any).house_bet && (
+                          <Badge variant="outline" className="text-xs">
+                            {isCreator ? "Creador" : "Aceptante"}
+                          </Badge>
+                        )}
                       </div>
                     </div>
 
@@ -283,7 +336,7 @@ export default function MyBetsPage() {
                           : "bg-red-500/10 border-red-500/30 text-red-500"
                       }`}>
                         {bet.winner_id === user.id ? "🏆 ¡Ganaste!" : "😞 Perdiste"}
-                        {winnerNickname && (
+                        {winnerNickname && !(bet as any).house_bet && (
                           <span className="ml-2 text-xs font-normal text-muted-foreground">
                             Ganador: {winnerNickname}
                           </span>

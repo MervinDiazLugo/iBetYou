@@ -403,6 +403,35 @@ function HomeContent() {
     }
   }, [])
 
+  // Refresh balances when wallet:updated fires (e.g. after house bet placed)
+  useEffect(() => {
+    const handler = async () => {
+      const token = sessionTokenRef.current
+      if (!token || !userIdRef.current) return
+      const headers: HeadersInit = { Authorization: `Bearer ${token}` }
+      const [walletRes, ibyRes] = await Promise.all([
+        fetch(`/api/wallet?user_id=${userIdRef.current}`, { headers }),
+        fetch(`/api/iby/wallet`, { headers }),
+      ])
+      if (walletRes.ok) {
+        const walletData = await walletRes.json()
+        if (walletData.wallet) {
+          const ibyData = ibyRes.ok ? await ibyRes.json() : null
+          const ibyBalance = ibyData?.wallet
+            ? Number(ibyData.wallet.balance) - Number(ibyData.wallet.balance_blocked || 0)
+            : 0
+          setBalance({
+            fantasy: walletData.wallet.balance_fantasy,
+            real: walletData.wallet.balance_real,
+            iBY: ibyBalance,
+          })
+        }
+      }
+    }
+    window.addEventListener("wallet:updated", handler)
+    return () => window.removeEventListener("wallet:updated", handler)
+  }, [])
+
   // Keep ref in sync with state so loadMoreEvents never reads stale offset
   useEffect(() => { eventsPaginationRef.current = eventsPagination }, [eventsPagination])
 

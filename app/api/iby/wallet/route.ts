@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
 
   const { data: wallet, error } = await supabase
     .from("iby_wallets")
-    .select("balance, balance_blocked, referral_bonus_locked, updated_at")
+    .select("balance, balance_blocked, referral_bonus_locked")
     .eq("user_id", userId)
     .single()
 
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     const { data: created } = await supabase
       .from("iby_wallets")
       .insert({ user_id: userId })
-      .select("balance, balance_blocked, referral_bonus_locked, updated_at")
+      .select("balance, balance_blocked, referral_bonus_locked")
       .single()
     return NextResponse.json({
       wallet: created || { balance: 0, balance_blocked: 0, referral_bonus_locked: 0 },

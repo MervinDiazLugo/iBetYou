@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { supportsPeerResolution as supportsPeerResolutionForType } from "@/lib/bet-resolution"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { formatHouseBetTypeLabel, formatHouseSelection } from "@/lib/bet-labels"
 import { useToast } from "@/components/toast"
 import { ArrowLeft, Trophy, Users, Clock, DollarSign, AlertCircle, CheckCircle } from "lucide-react"
 import Link from "next/link"
@@ -32,6 +33,9 @@ interface BetDetail {
   acceptor_claimed?: boolean
   created_at: string
   mode?: string
+  house_bet?: boolean
+  house_odds?: number
+  potential_payout?: number
   event: {
     id: number
     sport: string
@@ -631,7 +635,16 @@ export default function BetDetailPage() {
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-muted-foreground">Tipo de apuesta</span>
-              <Badge>{betTypeLabels[bet.bet_type] || bet.bet_type}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge>
+                  {bet.house_bet ? formatHouseBetTypeLabel(bet.bet_type) : (betTypeLabels[bet.bet_type] || bet.bet_type)}
+                </Badge>
+                {bet.house_bet && (
+                  <Badge className="bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                    Vs Casa
+                  </Badge>
+                )}
+              </div>
             </div>
             <div className="flex justify-between items-center py-2 border-b">
               <span className="text-muted-foreground">Modo</span>
@@ -642,53 +655,86 @@ export default function BetDetailPage() {
               )}
             </div>
 
-            <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
-              {(() => {
-                const exactScoreFavoredTeam = (() => {
-                  if (bet.bet_type !== "exact_score") return null
-                  const scoreMatch = bet.creator_selection.match(/^(\d+)\s*-\s*(\d+)$/)
-                  if (!scoreMatch) return null
-
-                  const homeGoals = Number(scoreMatch[1])
-                  const awayGoals = Number(scoreMatch[2])
-
-                  if (homeGoals > awayGoals) return bet.event.home_team
-                  if (awayGoals > homeGoals) return bet.event.away_team
-                  return "empate"
-                })()
-
-                let selectionText = bet.creator_selection
-                if (bet.bet_type === "exact_score") {
-                  selectionText = `El score será ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}`
-                } else if (bet.bet_type === "direct" || bet.bet_type === "half_time") {
-                  selectionText = `Gana ${bet.creator_selection}`
-                }
-
-                const isTaker = !!user && user.id === bet.acceptor_id
-
-                const takerWinCondition = bet.bet_type === "exact_score"
-                  ? `Tu condición para ganar: que el marcador final NO sea ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}.`
-                  : `Tu condición para ganar: que NO gane ${bet.creator_selection}.`
-
-                return (
-                  <>
-                    <div className="text-sm text-muted-foreground text-center mb-2">
-                      {user && user.id === bet.creator_id
-                        ? 'Tu selección:'
-                        : `${bet.creator?.nickname || 'Este usuario'} apostó que:`}
+            {bet.house_bet ? (
+              <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
+                <div className="text-xs text-orange-400 font-semibold uppercase tracking-wide">
+                  Apuesta contra la Casa
+                </div>
+                <div>
+                  <div className="text-sm text-muted-foreground mb-1">
+                    {user?.id === bet.creator_id ? "Tu selección:" : `${bet.creator?.nickname} apostó:`}
+                  </div>
+                  <div className="text-xl font-bold text-primary">
+                    {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event.home_team, bet.event.away_team)}
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-4 text-sm">
+                  {bet.house_odds && (
+                    <div>
+                      <span className="text-muted-foreground">Cuota: </span>
+                      <span className="font-bold text-orange-400">×{bet.house_odds}</span>
                     </div>
-                    <div className="text-2xl font-bold text-primary text-center">
-                      {selectionText}
+                  )}
+                  {bet.potential_payout && (
+                    <div>
+                      <span className="text-muted-foreground">Ganancia potencial: </span>
+                      <span className="font-bold text-primary">{formatCurrency(bet.potential_payout)}</span>
                     </div>
-                    {isTaker && (
-                      <div className="text-xs text-muted-foreground text-center mt-2">
-                        {takerWinCondition}
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm pt-1 border-t border-orange-500/10">
+                  <span className="text-muted-foreground">Jugador:</span>
+                  <span className="font-medium">{bet.creator?.nickname}</span>
+                  <span className="text-muted-foreground">vs</span>
+                  <span className="font-medium text-orange-400">La Casa</span>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-r from-primary/10 to-primary/5 rounded-lg p-4 border border-primary/20">
+                {(() => {
+                  const exactScoreFavoredTeam = (() => {
+                    if (bet.bet_type !== "exact_score") return null
+                    const scoreMatch = bet.creator_selection.match(/^(\d+)\s*-\s*(\d+)$/)
+                    if (!scoreMatch) return null
+                    const homeGoals = Number(scoreMatch[1])
+                    const awayGoals = Number(scoreMatch[2])
+                    if (homeGoals > awayGoals) return bet.event.home_team
+                    if (awayGoals > homeGoals) return bet.event.away_team
+                    return "empate"
+                  })()
+
+                  let selectionText = bet.creator_selection
+                  if (bet.bet_type === "exact_score") {
+                    selectionText = `El score será ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}`
+                  } else if (bet.bet_type === "direct" || bet.bet_type === "half_time") {
+                    selectionText = `Gana ${bet.creator_selection}`
+                  }
+
+                  const isTaker = !!user && user.id === bet.acceptor_id
+                  const takerWinCondition = bet.bet_type === "exact_score"
+                    ? `Tu condición para ganar: que el marcador final NO sea ${bet.creator_selection}${exactScoreFavoredTeam ? ` a favor de ${exactScoreFavoredTeam}` : ""}.`
+                    : `Tu condición para ganar: que NO gane ${bet.creator_selection}.`
+
+                  return (
+                    <>
+                      <div className="text-sm text-muted-foreground text-center mb-2">
+                        {user && user.id === bet.creator_id
+                          ? 'Tu selección:'
+                          : `${bet.creator?.nickname || 'Este usuario'} apostó que:`}
                       </div>
-                    )}
-                  </>
-                )
-              })()}
-            </div>
+                      <div className="text-2xl font-bold text-primary text-center">
+                        {selectionText}
+                      </div>
+                      {isTaker && (
+                        <div className="text-xs text-muted-foreground text-center mt-2">
+                          {takerWinCondition}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+            )}
             
             {bet.status === "taken" && (
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
@@ -867,48 +913,70 @@ export default function BetDetailPage() {
               </div>
             )}
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-secondary rounded-lg p-4 text-center">
-                <div className="text-sm text-muted-foreground">
-                  {user?.id === bet.creator_id ? 'Tu apuesta' : 'Tu colateral'}
+            {bet.house_bet ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-secondary rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Apostado</div>
+                  <div className="text-2xl font-bold text-primary">{formatCurrency(bet.amount)}</div>
                 </div>
-                <div className="text-2xl font-bold text-primary">
-                  {formatCurrency(user?.id === bet.creator_id ? bet.amount : acceptorStake)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {user?.id === bet.creator_id
-                    ? `+ ${formatCurrency(bet.fee_amount)} fee`
-                    : `+ ${formatCurrency(acceptorFee)} fee`}
-                </div>
-                {user?.id !== bet.creator_id && (
-                  <div className="text-[11px] text-blue-400/80 mt-0.5">se devuelve si ganás</div>
-                )}
-              </div>
-              <div className="bg-secondary rounded-lg p-4 text-center">
-                <div className="text-sm text-muted-foreground">Ganás (neto)</div>
-                <div className="text-2xl font-bold text-green-500">
-                  {formatCurrency(user?.id === bet.creator_id ? creatorNetGain : acceptorNetGain)}
-                </div>
-                <div className="text-xs text-muted-foreground mt-1">
-                  {user?.id === bet.creator_id
-                    ? `Retorno total: ${formatCurrency(potentialWin)}`
-                    : `Retorno total: ${formatCurrency(potentialWin)}`}
+                <div className="bg-secondary rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Ganancia potencial</div>
+                  <div className="text-2xl font-bold text-green-500">
+                    {bet.potential_payout ? formatCurrency(bet.potential_payout - bet.amount) : "—"}
+                  </div>
+                  {bet.potential_payout && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Retorno total: {formatCurrency(bet.potential_payout)}
+                    </div>
+                  )}
                 </div>
               </div>
-            </div>
-            
-            {bet.bet_type === "exact_score" && bet.multiplier > 1 && (
+            ) : (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-secondary rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">
+                    {user?.id === bet.creator_id ? 'Tu apuesta' : 'Tu colateral'}
+                  </div>
+                  <div className="text-2xl font-bold text-primary">
+                    {formatCurrency(user?.id === bet.creator_id ? bet.amount : acceptorStake)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {user?.id === bet.creator_id
+                      ? `+ ${formatCurrency(bet.fee_amount)} fee`
+                      : `+ ${formatCurrency(acceptorFee)} fee`}
+                  </div>
+                  {user?.id !== bet.creator_id && (
+                    <div className="text-[11px] text-blue-400/80 mt-0.5">se devuelve si ganás</div>
+                  )}
+                </div>
+                <div className="bg-secondary rounded-lg p-4 text-center">
+                  <div className="text-sm text-muted-foreground">Ganás (neto)</div>
+                  <div className="text-2xl font-bold text-green-500">
+                    {formatCurrency(user?.id === bet.creator_id ? creatorNetGain : acceptorNetGain)}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {user?.id === bet.creator_id
+                      ? `Retorno total: ${formatCurrency(potentialWin)}`
+                      : `Retorno total: ${formatCurrency(potentialWin)}`}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!bet.house_bet && bet.bet_type === "exact_score" && bet.multiplier > 1 && (
               <div className="text-center">
                 <Badge className="bg-green-500/20 text-green-500">
                   Multiplicador x{bet.multiplier}
                 </Badge>
               </div>
             )}
-            
+
             <div className="flex justify-between items-center pt-4 border-t">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Creador de la apuesta</span>
+                <span className="text-muted-foreground">
+                  {bet.house_bet ? "Apostador" : "Creador de la apuesta"}
+                </span>
               </div>
               <span className="font-semibold">{bet.creator?.nickname}</span>
             </div>
