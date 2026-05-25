@@ -575,13 +575,17 @@ export async function POST(request: NextRequest) {
       const { winnerId, reason } = resolution
       const totalPrize = calculateTotalPrize((bet as any).amount || 0, (bet as any).multiplier || 1)
 
+      // "house" is a sentinel used by resolvers to signal the house won.
+      // winner_id in DB is a UUID FK — store null when house wins.
+      const dbWinnerId = winnerId === "house" ? null : winnerId
+
       if (dryRun) {
         resolved += 1
         results.push({
           bet_id: (bet as any).id,
           bet_type: betType,
           status: "would_resolve",
-          winner_id: winnerId,
+          winner_id: dbWinnerId,
           reason,
           total_prize: totalPrize,
         })
@@ -590,7 +594,7 @@ export async function POST(request: NextRequest) {
 
       const { data: updatedBet, error: updateError } = await supabase
         .from("bets")
-        .update({ status: "resolved", winner_id: winnerId, resolved_at: new Date().toISOString() })
+        .update({ status: "resolved", winner_id: dbWinnerId, resolved_at: new Date().toISOString() })
         .eq("id", (bet as any).id)
         .in("status", ["taken", "disputed", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor"])
         .is("resolved_at", null)
@@ -607,7 +611,7 @@ export async function POST(request: NextRequest) {
         const potentialPayout = Number((bet as any).potential_payout || 0)
         const stake = Number((bet as any).amount || 0)
         const betMode = (bet as any).mode ?? "fantasy"
-        const userWon = winnerId === (bet as any).creator_id
+        const userWon = winnerId !== "house"
 
         if (userWon) {
           try {
