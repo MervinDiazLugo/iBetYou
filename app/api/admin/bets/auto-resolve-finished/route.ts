@@ -254,9 +254,46 @@ function resolveFirstScorer(
   }
 }
 
+// ─── score_margin ─────────────────────────────────────────────────────────────
+
+function resolveScoreMargin(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const parts = creatorSelection.split("_")
+  if (parts.length < 2) return null
+
+  const team = parts[0] // "home" | "away"
+  const rangeKey = parts.slice(1).join("_") // "1_5" | "6_10" | "11_15" | "16plus"
+
+  const margin = Math.abs(event.home_score - event.away_score)
+  const homeWon = event.home_score > event.away_score
+  const awayWon = event.away_score > event.home_score
+
+  let rangeMin: number, rangeMax: number
+  if (rangeKey === "1_5")       { rangeMin = 1;  rangeMax = 5  }
+  else if (rangeKey === "6_10") { rangeMin = 6;  rangeMax = 10 }
+  else if (rangeKey === "11_15"){ rangeMin = 11; rangeMax = 15 }
+  else if (rangeKey === "16plus"){ rangeMin = 16; rangeMax = Infinity }
+  else return null
+
+  const inRange = margin >= rangeMin && margin <= rangeMax
+  let creatorWins: boolean
+
+  if (team === "home")      creatorWins = homeWon && inRange
+  else if (team === "away") creatorWins = awayWon && inRange
+  else return null
+
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `score_margin: selección "${creatorSelection}", resultado ${event.home_score}-${event.away_score} (margen ${margin})`,
+  }
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "half_time", "first_scorer"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "score_margin", "half_time", "first_scorer"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -344,6 +381,8 @@ export async function POST(request: NextRequest) {
         resolution = resolveDirect(creatorSelection, eventRow, betForResolver)
       } else if (betType === "exact_score") {
         resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "score_margin") {
+        resolution = resolveScoreMargin(creatorSelection, eventRow, betForResolver)
       } else if (betType === "half_time") {
         // Fetch halftime scores on-demand if missing (e.g. admin manually set status=finished)
         const md = eventRow.metadata?.match_details

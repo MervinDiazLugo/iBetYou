@@ -11,6 +11,7 @@ export function calculateTotalPrize(amount: number | string, multiplier: number 
 const PEER_RESOLUTION_BY_TYPE: Record<string, boolean> = {
   direct: true,
   exact_score: true,
+  score_margin: true,
   first_scorer: true,
   half_time: true,
 }

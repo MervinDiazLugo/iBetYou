@@ -38,6 +38,7 @@ interface Event {
 const betTypes = [
   { id: "direct", label: "Directa", icon: "⚔️", desc: "Ambos arriesgan lo mismo" },
   { id: "exact_score", label: "Resultado Exacto", icon: "🎯", desc: "Apuesta al score exacto" },
+  { id: "score_margin", label: "Margen de Victoria", icon: "📏", desc: "Apuesta al margen de puntos" },
   { id: "first_scorer", label: "Primer Anotador", icon: "🥅", desc: "Quién anota primero" },
   { id: "half_time", label: "Medio Tiempo", icon: "⏱️", desc: "Resultado primer tiempo" },
 ]
@@ -49,11 +50,10 @@ const sports = [
 ]
 
 function getAvailableBetTypes(sport: string) {
-  if (sport === "football") return betTypes
-  // basketball/baseball: only direct
-  return betTypes.filter((type) => type.id === "direct")
-
-  return betTypes
+  if (sport === "football") return betTypes.filter((t) => t.id !== "score_margin")
+  if (sport === "basketball") return betTypes.filter((t) => ["direct", "score_margin"].includes(t.id))
+  // baseball: only direct
+  return betTypes.filter((t) => t.id === "direct")
 }
 
 interface CreateBetFormProps {
@@ -288,7 +288,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     switch (betType) {
       case "direct":
         options.push({ id: "home_win", label: `Gana ${selectedEvent.home_team}`, value: selectedEvent.home_team })
-        if (selectedSport !== "baseball") {
+        if (selectedSport === "football") {
           options.push({ id: "draw", label: "Empate", value: "Empate" })
         }
         options.push({ id: "away_win", label: `Gana ${selectedEvent.away_team}`, value: selectedEvent.away_team })
@@ -310,6 +310,17 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         return [
           { id: "home_team", label: selectedEvent.home_team, value: selectedEvent.home_team },
           { id: "away_team", label: selectedEvent.away_team, value: selectedEvent.away_team },
+        ]
+      case "score_margin":
+        return [
+          { id: "home_1_5",    label: `${selectedEvent.home_team} +1–5`,   value: "home_1_5" },
+          { id: "home_6_10",   label: `${selectedEvent.home_team} +6–10`,  value: "home_6_10" },
+          { id: "home_11_15",  label: `${selectedEvent.home_team} +11–15`, value: "home_11_15" },
+          { id: "home_16plus", label: `${selectedEvent.home_team} +16`,    value: "home_16plus" },
+          { id: "away_1_5",    label: `${selectedEvent.away_team} +1–5`,   value: "away_1_5" },
+          { id: "away_6_10",   label: `${selectedEvent.away_team} +6–10`,  value: "away_6_10" },
+          { id: "away_11_15",  label: `${selectedEvent.away_team} +11–15`, value: "away_11_15" },
+          { id: "away_16plus", label: `${selectedEvent.away_team} +16`,    value: "away_16plus" },
         ]
       case "half_time":
         return [
@@ -608,7 +619,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className={`grid gap-2 ${betType === "score_margin" ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
                   {getBetOptions().map((option) => (
                     <Button
                       key={option.id}
