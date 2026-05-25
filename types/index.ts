@@ -70,6 +70,7 @@ export interface Bet {
   house_bet?: boolean
   house_odds?: number | null
   potential_payout?: number | null
+  group_id?: string | null
   created_at: string
   // Joined fields
   event?: Event
@@ -122,4 +123,34 @@ export interface HouseWallet {
   balance_fantasy: number
   balance_real: number
   updated_at: string
+}
+
+export interface Group {
+  id: string
+  name: string
+  code: string
+  creator_id: string
+  sport: 'football' | 'basketball' | 'baseball' | null
+  league: string | null
+  status: 'active' | 'archived'
+  created_at: string
+  member_count?: number
+  my_balance?: number
+  my_role?: 'admin' | 'member'
+}
+
+export interface GroupMember {
+  group_id: string
+  user_id: string
+  role: 'admin' | 'member'
+  joined_at: string
+  profile?: { nickname: string; avatar_url: string | null }
+  balance?: number
+}
+
+export interface GroupWallet {
+  group_id: string
+  user_id: string
+  balance: number
+  last_daily_grant: string | null
 }
