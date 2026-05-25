@@ -615,6 +615,11 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   📊 Apuesta al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
                 </p>
               )}
+              {betType === "score_margin" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  📏 Elegí un equipo <strong>y por cuántos puntos gana</strong>. Ej: <em>{selectedEvent?.home_team} +6–10</em> = ese equipo gana por entre 6 y 10 puntos. Si gana por 3 o por 15, tu apuesta pierde aunque aciertes el equipo ganador.
+                </p>
+              )}
               {betType === "run_line" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
                   📐 <strong>Run Line</strong> es una apuesta de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras para que tu apuesta sea ganadora. El equipo con <strong>+1.5</strong> te da como ganador si ese equipo gana el juego <em>o</em> pierde por solo 1 carrera.
