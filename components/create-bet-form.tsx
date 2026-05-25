@@ -698,6 +698,17 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 <span>$1</span>
                 <span>{formatPesos(maxAmountInteger)}</span>
               </div>
+              <input
+                type="number"
+                min={1}
+                max={maxAmountInteger}
+                value={amount}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  if (Number.isFinite(v) && v >= 1) setAmount(Math.min(v, maxAmountInteger))
+                }}
+                className="mt-2 w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+              />
             </div>
             <p className="text-xs text-muted-foreground">
               Máximo disponible: {formatPesos(maxAllowedAmount)} {mode === "real" ? "iBY" : "Fantasy"}
