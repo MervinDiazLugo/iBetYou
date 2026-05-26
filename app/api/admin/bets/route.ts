@@ -264,15 +264,12 @@ export async function GET(request: NextRequest) {
 
     let emailByUserId: Record<string, string> = {}
     if (userIds.length > 0) {
-      const { data: usersRes, error: listError } = await supabase.auth.admin.listUsers()
-      if (listError) {
-        return NextResponse.json({ error: listError.message }, { status: 500 })
-      }
-
-      emailByUserId = (usersRes.users || []).reduce((acc, user) => {
-        if (user.id && user.email && userIds.includes(user.id)) {
-          acc[user.id] = user.email
-        }
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', userIds)
+      emailByUserId = (profilesData || []).reduce((acc, p) => {
+        if (p.id && p.email) acc[p.id] = p.email
         return acc
       }, {} as Record<string, string>)
     }
@@ -349,10 +346,18 @@ export async function PATCH(request: NextRequest) {
         }
 
         const betModeApprove = (bet as any).mode ?? "fantasy"
+        const prevStatusApprove = bet.status
         try {
           await payoutToMode(supabase, winnerUserId, totalPrize, betModeApprove)
         } catch (payoutErr) {
           console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId: id, betMode: betModeApprove, error: payoutErr })
+          // Revert so admin can retry without the bet being stuck in resolved state with no payout
+          const { error: revertErr } = await supabase
+            .from('bets')
+            .update({ status: prevStatusApprove, resolved_at: null, winner_id: bet.winner_id ?? null })
+            .eq('id', id)
+            .eq('status', 'resolved')
+          if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: id, error: revertErr })
           results.push({ id, success: false, error: "Payout failed after 3 retries" })
           continue
         }
@@ -592,6 +597,12 @@ export async function PATCH(request: NextRequest) {
           await payoutToMode(supabase, winner_id, totalPrize, betModeResolve)
         } catch (payoutErr) {
           console.error("PAYOUT_FAILED", { userId: winner_id, amount: totalPrize, betId: bet_id, betMode: betModeResolve, error: payoutErr })
+          const { error: revertErr } = await supabase
+            .from('bets')
+            .update({ status: currentBet.status, resolved_at: null, winner_id: null })
+            .eq('id', bet_id)
+            .eq('status', 'resolved')
+          if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: bet_id, error: revertErr })
           return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
         }
         await supabase.from('transactions').insert({

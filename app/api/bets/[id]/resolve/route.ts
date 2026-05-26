@@ -283,6 +283,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       }
     } catch (payoutErr) {
       console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId, betMode, error: payoutErr })
+      const { error: revertErr } = await supabase
+        .from("bets")
+        .update({ status: previousStatus, resolved_at: null, winner_id: bet.winner_id ?? null })
+        .eq("id", betId)
+        .eq("status", "resolved")
+      if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId, error: revertErr })
       return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
     }
     await supabase.from("transactions").insert({
@@ -309,7 +315,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const evR = Array.isArray(bet.event) ? bet.event[0] : bet.event
     const matchInfoR = evR ? `${evR.home_team} vs ${evR.away_team}` + (evR.home_score !== null && evR.away_score !== null ? ` (${evR.home_score}-${evR.away_score})` : '') : 'Apuesta resuelta'
     const resolveNotifs = [
-      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "IBC" : "Fantasy Tokens"}!`, body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" },
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`, body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" },
       ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)
