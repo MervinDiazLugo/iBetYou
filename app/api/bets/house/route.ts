@@ -301,6 +301,7 @@ export async function POST(request: NextRequest) {
 
     // Check user balance and deduct (optimistic lock)
     let currentBalance: number
+    let currentBalanceBlocked: number = 0
     if (betMode === "real") {
       const { data: ibcWallet, error: ibcErr } = await supabase
         .from("iby_wallets")
@@ -315,6 +316,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
       }
       currentBalance = Number(ibcWallet.balance)
+      currentBalanceBlocked = Number(ibcWallet.balance_blocked)
     } else {
       const { data: wallet, error: walletError } = await supabase
         .from("wallets")
@@ -337,6 +339,7 @@ export async function POST(request: NextRequest) {
         .update({ balance: currentBalance - stake })
         .eq("user_id", user.id)
         .eq("balance", currentBalance)
+        .eq("balance_blocked", currentBalanceBlocked)
         .select("user_id")
       if (walletUpdateError) {
         return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })

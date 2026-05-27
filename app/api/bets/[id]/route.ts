@@ -202,11 +202,13 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
       }
       const takerBalance = Number(ibcWallet.balance)
+      const takerBlocked = Number(ibcWallet.balance_blocked)
       const { data: ibcUpdated, error: ibcUpdateError } = await supabase
         .from("iby_wallets")
         .update({ balance: takerBalance - totalNeeded })
         .eq("user_id", effectiveUserId)
         .eq("balance", takerBalance)
+        .eq("balance_blocked", takerBlocked)
         .select("user_id")
       if (ibcUpdateError) {
         return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })

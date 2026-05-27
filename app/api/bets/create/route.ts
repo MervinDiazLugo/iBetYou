@@ -200,11 +200,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
       }
       const currentBalance = Number(ibcWallet.balance)
+      const currentBlocked = Number(ibcWallet.balance_blocked)
       const { data: ibcUpdated, error: walletUpdateError } = await supabase
         .from("iby_wallets")
         .update({ balance: currentBalance - totalNeeded })
         .eq("user_id", user.id)
         .eq("balance", currentBalance)
+        .eq("balance_blocked", currentBlocked)
         .select("user_id")
       if (walletUpdateError) {
         return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })
