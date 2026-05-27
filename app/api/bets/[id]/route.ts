@@ -266,7 +266,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     // Record transaction for taker
     await supabase.from("transactions").insert({
       user_id: effectiveUserId,
-      token_type: (bet as any).group_id ? "group_fantasy" : (betMode === "real" ? "ibc" : "fantasy"),
+      token_type: (bet as any).group_id ? "group_fantasy" : (betMode === "real" ? "iBY" : "fantasy"),
       amount: -totalNeeded,
       operation: "bet_taken",
       reference_id: betId,

@@ -169,8 +169,8 @@ export async function updateWageringProgress(
       const newProgress = bonus.wagering_progress + betAmount
 
       if (newProgress >= bonus.wagering_required) {
-        // Unlock: update bonus status
-        await supabase
+        // Unlock: update bonus status — optimistic lock prevents double-unlock on concurrent calls
+        const { data: unlockRows } = await supabase
           .from("referral_bonuses")
           .update({
             wagering_progress: newProgress,
@@ -178,7 +178,11 @@ export async function updateWageringProgress(
             unlocked_at: new Date().toISOString(),
           })
           .eq("id", bonus.id)
-          .eq("status", "locked") // optimistic lock
+          .eq("status", "locked")
+          .select("id")
+
+        // Only proceed if we were the one to flip status; skip if concurrent call already did it
+        if (!unlockRows || unlockRows.length === 0) continue
 
         // Move locked bonus to iby_wallets balance
         await supabase.rpc("unlock_referral_bonus_ibc", {

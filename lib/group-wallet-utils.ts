@@ -21,7 +21,9 @@ export async function ensureDailyGrant(
   if (!gw) throw new Error(`Group wallet not found for user ${userId}`)
   if (gw.last_daily_grant === todayUTC) return false
 
-  await supabase
+  // Optimistic lock: only grant if last_daily_grant hasn't changed since we read it,
+  // preventing double-grant when two concurrent requests both see an un-granted day.
+  const { data: updated } = await supabase
     .from("group_wallets")
     .update({
       balance: Number(gw.balance) + DAILY_GRANT_AMOUNT,
@@ -29,8 +31,10 @@ export async function ensureDailyGrant(
     })
     .eq("group_id", groupId)
     .eq("user_id", userId)
+    .neq("last_daily_grant", todayUTC)
+    .select("user_id")
 
-  return true
+  return !!(updated && updated.length > 0)
 }
 
 export async function deductFromGroupWallet(
