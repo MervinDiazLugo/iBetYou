@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
     // ── Bets locked ───────────────────────────────────────────────────────
     const lockedBetsQuery = supabase
       .from("bets")
-      .select("status, amount, fee_amount, multiplier, type")
+      .select("status, amount, fee_amount, multiplier, bet_type")
       .in("status", ["open", "taken", "pending_resolution", "pending_resolution_creator", "pending_resolution_acceptor", "disputed"])
 
     const [txResult, summaryResult, walletsResult, lockedResult] = await Promise.all([
@@ -97,14 +97,14 @@ export async function GET(request: NextRequest) {
     // Acceptor fees are embedded in the bet_taken deduction
     const { data: resolvedBets } = await supabase
       .from("bets")
-      .select("fee_amount, amount, multiplier, type")
+      .select("fee_amount, amount, multiplier, bet_type")
       .eq("status", "resolved")
 
     let creatorFeesTotal = 0
     let acceptorFeesTotal = 0
     for (const b of resolvedBets || []) {
       creatorFeesTotal += Number(b.fee_amount || 0)
-      const acceptorStake = b.type === "asymmetric"
+      const acceptorStake = b.bet_type === "exact_score"
         ? Number(b.amount) * Number(b.multiplier || 1)
         : Number(b.amount)
       acceptorFeesTotal += acceptorStake * 0.03
@@ -133,7 +133,7 @@ export async function GET(request: NextRequest) {
     // ── Locked in active bets ─────────────────────────────────────────────
     const locked = (lockedResult.data || []).reduce((acc, b) => {
       const creatorAmt = Number(b.amount || 0)
-      const acceptorStake = b.type === "asymmetric"
+      const acceptorStake = b.bet_type === "exact_score"
         ? creatorAmt * Number(b.multiplier || 1)
         : creatorAmt
       const fee = Number(b.fee_amount || 0)

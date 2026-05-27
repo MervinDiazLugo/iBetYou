@@ -36,8 +36,31 @@ export async function POST(request: NextRequest) {
 
   if (existing) return NextResponse.json({ error: "Ya eres miembro de este grupo" }, { status: 409 })
 
-  await supabase.from("group_members").insert({ group_id: group.id, user_id: userId, role: "member" })
-  await supabase.from("group_wallets").insert({ group_id: group.id, user_id: userId, balance: 0 })
+  const { error: memberError } = await supabase
+    .from("group_members")
+    .insert({ group_id: group.id, user_id: userId, role: "member" })
+
+  if (memberError) {
+    if (memberError.message.includes("unique") || memberError.code === "23505") {
+      return NextResponse.json({ error: "Ya eres miembro de este grupo" }, { status: 409 })
+    }
+    return NextResponse.json({ error: memberError.message }, { status: 500 })
+  }
+
+  const { error: walletError } = await supabase
+    .from("group_wallets")
+    .insert({ group_id: group.id, user_id: userId, balance: 0 })
+
+  if (walletError) {
+    // Best-effort rollback — remove the member row so state stays consistent
+    await supabase
+      .from("group_members")
+      .delete()
+      .eq("group_id", group.id)
+      .eq("user_id", userId)
+    console.error("GROUP_WALLET_CREATE_FAILED", { groupId: group.id, userId, error: walletError.message })
+    return NextResponse.json({ error: "Error creando wallet del grupo" }, { status: 500 })
+  }
 
   return NextResponse.json({ success: true, group_id: group.id, group_name: group.name })
 }

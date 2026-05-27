@@ -56,11 +56,11 @@ export async function GET(request: NextRequest) {
     // Get bets for stats
     const { data: bets } = await supabase
       .from("bets")
-      .select("status")
+      .select("status, winner_id")
       .or(`creator_id.eq.${userId},acceptor_id.eq.${userId}`)
 
     const totalBets = bets?.length || 0
-    const wonBets = bets?.filter((b) => b.status === "resolved").length || 0
+    const wonBets = bets?.filter((b) => b.status === "resolved" && b.winner_id === userId).length || 0
     const winRate = totalBets > 0 ? Math.round((wonBets / totalBets) * 100) : 0
 
     return NextResponse.json({
