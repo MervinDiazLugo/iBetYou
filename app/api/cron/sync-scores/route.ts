@@ -197,41 +197,46 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 4. Update events in DB
+  // 4. Update events in DB (parallel)
   const justFinished: Array<{ id: number; hasFirstScorer: boolean; externalId: string }> = []
   const justPostponed: number[] = []
+
+  const updateResults = await Promise.all(
+    Array.from(eventMap.values()).map(async (event) => {
+      const score = scoresByExternalId.get(event.external_id)
+      if (!score) return null
+
+      const metadata = event.metadata || {}
+      const matchDetails = { ...(metadata.match_details || {}) }
+
+      if (score.halftimeHome !== null && score.halftimeHome !== undefined) {
+        matchDetails.halftime_home_score = score.halftimeHome
+        matchDetails.halftime_away_score = score.halftimeAway
+      }
+
+      await supabase
+        .from("events")
+        .update({
+          status: score.status,
+          home_score: score.homeScore,
+          away_score: score.awayScore,
+          metadata: { ...metadata, match_details: matchDetails },
+        })
+        .eq("id", event.id)
+
+      return { event, score }
+    })
+  )
+
   let updated = 0
-
-  for (const event of eventMap.values()) {
-    const score = scoresByExternalId.get(event.external_id)
-    if (!score) continue
-
-    const metadata = event.metadata || {}
-    const matchDetails = { ...(metadata.match_details || {}) }
-
-    if (score.halftimeHome !== null && score.halftimeHome !== undefined) {
-      matchDetails.halftime_home_score = score.halftimeHome
-      matchDetails.halftime_away_score = score.halftimeAway
-    }
-
-    await supabase
-      .from("events")
-      .update({
-        status: score.status,
-        home_score: score.homeScore,
-        away_score: score.awayScore,
-        metadata: { ...metadata, match_details: matchDetails },
-      })
-      .eq("id", event.id)
-
+  for (const result of updateResults) {
+    if (!result) continue
     updated++
-
-    if (score.status === "finished") {
-      justFinished.push({ id: event.id, hasFirstScorer: event.hasFirstScorer, externalId: event.external_id })
+    if (result.score.status === "finished") {
+      justFinished.push({ id: result.event.id, hasFirstScorer: result.event.hasFirstScorer, externalId: result.event.external_id })
     }
-
-    if (score.status === "postponed") {
-      justPostponed.push(event.id)
+    if (result.score.status === "postponed") {
+      justPostponed.push(result.event.id)
     }
   }
 
@@ -278,22 +283,23 @@ export async function GET(request: NextRequest) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
 
-  const resolvedEvents: number[] = []
-  for (const ev of justFinished) {
-    try {
-      const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${CRON_SECRET}`,
-        },
-        body: JSON.stringify({ event_id: ev.id }),
-      })
-      if (res.ok) resolvedEvents.push(ev.id)
-      else apiErrors.push(`auto-resolve/event_${ev.id}: HTTP ${res.status}`)
-    } catch (e: any) {
-      apiErrors.push(`auto-resolve/event_${ev.id}: ${e.message}`)
-    }
+  const resolveResults = await Promise.all(
+    justFinished.map(async (ev) => {
+      try {
+        const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${CRON_SECRET}` },
+          body: JSON.stringify({ event_id: ev.id }),
+        })
+        return { ok: res.ok, id: ev.id, status: res.status }
+      } catch (e: any) {
+        return { ok: false, id: ev.id, error: e.message }
+      }
+    })
+  )
+  const resolvedEvents = resolveResults.filter((r) => r.ok).map((r) => r.id)
+  for (const r of resolveResults) {
+    if (!r.ok) apiErrors.push(`auto-resolve/event_${r.id}: ${"error" in r ? r.error : `HTTP ${r.status}`}`)
   }
 
   // 7. Find already-finished events with pending first_scorer/half_time bets missing metadata
