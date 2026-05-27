@@ -191,6 +191,8 @@ function HomeContent() {
   } | null>(null)
   const [houseBetSelection, setHouseBetSelection] = useState<string | null>(null)
   const [houseBetExactScore, setHouseBetExactScore] = useState("")
+  const [houseBetHomeGoals, setHouseBetHomeGoals] = useState("")
+  const [houseBetAwayGoals, setHouseBetAwayGoals] = useState("")
   const [houseBetSelectionOdds, setHouseBetSelectionOdds] = useState<number | null>(null)
   const [houseBetType, setHouseBetType] = useState<string>("direct")
   const [houseBetAmount, setHouseBetAmount] = useState("")
@@ -688,6 +690,8 @@ function HomeContent() {
     setHouseBetModal({ event, odds, runLineOdds })
     setHouseBetSelection(null)
     setHouseBetExactScore("")
+    setHouseBetHomeGoals("")
+    setHouseBetAwayGoals("")
     setHouseBetAmount("")
     setHouseBetType("direct")
   }
@@ -1792,7 +1796,7 @@ function HomeContent() {
                   <h2 className="font-bold text-lg">🏦 Vs. la casa</h2>
                 </div>
                 <button
-                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore("") }}
+                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
                   className="text-muted-foreground hover:text-foreground text-xl leading-none shrink-0 mt-1"
                 >
                   ✕
@@ -1852,7 +1856,7 @@ function HomeContent() {
                     key={bt.id}
                     variant={houseBetType === bt.id ? "default" : "outline"}
                     size="sm"
-                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore("") }}
+                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
                   >
                     {bt.label}
                   </Button>
@@ -1894,21 +1898,51 @@ function HomeContent() {
               )}
               {/* Exact score */}
               {houseBetType === "exact_score" && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
+                <div className="space-y-3">
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 text-center">
+                      <p className="text-xs text-muted-foreground mb-1 truncate">{houseBetModal.event.home_team}</p>
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        placeholder="0"
+                        value={houseBetHomeGoals}
+                        onChange={e => {
+                          const v = e.target.value
+                          setHouseBetHomeGoals(v)
+                          const combined = v !== "" && houseBetAwayGoals !== "" ? `${v}-${houseBetAwayGoals}` : ""
+                          setHouseBetExactScore(combined)
+                        }}
+                        className="w-full border border-border rounded-md px-2 py-3 text-center text-xl font-bold bg-background"
+                      />
+                    </div>
+                    <span className="text-2xl font-bold text-muted-foreground pb-2">-</span>
+                    <div className="flex-1 text-center">
+                      <p className="text-xs text-muted-foreground mb-1 truncate">{houseBetModal.event.away_team}</p>
+                      <input
+                        type="number"
+                        min={0}
+                        max={20}
+                        placeholder="0"
+                        value={houseBetAwayGoals}
+                        onChange={e => {
+                          const v = e.target.value
+                          setHouseBetAwayGoals(v)
+                          const combined = houseBetHomeGoals !== "" && v !== "" ? `${houseBetHomeGoals}-${v}` : ""
+                          setHouseBetExactScore(combined)
+                        }}
+                        className="w-full border border-border rounded-md px-2 py-3 text-center text-xl font-bold bg-background"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center">
                     Cuota: {houseBetSelectionOdds !== null
-                      ? `${houseBetSelectionOdds}x`
+                      ? <span className="text-yellow-500 font-semibold">{houseBetSelectionOdds}x</span>
                       : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore)
                         ? "calculando..."
-                        : "ingresa un marcador (ej: 2-1)"}
+                        : "ingresa el marcador"}
                   </p>
-                  <input
-                    type="text"
-                    placeholder="Ej: 2-1"
-                    value={houseBetExactScore}
-                    onChange={e => setHouseBetExactScore(e.target.value)}
-                    className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
-                  />
                 </div>
               )}
               {/* Score margin */}
@@ -2030,6 +2064,11 @@ function HomeContent() {
                         {walletBal.toLocaleString()} tokens
                       </span>
                     </div>
+                    {activeOdds !== null && stake === 0 && (
+                      <p className="text-xs text-muted-foreground text-center pt-1">
+                        Ingresa un monto para ver la ganancia potencial ({activeOdds.toFixed(2)}x)
+                      </p>
+                    )}
                     {stake > 0 && activeOdds !== null && (
                       <>
                         <div className="border-t border-border/40" />
@@ -2058,7 +2097,7 @@ function HomeContent() {
                 <Button
                   variant="outline"
                   className="flex-1"
-                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetAmount("") }}
+                  onClick={() => { setHouseBetModal(null); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals(""); setHouseBetAmount("") }}
                 >
                   Cancelar
                 </Button>
