@@ -122,7 +122,7 @@ export default function BackofficeLayout({
               <X className="h-5 w-5" />
             </Button>
           </div>
-          <nav className="p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {navigation.map((item) => {
               const isActive = pathname === item.href
               return (
@@ -130,8 +130,8 @@ export default function BackofficeLayout({
                   key={item.name}
                   href={item.href}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg ${
-                    isActive 
-                      ? 'bg-primary text-primary-foreground' 
+                    isActive
+                      ? 'bg-primary text-primary-foreground'
                       : 'hover:bg-secondary'
                   }`}
                   onClick={() => setSidebarOpen(false)}
@@ -142,6 +142,12 @@ export default function BackofficeLayout({
               )
             })}
           </nav>
+          <div className="p-4 border-t">
+            <Button variant="outline" className="w-full justify-start" onClick={() => { setSidebarOpen(false); handleLogout() }}>
+              <LogOut className="h-4 w-4 mr-2" />
+              Cerrar Sesión
+            </Button>
+          </div>
         </div>
       </div>
 
