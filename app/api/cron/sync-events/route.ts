@@ -159,7 +159,7 @@ export async function GET(request: NextRequest) {
     // Batch insert new events
     for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
       const batch = toInsert.slice(i, i + BATCH_SIZE)
-      const { data: inserted, error } = await supabase.from("events").insert(batch).select("id, external_id")
+      const { data: inserted, error } = await supabase.from("events").upsert(batch, { onConflict: "external_id", ignoreDuplicates: true }).select("id, external_id")
       if (error) {
         summary[sport.id].errors.push(`insert: ${error.message}`)
       } else {
