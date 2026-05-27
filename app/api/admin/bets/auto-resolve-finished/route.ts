@@ -665,7 +665,7 @@ export async function POST(request: NextRequest) {
           action: `auto_resolve_finished_${betType}`,
           previous_status: (bet as any).status,
           new_status: "resolved",
-          decided_winner_id: winnerId,
+          decided_winner_id: userWon ? winnerId : null,
           reason,
           details: {
             bet_type: betType,
