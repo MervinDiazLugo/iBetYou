@@ -75,6 +75,8 @@ export async function creditGroupWallet(
   amount: number
 ): Promise<void> {
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 50 * attempt))
+
     const { data: gw } = await supabase
       .from("group_wallets")
       .select("balance")

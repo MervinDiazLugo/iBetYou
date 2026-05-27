@@ -288,6 +288,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .update({ status: previousStatus, resolved_at: null, winner_id: bet.winner_id ?? null })
         .eq("id", betId)
         .eq("status", "resolved")
+        .eq("winner_id", winnerUserId)
       if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId, error: revertErr })
       return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
     }

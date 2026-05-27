@@ -33,7 +33,6 @@ type BalanceSummary = {
 
 export default function BalancePage() {
   const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
   const [loading, setLoading] = useState(true)
   const [rows, setRows] = useState<BalanceBetRow[]>([])
   const [summary, setSummary] = useState<BalanceSummary>({
@@ -46,6 +45,7 @@ export default function BalancePage() {
 
   useEffect(() => {
     async function loadBalance() {
+      const supabase = createBrowserSupabaseClient()
       try {
         const {
           data: { session },
@@ -84,7 +84,7 @@ export default function BalancePage() {
     }
 
     loadBalance()
-  }, [router, supabase])
+  }, [router])
 
   return (
     <div className="min-h-screen bg-background">

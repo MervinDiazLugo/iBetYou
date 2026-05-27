@@ -19,6 +19,7 @@ export async function payoutToMode(
     throw new Error(`Invalid betMode: ${betMode}`)
   }
   for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, 50 * attempt))
     if (betMode === "real") {
       const { data: w } = await supabase
         .from("iby_wallets")
