@@ -170,18 +170,18 @@ export async function POST(request: NextRequest) {
       groupRow = gRow
     }
 
-    // --- Wallet operations ---
+    // --- Balance pre-check (read-only) ---
     const fee = isGroupBet ? 0 : amount * 0.03
     const totalNeeded = amount + fee
 
+    // Read wallet balances and snapshot values for optimistic lock later
+    let ibcSnapshot: { balance: number; blocked: number } | null = null
+    let fantasySnapshot: number | null = null
+
     if (isGroupBet) {
-      const { ensureDailyGrant, deductFromGroupWallet } = await import("@/lib/group-wallet-utils")
+      const { ensureDailyGrant } = await import("@/lib/group-wallet-utils")
       await ensureDailyGrant(supabase, group_id, user.id)
-      try {
-        await deductFromGroupWallet(supabase, group_id, user.id, totalNeeded)
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message }, { status: 400 })
-      }
+      // Balance check happens inside deductFromGroupWallet with optimistic lock
     } else if (betMode === "real") {
       const { data: ibcWallet, error: ibcErr } = await supabase
         .from("iby_wallets")
@@ -195,21 +195,7 @@ export async function POST(request: NextRequest) {
       if (available < totalNeeded) {
         return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
       }
-      const currentBalance = Number(ibcWallet.balance)
-      const currentBlocked = Number(ibcWallet.balance_blocked)
-      const { data: ibcUpdated, error: walletUpdateError } = await supabase
-        .from("iby_wallets")
-        .update({ balance: currentBalance - totalNeeded })
-        .eq("user_id", user.id)
-        .eq("balance", currentBalance)
-        .eq("balance_blocked", currentBlocked)
-        .select("user_id")
-      if (walletUpdateError) {
-        return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })
-      }
-      if (!ibcUpdated || ibcUpdated.length === 0) {
-        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
-      }
+      ibcSnapshot = { balance: Number(ibcWallet.balance), blocked: Number(ibcWallet.balance_blocked) }
     } else {
       const { data: wallet, error: walletError } = await supabase
         .from("wallets")
@@ -222,22 +208,10 @@ export async function POST(request: NextRequest) {
       if (wallet.balance_fantasy < totalNeeded) {
         return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
       }
-      const currentBalance = wallet.balance_fantasy
-      const { data: fantasyUpdated, error: walletUpdateError } = await supabase
-        .from("wallets")
-        .update({ balance_fantasy: currentBalance - totalNeeded })
-        .eq("user_id", user.id)
-        .eq("balance_fantasy", currentBalance)
-        .select("user_id")
-      if (walletUpdateError) {
-        return NextResponse.json({ error: "Failed to update wallet" }, { status: 400 })
-      }
-      if (!fantasyUpdated || fantasyUpdated.length === 0) {
-        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
-      }
+      fantasySnapshot = wallet.balance_fantasy
     }
 
-    // Create bet after confirmed deduction
+    // 1. Insert bet FIRST (payment ordering invariant: record exists before money moves)
     const isAsymmetric = betType === "exact_score"
 
     const { data: bet, error: betError } = await supabase
@@ -260,17 +234,46 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
-      try {
-        if (isGroupBet) {
-          const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
-          await creditGroupWallet(supabase, group_id, user.id, totalNeeded)
-        } else {
-          await payoutToMode(supabase, user.id, totalNeeded, betMode)
-        }
-      } catch (rollbackErr) {
-        console.error("REFUND_FAILED", { userId: user.id, amount: totalNeeded, betMode, error: rollbackErr })
-      }
       return NextResponse.json({ error: `Failed to create bet: ${betError.message}` }, { status: 400 })
+    }
+
+    // Helper: cancel the bet if wallet deduction fails below
+    async function cancelBetOnFailure() {
+      await supabase.from("bets").update({ status: "cancelled" }).eq("id", bet.id).eq("status", "open")
+    }
+
+    // 2. Deduct wallet — bet record already exists
+    if (isGroupBet) {
+      const { deductFromGroupWallet } = await import("@/lib/group-wallet-utils")
+      try {
+        await deductFromGroupWallet(supabase, group_id, user.id, totalNeeded)
+      } catch (err: any) {
+        await cancelBetOnFailure()
+        return NextResponse.json({ error: err.message }, { status: 400 })
+      }
+    } else if (betMode === "real" && ibcSnapshot) {
+      const { data: ibcUpdated, error: walletUpdateError } = await supabase
+        .from("iby_wallets")
+        .update({ balance: ibcSnapshot.balance - totalNeeded })
+        .eq("user_id", user.id)
+        .eq("balance", ibcSnapshot.balance)
+        .eq("balance_blocked", ibcSnapshot.blocked)
+        .select("user_id")
+      if (walletUpdateError || !ibcUpdated || ibcUpdated.length === 0) {
+        await cancelBetOnFailure()
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
+    } else if (fantasySnapshot !== null) {
+      const { data: fantasyUpdated, error: walletUpdateError } = await supabase
+        .from("wallets")
+        .update({ balance_fantasy: fantasySnapshot - totalNeeded })
+        .eq("user_id", user.id)
+        .eq("balance_fantasy", fantasySnapshot)
+        .select("user_id")
+      if (walletUpdateError || !fantasyUpdated || fantasyUpdated.length === 0) {
+        await cancelBetOnFailure()
+        return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
+      }
     }
 
     // Record transaction
