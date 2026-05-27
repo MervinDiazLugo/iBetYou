@@ -288,10 +288,18 @@ function HomeContent() {
           }
           userIdRef.current = authUser.id
 
-          // Get user profile, wallet, and iBY wallet in parallel
-          const [walletRes, ibyRes] = await Promise.all([
+          // Fetch wallet + all bet lists in parallel — no sequential waterfalls
+          const [
+            walletRes, ibyRes,
+            marketplaceRes, myOpenRes, myCreatedTakenRes, myTakenRes, takenRes,
+          ] = await Promise.all([
             fetch(`/api/wallet?user_id=${authUser.id}`, { headers: authHeaders }),
             fetch(`/api/iby/wallet`, { headers: authHeaders }),
+            fetch(`/api/bets?user_id=${authUser.id}&limit=50`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_open&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_created_taken&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_taken&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
+            fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=50`, { headers: authHeaders }),
           ])
 
           if (walletRes.ok && isMounted) {
@@ -305,11 +313,7 @@ function HomeContent() {
 
             const nickname = walletData.user?.nickname || authUser.email?.split('@')[0] || 'Usuario'
             if (walletData.user || authUser) {
-              setUser({
-                id: authUser.id,
-                email: authUser.email!,
-                nickname: nickname
-              })
+              setUser({ id: authUser.id, email: authUser.email!, nickname })
             }
             if (walletData.wallet && isMounted) {
               const ibyData = ibyRes.ok ? await ibyRes.json() : null
@@ -324,58 +328,34 @@ function HomeContent() {
             }
           }
 
-          // Load marketplace (open bets excluding user's own)
-          const marketplaceRes = await fetch(`/api/bets?user_id=${authUser.id}&limit=50`, {
-            headers: authHeaders
-          })
-          const marketplaceData = await marketplaceRes.json()
           if (isMounted) {
+            const [marketplaceData, myOpenData, myCreatedTakenData, myTakenData, takenData] = await Promise.all([
+              marketplaceRes.json(),
+              myOpenRes.json(),
+              myCreatedTakenRes.json(),
+              myTakenRes.json(),
+              takenRes.json(),
+            ])
             setBets(marketplaceData.bets || [])
-          }
-
-          // Get user's open bets (created by user, waiting for someone to take)
-          const myOpenBetsRes = await fetch(`/api/bets?type=my_open&user_id=${authUser.id}&limit=10`, {
-            headers: authHeaders
-          })
-          const myOpenBetsData = await myOpenBetsRes.json()
-
-          // Get bets the user created that were taken by others (en curso)
-          const myCreatedTakenRes = await fetch(`/api/bets?type=my_created_taken&user_id=${authUser.id}&limit=10`, {
-            headers: authHeaders
-          })
-          const myCreatedTakenData = await myCreatedTakenRes.json()
-
-          // Get bets the user took from others (en curso)
-          const myTakenBetsRes = await fetch(`/api/bets?type=my_taken&user_id=${authUser.id}&limit=10`, {
-            headers: authHeaders
-          })
-          const myTakenBetsData = await myTakenBetsRes.json()
-
-          // Get all taken bets (for cloning) - exclude user's own bets
-          const takenBetsRes = await fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=50`, {
-            headers: authHeaders
-          })
-          const takenBetsData = await takenBetsRes.json()
-
-          if (isMounted) {
-            // Combine open bets + taken bets (user is creator or acceptor of taken bets)
             const allInProgress = [
-              ...(myOpenBetsData.bets || []),
+              ...(myOpenData.bets || []),
               ...(myCreatedTakenData.bets || []),
-              ...(myTakenBetsData.bets || [])
+              ...(myTakenData.bets || []),
             ]
             setInProgressBets(allInProgress)
             setActiveBets(allInProgress)
-            setTakenBets(takenBetsData.bets || [])
+            setTakenBets(takenData.bets || [])
           }
         } else {
-          // Public marketplace for anonymous users
-          const marketplaceRes = await fetch(`/api/bets?limit=50`)
-          const marketplaceData = await marketplaceRes.json()
-
-          const takenBetsRes = await fetch(`/api/bets?type=taken&limit=50`)
-          const takenBetsData = await takenBetsRes.json()
-
+          // Public marketplace for anonymous users — both in parallel
+          const [marketplaceRes, takenBetsRes] = await Promise.all([
+            fetch(`/api/bets?limit=50`),
+            fetch(`/api/bets?type=taken&limit=50`),
+          ])
+          const [marketplaceData, takenBetsData] = await Promise.all([
+            marketplaceRes.json(),
+            takenBetsRes.json(),
+          ])
           if (isMounted) {
             setBets(marketplaceData.bets || [])
             setTakenBets(takenBetsData.bets || [])
@@ -484,17 +464,23 @@ function HomeContent() {
       baseball: { data: [], hasMore: false, loading: true, offset: 0 },
     })
 
-    SPORTS_LIST.forEach(async (sport) => {
-      try {
-        const res = await fetch(`/api/events/list?sport=${sport}&paginated=1&limit=12${searchParam}`)
-        const data = await res.json()
-        setEventsPagination((prev) => ({
-          ...prev,
-          [sport]: { data: data.events || [], hasMore: data.hasMore || false, loading: false, offset: 12 },
-        }))
-      } catch {
-        setEventsPagination((prev) => ({ ...prev, [sport]: { ...prev[sport], loading: false } }))
-      }
+    Promise.all(
+      SPORTS_LIST.map(sport =>
+        fetch(`/api/events/list?sport=${sport}&paginated=1&limit=12${searchParam}`)
+          .then(r => r.json())
+          .then(data => ({ sport, data, ok: true }))
+          .catch(() => ({ sport, data: null, ok: false }))
+      )
+    ).then(results => {
+      setEventsPagination(prev => {
+        const next = { ...prev }
+        for (const { sport, data, ok } of results) {
+          next[sport] = ok && data
+            ? { data: data.events || [], hasMore: data.hasMore || false, loading: false, offset: 12 }
+            : { ...prev[sport], loading: false }
+        }
+        return next
+      })
     })
   }, [debouncedSearch])
 
