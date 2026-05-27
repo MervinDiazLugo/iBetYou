@@ -1,6 +1,7 @@
 ﻿import { createAdminSupabaseClient } from "@/lib/supabase"
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 import { createNotification } from "@/lib/notifications"
+import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 
 export async function cleanupExpiredOpenBets(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -51,58 +52,18 @@ export async function cleanupExpiredOpenBets(
     const creatorRefund = Number(updatedBet.amount || 0) + Number(updatedBet.fee_amount || 0)
     const betMode = updatedBet.mode === "real" ? "real" : "fantasy"
 
-    if (betMode === "real") {
-      const { data: ibcWallet } = await supabase
-        .from("iby_wallets")
-        .select("balance")
-        .eq("user_id", updatedBet.creator_id)
-        .single()
-
-      if (ibcWallet) {
-        const { error: walletErr } = await supabase
-          .from("iby_wallets")
-          .update({ balance: Number(ibcWallet.balance || 0) + creatorRefund })
-          .eq("user_id", updatedBet.creator_id)
-
-        if (!walletErr) {
-          await supabase.from("transactions").insert({
-            user_id: updatedBet.creator_id,
-            token_type: "iBY",
-            amount: creatorRefund,
-            operation: "bet_cancelled_refund",
-            reference_id: updatedBet.id,
-          })
-          refunded += 1
-        } else {
-          console.error("Failed to refund iBY wallet on bet expiry:", walletErr, { betId: updatedBet.id })
-        }
-      }
-    } else {
-      const { data: creatorWallet } = await supabase
-        .from("wallets")
-        .select("balance_fantasy")
-        .eq("user_id", updatedBet.creator_id)
-        .single()
-
-      if (creatorWallet) {
-        const { error: walletErr } = await supabase
-          .from("wallets")
-          .update({ balance_fantasy: Number(creatorWallet.balance_fantasy || 0) + creatorRefund })
-          .eq("user_id", updatedBet.creator_id)
-
-        if (!walletErr) {
-          await supabase.from("transactions").insert({
-            user_id: updatedBet.creator_id,
-            token_type: "fantasy",
-            amount: creatorRefund,
-            operation: "bet_cancelled_refund",
-            reference_id: updatedBet.id,
-          })
-          refunded += 1
-        } else {
-          console.error("Failed to refund fantasy wallet on bet expiry:", walletErr, { betId: updatedBet.id })
-        }
-      }
+    try {
+      await payoutToMode(supabase, updatedBet.creator_id, creatorRefund, betMode)
+      await supabase.from("transactions").insert({
+        user_id: updatedBet.creator_id,
+        token_type: tokenTypeForMode(betMode),
+        amount: creatorRefund,
+        operation: "bet_cancelled_refund",
+        reference_id: updatedBet.id,
+      })
+      refunded += 1
+    } catch (err) {
+      console.error("Failed to refund wallet on bet expiry:", err, { betId: updatedBet.id, userId: updatedBet.creator_id })
     }
 
     await supabase.from("arbitration_decisions").insert({
