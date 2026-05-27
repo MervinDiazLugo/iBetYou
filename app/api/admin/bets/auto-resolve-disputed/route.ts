@@ -214,6 +214,8 @@ export async function POST(request: NextRequest) {
       } catch (payoutErr) {
         failed += 1
         console.error("PAYOUT_FAILED", { userId: winnerId, amount: totalPrize, betId: bet.id, betMode, error: payoutErr })
+        const { error: revertErr } = await supabase.from("bets").update({ status: "disputed", resolved_at: null, winner_id: null }).eq("id", bet.id).eq("status", "resolved")
+        if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: bet.id, error: revertErr })
         results.push({ bet_id: bet.id, status: "failed", reason: "Payout failed after 3 retries" })
         continue
       }

@@ -619,6 +619,8 @@ export async function POST(request: NextRequest) {
           } catch (payoutErr) {
             failed += 1
             console.error("HOUSE_BET_PAYOUT_FAILED", { userId: winnerId, amount: potentialPayout, betId: (bet as any).id, error: payoutErr })
+            const { error: revertErr } = await supabase.from("bets").update({ status: (bet as any).status, resolved_at: null, winner_id: null }).eq("id", (bet as any).id).eq("status", "resolved")
+            if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: (bet as any).id, error: revertErr })
             results.push({ bet_id: (bet as any).id, status: "failed", reason: "User payout failed" })
             continue
           }
@@ -706,6 +708,8 @@ export async function POST(request: NextRequest) {
       } catch (payoutErr) {
         failed += 1
         console.error("PAYOUT_FAILED", { userId: winnerId, amount: totalPrize, betId: (bet as any).id, betMode, error: payoutErr })
+        const { error: revertErr } = await supabase.from("bets").update({ status: (bet as any).status, resolved_at: null, winner_id: null }).eq("id", (bet as any).id).eq("status", "resolved")
+        if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: (bet as any).id, error: revertErr })
         results.push({ bet_id: (bet as any).id, status: "failed", reason: "Payout failed after 3 retries" })
         continue
       }
