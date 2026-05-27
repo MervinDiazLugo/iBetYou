@@ -18,6 +18,9 @@ export async function payoutToMode(
   if (betMode !== "real" && betMode !== "fantasy") {
     throw new Error(`Invalid betMode: ${betMode}`)
   }
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error(`payoutToMode: invalid amount ${amount}`)
+  }
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 50 * attempt))
     if (betMode === "real") {

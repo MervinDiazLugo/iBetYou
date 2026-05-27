@@ -321,10 +321,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     ]
     await createNotifications(resolveNotifs, supabase)
 
-    await updateWageringProgress(bet.creator_id, bet.amount, supabase, bet.mode ?? "fantasy")
-    if (bet.acceptor_id) {
-      await updateWageringProgress(bet.acceptor_id, bet.amount, supabase, bet.mode ?? "fantasy")
-    }
+    await Promise.all([
+      updateWageringProgress(bet.creator_id, bet.amount, supabase, bet.mode ?? "fantasy"),
+      ...(bet.acceptor_id ? [updateWageringProgress(bet.acceptor_id, bet.amount, supabase, bet.mode ?? "fantasy")] : []),
+    ])
 
     return NextResponse.json({ success: true, bet: resolvedBet })
   } catch (error: unknown) {
