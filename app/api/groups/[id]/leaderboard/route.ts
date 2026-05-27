@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
+import { calculateTotalPrize } from "@/lib/bet-resolution"
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const userId = await getAuthenticatedUserId(request)
@@ -14,7 +15,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
   const [membersRes, resolvedBetsRes] = await Promise.all([
     supabase.from("group_members").select("user_id, profile:profiles(nickname, avatar_url), wallet:group_wallets(balance)").eq("group_id", groupId),
-    supabase.from("bets").select("winner_id, amount").eq("group_id", groupId).eq("status", "resolved").not("winner_id", "is", null),
+    supabase.from("bets").select("winner_id, amount, multiplier").eq("group_id", groupId).eq("status", "resolved").not("winner_id", "is", null),
   ])
 
   const members = membersRes.data || []
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   for (const bet of resolvedBets) {
     if (!bet.winner_id || !winMap.has(bet.winner_id)) continue
     const entry = winMap.get(bet.winner_id)!
-    entry.total_won += Number(bet.amount) * 2
+    entry.total_won += calculateTotalPrize(bet.amount, (bet as any).multiplier)
     entry.total_wins += 1
   }
 

@@ -6,15 +6,15 @@
     },
     {
       "path": "/api/cron/auto-featured",
-      "schedule": "0 6 * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/sync-predictions",
-      "schedule": "30 6 * * *"
+      "schedule": "10 12 * * *"
     },
     {
       "path": "/api/cron/auto-bets",
-      "schedule": "0 7 * * *"
+      "schedule": "30 12 * * *"
     }
   ]
 }

@@ -1111,9 +1111,9 @@ function HomeContent() {
 
         {/* Eventos Destacados */}
         {(() => {
-          const visibleFeatured = selectedSport === "all"
-            ? featuredEvents
-            : featuredEvents.filter(e => e.sport === selectedSport)
+          const visibleFeatured = featuredEvents
+            .filter(e => selectedSport === "all" || e.sport === selectedSport)
+            .filter(e => selectedLeague === "all" || e.league === selectedLeague)
           return visibleFeatured.length > 0 ? (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">

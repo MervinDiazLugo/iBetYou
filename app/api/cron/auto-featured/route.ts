@@ -7,8 +7,8 @@ const CRON_SECRET = process.env.CRON_SECRET
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
-const MAX_FEATURED = 16
-const LOOKAHEAD_DAYS = 3
+const MAX_FEATURED = 18
+const LOOKAHEAD_DAYS = 4
 
 function fetchApiSports(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -76,9 +76,9 @@ export async function GET(request: NextRequest) {
 Select exactly ${MAX_FEATURED} events from the list below.
 
 HARD SPORT CAPS — you MUST respect these limits regardless of availability:
-- football (soccer): minimum 4, maximum 8 (if ${footballCount} available)
+- football (soccer): minimum 6, maximum 10 (if ${footballCount} available)
 - baseball (MLB): maximum 5
-- basketball (NBA): minimum 1 (if available), maximum 4
+- basketball (NBA): minimum 1 (if available), maximum 5
 
 MANDATORY FOOTBALL — always include these if present:
 - UEFA Champions League, UEFA Europa League knockouts
@@ -144,8 +144,8 @@ No explanation. No markdown. Just the raw JSON array.`
 
     // Enforce sport caps regardless of what Claude returns
     const eventMap = new Map(events.map(e => [e.id, e]))
-    const football = rawIds.filter(id => eventMap.get(id)?.sport === "football").slice(0, 8)
-    const basketball = rawIds.filter(id => eventMap.get(id)?.sport === "basketball").slice(0, 4)
+    const football = rawIds.filter(id => eventMap.get(id)?.sport === "football").slice(0, 10)
+    const basketball = rawIds.filter(id => eventMap.get(id)?.sport === "basketball").slice(0, 5)
     const baseball = rawIds.filter(id => eventMap.get(id)?.sport === "baseball").slice(0, 5)
     let enforcedIds = [...football, ...basketball, ...baseball]
 
@@ -181,18 +181,17 @@ No explanation. No markdown. Just the raw JSON array.`
     if (setErr) return NextResponse.json({ error: setErr.message }, { status: 500 })
   }
 
-  // Fetch predictions for featured football events and store in metadata
+  // Fetch predictions for featured football events and store in metadata (in parallel)
   const selectedEvents = events.filter(e => selectedIds.includes(e.id))
   const footballEvents = selectedEvents.filter(e => e.sport === "football" && e.external_id?.startsWith("football_"))
-  let predictionsFetched = 0
   const predictionErrors: string[] = []
 
-  for (const ev of footballEvents) {
+  const footballResults = await Promise.all(footballEvents.map(async (ev) => {
     const fixtureId = ev.external_id.replace("football_", "")
     try {
       const data = await fetchApiSports(`${FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
       const raw = data.response?.[0]
-      if (!raw) continue
+      if (!raw) return false
 
       const pred = raw.predictions
       const home = raw.teams?.home
@@ -223,11 +222,13 @@ No explanation. No markdown. Just the raw JSON array.`
         .update({ metadata: { ...existingMd, predictions } })
         .eq("id", ev.id)
 
-      predictionsFetched++
+      return true
     } catch (e: any) {
       predictionErrors.push(`${ev.external_id}: ${e.message}`)
+      return false
     }
-  }
+  }))
+  const predictionsFetched = footballResults.filter(Boolean).length
 
   // Generate AI predictions for selected events still missing them (baseball, basketball, football without API data)
   const selectedEventsForAi = selectedEvents.filter(e => {
@@ -235,15 +236,15 @@ No explanation. No markdown. Just the raw JSON array.`
     return !existing?.percent
   })
   const aiPredictions = await generateAiPredictions(selectedEventsForAi)
-  let aiPredictionsFetched = 0
-  for (const [eventId, prediction] of aiPredictions) {
+  const aiPredictionsFetched = aiPredictions.size
+
+  await Promise.all(Array.from(aiPredictions.entries()).map(async ([eventId, prediction]) => {
     const ev = selectedEvents.find(e => e.id === eventId)
     const existingMd = (ev?.metadata as any) || {}
     await supabase.from("events")
       .update({ metadata: { ...existingMd, predictions: prediction } })
       .eq("id", eventId)
-    aiPredictionsFetched++
-  }
+  }))
 
   console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
 

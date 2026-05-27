@@ -26,13 +26,24 @@ export async function GET(request: NextRequest) {
       query = query.eq("role", role)
     }
 
-    const { data: profiles, error } = await query
+    const [profilesRes, authRes] = await Promise.all([
+      query,
+      supabase.auth.admin.listUsers({ perPage: 1000 }),
+    ])
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (profilesRes.error) {
+      return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
     }
 
-    const users = profiles || []
+    const authById = new Map<string, string | null>()
+    for (const u of authRes.data?.users ?? []) {
+      authById.set(u.id, u.last_sign_in_at ?? null)
+    }
+
+    const users = (profilesRes.data || []).map((p) => ({
+      ...p,
+      last_sign_in_at: authById.get(p.id) ?? null,
+    }))
 
     // Auto-clear false_claim_count when betting block has expired
     const now = new Date()

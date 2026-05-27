@@ -26,6 +26,7 @@ interface AdminUser {
   created_at: string
   country?: string | null
   real_betting_enabled?: boolean | null
+  last_sign_in_at?: string | null
 }
 
 export default function BackofficeUsersPage() {
@@ -270,19 +271,20 @@ export default function BackofficeUsersPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Estado</th>
               <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Real</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Registro</th>
+              <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Últ. conexión</th>
               <th className="text-right px-4 py-3 font-medium text-muted-foreground">Acciones</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                <td colSpan={8} className="text-center py-12 text-muted-foreground">
                   Cargando usuarios...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                <td colSpan={8} className="text-center py-12 text-muted-foreground">
                   No hay usuarios que coincidan.
                 </td>
               </tr>
@@ -389,6 +391,19 @@ export default function BackofficeUsersPage() {
                           month: "short",
                           year: "numeric",
                         })}
+                      </span>
+                    </td>
+
+                    {/* Última conexión */}
+                    <td className="px-4 py-3 hidden xl:table-cell">
+                      <span className="text-xs text-muted-foreground">
+                        {user.last_sign_in_at
+                          ? new Date(user.last_sign_in_at).toLocaleDateString("es-ES", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "—"}
                       </span>
                     </td>
 
