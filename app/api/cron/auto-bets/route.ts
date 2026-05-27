@@ -234,7 +234,7 @@ No explanation. No markdown. Raw JSON array only.`
       // Record transaction
       await supabase.from("transactions").insert({
         user_id: userId,
-        token_type: mode === "real" ? "ibc" : "fantasy",
+        token_type: mode === "real" ? "iBY" : "fantasy",
         amount: -totalNeeded,
         operation: "bet_created",
         reference_id: bet.id,

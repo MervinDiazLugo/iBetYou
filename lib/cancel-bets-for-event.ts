@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { createNotifications } from "@/lib/notifications"
+import { creditGroupWallet } from "@/lib/group-wallet-utils"
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
@@ -16,7 +17,7 @@ export async function cancelBetsForEvent(
 
   const { data: bets, error } = await supabase
     .from("bets")
-    .select("id, creator_id, acceptor_id, amount, fee_amount, multiplier, bet_type, status, mode")
+    .select("id, creator_id, acceptor_id, amount, fee_amount, multiplier, bet_type, status, mode, group_id")
     .eq("event_id", eventId)
     .in("status", ACTIVE_STATUSES)
 
@@ -37,22 +38,34 @@ export async function cancelBetsForEvent(
     }
 
     const betMode = bet.mode === "real" ? "real" : "fantasy"
+    const groupId = (bet as any).group_id ?? null
     const creatorStake = Number(bet.amount)
     const creatorFee = Number(bet.fee_amount)
     const isAsymmetric = bet.bet_type === "exact_score"
     const acceptorStake = isAsymmetric ? creatorStake * Math.max(1, Number(bet.multiplier)) : creatorStake
-    const acceptorFee = acceptorStake * 0.03
+    const acceptorFee = groupId ? 0 : acceptorStake * 0.03
 
     // 2. Refund creator
     try {
-      await payoutToMode(supabase, bet.creator_id, creatorStake + creatorFee, betMode)
-      await supabase.from("transactions").insert({
-        user_id: bet.creator_id,
-        token_type: tokenTypeForMode(betMode),
-        amount: creatorStake + creatorFee,
-        operation: "bet_cancelled_event_postponed",
-        reference_id: bet.id,
-      })
+      if (groupId) {
+        await creditGroupWallet(supabase, groupId, bet.creator_id, creatorStake + creatorFee)
+        await supabase.from("transactions").insert({
+          user_id: bet.creator_id,
+          token_type: "group_fantasy",
+          amount: creatorStake + creatorFee,
+          operation: "bet_cancelled_event_postponed",
+          reference_id: bet.id,
+        })
+      } else {
+        await payoutToMode(supabase, bet.creator_id, creatorStake + creatorFee, betMode)
+        await supabase.from("transactions").insert({
+          user_id: bet.creator_id,
+          token_type: tokenTypeForMode(betMode),
+          amount: creatorStake + creatorFee,
+          operation: "bet_cancelled_event_postponed",
+          reference_id: bet.id,
+        })
+      }
     } catch (err) {
       console.error("REFUND_FAILED creator event_postponed", { betId: bet.id, userId: bet.creator_id, err })
       failed++
@@ -63,14 +76,25 @@ export async function cancelBetsForEvent(
     const hasTwoParties = bet.acceptor_id && bet.status !== "open"
     if (hasTwoParties) {
       try {
-        await payoutToMode(supabase, bet.acceptor_id!, acceptorStake + acceptorFee, betMode)
-        await supabase.from("transactions").insert({
-          user_id: bet.acceptor_id,
-          token_type: tokenTypeForMode(betMode),
-          amount: acceptorStake + acceptorFee,
-          operation: "bet_cancelled_event_postponed",
-          reference_id: bet.id,
-        })
+        if (groupId) {
+          await creditGroupWallet(supabase, groupId, bet.acceptor_id!, acceptorStake + acceptorFee)
+          await supabase.from("transactions").insert({
+            user_id: bet.acceptor_id,
+            token_type: "group_fantasy",
+            amount: acceptorStake + acceptorFee,
+            operation: "bet_cancelled_event_postponed",
+            reference_id: bet.id,
+          })
+        } else {
+          await payoutToMode(supabase, bet.acceptor_id!, acceptorStake + acceptorFee, betMode)
+          await supabase.from("transactions").insert({
+            user_id: bet.acceptor_id,
+            token_type: tokenTypeForMode(betMode),
+            amount: acceptorStake + acceptorFee,
+            operation: "bet_cancelled_event_postponed",
+            reference_id: bet.id,
+          })
+        }
       } catch (err) {
         console.error("REFUND_FAILED acceptor event_postponed", { betId: bet.id, userId: bet.acceptor_id, err })
         // Don't increment failed — creator was already refunded; log for manual recovery

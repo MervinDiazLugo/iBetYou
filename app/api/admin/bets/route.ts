@@ -6,6 +6,7 @@ import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { houseWalletCredit } from "@/lib/house-wallet"
+import { creditGroupWallet } from "@/lib/group-wallet-utils"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -309,7 +310,7 @@ export async function PATCH(request: NextRequest) {
       for (const id of bet_ids) {
         const { data: bet, error: betError } = await supabase
           .from('bets')
-          .select('*, event:events(*), creator:profiles!bets_creator_id_fkey(id, nickname), acceptor:profiles!bets_acceptor_id_fkey(id, nickname)')
+          .select('*, group_id, event:events(*), creator:profiles!bets_creator_id_fkey(id, nickname), acceptor:profiles!bets_acceptor_id_fkey(id, nickname)')
           .eq('id', id)
           .single()
         
@@ -348,24 +349,29 @@ export async function PATCH(request: NextRequest) {
         }
 
         const betModeApprove = (bet as any).mode ?? "fantasy"
+        const betGroupIdApprove = (bet as any).group_id ?? null
         const prevStatusApprove = bet.status
         try {
-          await payoutToMode(supabase, winnerUserId, totalPrize, betModeApprove)
+          if (betGroupIdApprove) {
+            await creditGroupWallet(supabase, betGroupIdApprove, winnerUserId, totalPrize)
+          } else {
+            await payoutToMode(supabase, winnerUserId, totalPrize, betModeApprove)
+          }
         } catch (payoutErr) {
           console.error("PAYOUT_FAILED", { userId: winnerUserId, amount: totalPrize, betId: id, betMode: betModeApprove, error: payoutErr })
-          // Revert so admin can retry without the bet being stuck in resolved state with no payout
           const { error: revertErr } = await supabase
             .from('bets')
             .update({ status: prevStatusApprove, resolved_at: null, winner_id: bet.winner_id ?? null })
             .eq('id', id)
             .eq('status', 'resolved')
+            .eq('winner_id', winnerUserId)
           if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: id, error: revertErr })
           results.push({ id, success: false, error: "Payout failed after 3 retries" })
           continue
         }
         await supabase.from('transactions').insert({
           user_id: winnerUserId,
-          token_type: tokenTypeForMode(betModeApprove),
+          token_type: betGroupIdApprove ? "group_fantasy" : tokenTypeForMode(betModeApprove),
           amount: totalPrize,
           operation: 'bet_won',
           reference_id: bet.id,
@@ -445,7 +451,7 @@ export async function PATCH(request: NextRequest) {
       case 'cancel': {
         const { data: betToCancel, error: fetchErr } = await supabase
           .from('bets')
-          .select('id, creator_id, acceptor_id, amount, multiplier, fee_amount, type, bet_type, status, mode')
+          .select('id, creator_id, acceptor_id, amount, multiplier, fee_amount, type, bet_type, status, mode, group_id, house_bet, potential_payout')
           .eq('id', bet_id)
           .single()
 
@@ -474,20 +480,29 @@ export async function PATCH(request: NextRequest) {
 
         // Refund creator
         const cancelBetMode = (betToCancel as any).mode === "real" ? "real" : "fantasy"
+        const cancelGroupId = (betToCancel as any).group_id ?? null
         const creatorRefund = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
         try {
-          await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
-          await supabase.from('transactions').insert({
-            user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
-            operation: 'bet_cancelled_refund', reference_id: bet_id,
-          })
+          if (cancelGroupId) {
+            await creditGroupWallet(supabase, cancelGroupId, betToCancel.creator_id, creatorRefund)
+            await supabase.from('transactions').insert({
+              user_id: betToCancel.creator_id, token_type: "group_fantasy", amount: creatorRefund,
+              operation: 'bet_cancelled_refund', reference_id: bet_id,
+            })
+          } else {
+            await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
+            await supabase.from('transactions').insert({
+              user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
+              operation: 'bet_cancelled_refund', reference_id: bet_id,
+            })
+          }
         } catch (refundErr) {
           console.error("REFUND_FAILED", { userId: betToCancel.creator_id, amount: creatorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
         }
 
         // If house bet, return reserved liability to house wallet
         if ((betToCancel as any).house_bet) {
-          const stake = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
+          const stake = Number(betToCancel.amount)
           const potentialPayout = Number((betToCancel as any).potential_payout || 0)
           const houseRisk = potentialPayout - stake
           const betMode = (betToCancel as any).mode ?? "fantasy"
@@ -505,14 +520,22 @@ export async function PATCH(request: NextRequest) {
           const acceptorStake = betToCancel.bet_type === 'exact_score'
             ? Number(betToCancel.amount) * Math.max(1, Number(betToCancel.multiplier) || 1)
             : Number(betToCancel.amount)
-          const acceptorFee = (betToCancel as any).group_id ? 0 : acceptorStake * 0.03
+          const acceptorFee = cancelGroupId ? 0 : acceptorStake * 0.03
           const acceptorRefund = acceptorStake + acceptorFee
           try {
-            await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
-            await supabase.from('transactions').insert({
-              user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
-              operation: 'bet_cancelled_refund', reference_id: bet_id,
-            })
+            if (cancelGroupId) {
+              await creditGroupWallet(supabase, cancelGroupId, betToCancel.acceptor_id, acceptorRefund)
+              await supabase.from('transactions').insert({
+                user_id: betToCancel.acceptor_id, token_type: "group_fantasy", amount: acceptorRefund,
+                operation: 'bet_cancelled_refund', reference_id: bet_id,
+              })
+            } else {
+              await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
+              await supabase.from('transactions').insert({
+                user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
+                operation: 'bet_cancelled_refund', reference_id: bet_id,
+              })
+            }
           } catch (refundErr) {
             console.error("REFUND_FAILED", { userId: betToCancel.acceptor_id, amount: acceptorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
           }
@@ -605,6 +628,7 @@ export async function PATCH(request: NextRequest) {
             .update({ status: currentBet.status, resolved_at: null, winner_id: null })
             .eq('id', bet_id)
             .eq('status', 'resolved')
+            .eq('winner_id', winner_id)
           if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: bet_id, error: revertErr })
           return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
         }

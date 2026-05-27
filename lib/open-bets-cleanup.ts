@@ -2,6 +2,7 @@
 import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
 import { createNotification } from "@/lib/notifications"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
+import { creditGroupWallet } from "@/lib/group-wallet-utils"
 
 export async function cleanupExpiredOpenBets(
   supabase: ReturnType<typeof createAdminSupabaseClient>,
@@ -11,7 +12,7 @@ export async function cleanupExpiredOpenBets(
 
   const { data: openBets, error: openBetsError } = await supabase
     .from("bets")
-    .select("id, creator_id, amount, fee_amount, status, acceptor_id, mode, event:events(start_time, status)")
+    .select("id, creator_id, amount, fee_amount, status, acceptor_id, mode, group_id, event:events(start_time, status)")
     .eq("status", "open")
     .is("acceptor_id", null)
     .limit(1000)
@@ -43,7 +44,7 @@ export async function cleanupExpiredOpenBets(
       .update({ status: "cancelled" })
       .eq("id", bet.id)
       .eq("status", "open")
-      .select("id, creator_id, amount, fee_amount, mode")
+      .select("id, creator_id, amount, fee_amount, mode, group_id")
       .single()
 
     if (cancelError || !updatedBet) continue
@@ -51,16 +52,28 @@ export async function cleanupExpiredOpenBets(
     cancelled += 1
     const creatorRefund = Number(updatedBet.amount || 0) + Number(updatedBet.fee_amount || 0)
     const betMode = updatedBet.mode === "real" ? "real" : "fantasy"
+    const betGroupId = (updatedBet as any).group_id ?? null
 
     try {
-      await payoutToMode(supabase, updatedBet.creator_id, creatorRefund, betMode)
-      await supabase.from("transactions").insert({
-        user_id: updatedBet.creator_id,
-        token_type: tokenTypeForMode(betMode),
-        amount: creatorRefund,
-        operation: "bet_cancelled_refund",
-        reference_id: updatedBet.id,
-      })
+      if (betGroupId) {
+        await creditGroupWallet(supabase, betGroupId, updatedBet.creator_id, creatorRefund)
+        await supabase.from("transactions").insert({
+          user_id: updatedBet.creator_id,
+          token_type: "group_fantasy",
+          amount: creatorRefund,
+          operation: "bet_cancelled_refund",
+          reference_id: updatedBet.id,
+        })
+      } else {
+        await payoutToMode(supabase, updatedBet.creator_id, creatorRefund, betMode)
+        await supabase.from("transactions").insert({
+          user_id: updatedBet.creator_id,
+          token_type: tokenTypeForMode(betMode),
+          amount: creatorRefund,
+          operation: "bet_cancelled_refund",
+          reference_id: updatedBet.id,
+        })
+      }
       refunded += 1
     } catch (err) {
       console.error("Failed to refund wallet on bet expiry:", err, { betId: updatedBet.id, userId: updatedBet.creator_id })
