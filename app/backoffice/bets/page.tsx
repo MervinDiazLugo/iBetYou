@@ -1303,6 +1303,11 @@ export default function BackofficeBets() {
                               Marcador: {bet.event.home_team} {bet.event.home_score} — {bet.event.away_score} {bet.event.away_team}
                             </div>
                           )}
+                          <div className="mt-2">
+                            <Link href={`/bet/${bet.id}`} className="text-xs text-primary underline underline-offset-4">
+                              Ver detalles
+                            </Link>
+                          </div>
                         </CardContent>
                       </Card>
                     )
