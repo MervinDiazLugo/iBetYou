@@ -337,8 +337,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "ANTHROPIC_API_KEY not configured" }, { status: 500 })
       }
 
-      const MAX_FEATURED = 16
-      const LOOKAHEAD_DAYS = 3
+      const MAX_FEATURED = 18
+      const LOOKAHEAD_DAYS = 4
       const now = new Date()
       const cutoff = new Date(now.getTime() + LOOKAHEAD_DAYS * 24 * 60 * 60 * 1000)
 
@@ -424,8 +424,8 @@ No explanation. No markdown. Just the raw JSON array.`
         const validIds = new Set(events.map(e => e.id))
         const rawIds = (parsed as unknown[]).map(v => Number(v)).filter(id => Number.isFinite(id) && validIds.has(id))
         const evMap = new Map(events.map(e => [e.id, e]))
-        const ftIds = rawIds.filter(id => evMap.get(id)?.sport === "football").slice(0, 8)
-        const bkIds = rawIds.filter(id => evMap.get(id)?.sport === "basketball").slice(0, 4)
+        const ftIds = rawIds.filter(id => evMap.get(id)?.sport === "football").slice(0, 10)
+        const bkIds = rawIds.filter(id => evMap.get(id)?.sport === "basketball").slice(0, 5)
         const bbIds = rawIds.filter(id => evMap.get(id)?.sport === "baseball").slice(0, 5)
         let enforcedIds = [...ftIds, ...bkIds, ...bbIds]
         if (enforcedIds.length < MAX_FEATURED) {

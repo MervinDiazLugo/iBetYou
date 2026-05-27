@@ -76,6 +76,26 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Cantidad de iBY coins inválida" }, { status: 400 })
   }
 
+  // Mark approved first — payment ordering invariant; prevents double-credit if later steps fail
+  const { data: approvedRows, error: approveError } = await supabase
+    .from("deposit_requests")
+    .update({
+      status: "approved",
+      iby_coins: coinsToCredit,
+      reviewed_by: auth.userId,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("id")
+
+  if (approveError) {
+    return NextResponse.json({ error: approveError.message }, { status: 500 })
+  }
+  if (!approvedRows || approvedRows.length === 0) {
+    return NextResponse.json({ error: "Esta solicitud ya fue procesada" }, { status: 409 })
+  }
+
   const { data: wallet } = await supabase
     .from("iby_wallets")
     .select("balance")
@@ -85,10 +105,31 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!wallet) {
     await supabase.from("iby_wallets").insert({ user_id: req.user_id, balance: coinsToCredit })
   } else {
-    await supabase
+    const { data: updatedWallet } = await supabase
       .from("iby_wallets")
       .update({ balance: Number(wallet.balance) + coinsToCredit, updated_at: new Date().toISOString() })
       .eq("user_id", req.user_id)
+      .eq("balance", Number(wallet.balance))
+      .select("balance")
+
+    if (!updatedWallet || updatedWallet.length === 0) {
+      // Wallet was modified concurrently — fetch fresh balance and retry once
+      const { data: freshWallet } = await supabase
+        .from("iby_wallets")
+        .select("balance")
+        .eq("user_id", req.user_id)
+        .single()
+
+      if (!freshWallet) {
+        console.error("IBY_WALLET_CREDIT_FAILED concurrent update", { userId: req.user_id, coinsToCredit })
+        return NextResponse.json({ error: "Error actualizando wallet, intenta de nuevo" }, { status: 500 })
+      }
+
+      await supabase
+        .from("iby_wallets")
+        .update({ balance: Number(freshWallet.balance) + coinsToCredit, updated_at: new Date().toISOString() })
+        .eq("user_id", req.user_id)
+    }
   }
 
   await supabase.from("iby_transactions").insert({
@@ -97,16 +138,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     operation: "deposit_approved",
     reference_id: id,
   })
-
-  await supabase
-    .from("deposit_requests")
-    .update({
-      status: "approved",
-      iby_coins: coinsToCredit,
-      reviewed_by: auth.userId,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq("id", id)
 
   if (userEmail) {
     try {
