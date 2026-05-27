@@ -301,7 +301,7 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json()
     const { bet_id, action, winner_id, bet_ids, approved, reason } = body
-    const decidedBy = auth.userId || request.headers.get('x-admin-id') || request.headers.get('x-user-id') || 'admin'
+    const decidedBy = auth.userId
 
     if (action === 'approve_pending' && bet_ids && Array.isArray(bet_ids)) {
       const results = []
@@ -477,13 +477,13 @@ export async function PATCH(request: NextRequest) {
         const creatorRefund = Number(betToCancel.amount) + Number(betToCancel.fee_amount || 0)
         try {
           await payoutToMode(supabase, betToCancel.creator_id, creatorRefund, cancelBetMode)
+          await supabase.from('transactions').insert({
+            user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
+            operation: 'bet_cancelled_refund', reference_id: bet_id,
+          })
         } catch (refundErr) {
           console.error("REFUND_FAILED", { userId: betToCancel.creator_id, amount: creatorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
         }
-        await supabase.from('transactions').insert({
-          user_id: betToCancel.creator_id, token_type: tokenTypeForMode(cancelBetMode), amount: creatorRefund,
-          operation: 'bet_cancelled_refund', reference_id: bet_id,
-        })
 
         // If house bet, return reserved liability to house wallet
         if ((betToCancel as any).house_bet) {
@@ -505,16 +505,17 @@ export async function PATCH(request: NextRequest) {
           const acceptorStake = betToCancel.bet_type === 'exact_score'
             ? Number(betToCancel.amount) * Math.max(1, Number(betToCancel.multiplier) || 1)
             : Number(betToCancel.amount)
-          const acceptorRefund = acceptorStake + acceptorStake * 0.03
+          const acceptorFee = (betToCancel as any).group_id ? 0 : acceptorStake * 0.03
+          const acceptorRefund = acceptorStake + acceptorFee
           try {
             await payoutToMode(supabase, betToCancel.acceptor_id, acceptorRefund, cancelBetMode)
+            await supabase.from('transactions').insert({
+              user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
+              operation: 'bet_cancelled_refund', reference_id: bet_id,
+            })
           } catch (refundErr) {
             console.error("REFUND_FAILED", { userId: betToCancel.acceptor_id, amount: acceptorRefund, betId: bet_id, betMode: cancelBetMode, error: refundErr })
           }
-          await supabase.from('transactions').insert({
-            user_id: betToCancel.acceptor_id, token_type: tokenTypeForMode(cancelBetMode), amount: acceptorRefund,
-            operation: 'bet_cancelled_refund', reference_id: bet_id,
-          })
         }
 
         await logArbitrationDecision(supabase, {
