@@ -10,18 +10,15 @@ export async function GET(request: NextRequest) {
   const supabase = createAdminSupabaseClient()
 
   try {
-    // All bets with relevant fields
-    const { data: bets, error: betsError } = await supabase
-      .from("bets")
-      .select("id, status, amount, fee_amount, multiplier, type, bet_type, created_at, resolved_at")
+    const [
+      { data: bets, error: betsError },
+      { data: wallets, error: walletsError },
+    ] = await Promise.all([
+      supabase.from("bets").select("id, status, amount, fee_amount, multiplier, type, bet_type, created_at, resolved_at"),
+      supabase.from("wallets").select("balance_fantasy, balance_real"),
+    ])
 
     if (betsError) return NextResponse.json({ error: betsError.message }, { status: 500 })
-
-    // All wallets
-    const { data: wallets, error: walletsError } = await supabase
-      .from("wallets")
-      .select("balance_fantasy, balance_real")
-
     if (walletsError) return NextResponse.json({ error: walletsError.message }, { status: 500 })
 
     const allBets = bets || []

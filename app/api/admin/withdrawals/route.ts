@@ -58,6 +58,13 @@ export async function PATCH(request: NextRequest) {
       p_user_id: req.user_id,
       p_amount: req.amount,
     })
+    await supabase.from("transactions").insert({
+      user_id: req.user_id,
+      token_type: "iBY",
+      amount: -Number(req.amount),
+      operation: "withdrawal_paid",
+      reference_id: req.id,
+    })
     await supabase
       .from("withdrawal_requests")
       .update({ status: "paid", admin_notes: admin_notes || null, updated_at: new Date().toISOString() })
@@ -81,8 +88,22 @@ export async function PATCH(request: NextRequest) {
 
     if (rejection_type === "refund") {
       await supabase.rpc("refund_withdrawal", { p_user_id: req.user_id, p_amount: req.amount })
+      await supabase.from("transactions").insert({
+        user_id: req.user_id,
+        token_type: "iBY",
+        amount: Number(req.amount),
+        operation: "withdrawal_refunded",
+        reference_id: req.id,
+      })
     } else {
       await supabase.rpc("forfeit_withdrawal", { p_user_id: req.user_id, p_amount: req.amount })
+      await supabase.from("transactions").insert({
+        user_id: req.user_id,
+        token_type: "iBY",
+        amount: -Number(req.amount),
+        operation: "withdrawal_forfeited",
+        reference_id: req.id,
+      })
     }
 
     await supabase

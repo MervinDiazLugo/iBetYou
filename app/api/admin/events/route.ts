@@ -448,12 +448,12 @@ No explanation. No markdown. Just the raw JSON array.`
       let predictionsFetched = 0
       const predictionErrors: string[] = []
       if (API_FOOTBALL_KEY && API_FOOTBALL_URL) {
-        for (const ev of footballEvents) {
+        const results = await Promise.all(footballEvents.map(async (ev) => {
           const fixtureId = ev.external_id.replace("football_", "")
           try {
             const data = await fetchApiSports(`${API_FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
             const raw = data.response?.[0]
-            if (!raw) continue
+            if (!raw) return { ok: false, id: ev.external_id }
             const pred = raw.predictions
             const home = raw.teams?.home
             const away = raw.teams?.away
@@ -469,10 +469,14 @@ No explanation. No markdown. Just the raw JSON array.`
               })),
             }
             await supabase.from("events").update({ metadata: { ...(ev.metadata || {}), predictions } }).eq("id", ev.id)
-            predictionsFetched++
+            return { ok: true, id: ev.external_id }
           } catch (e: any) {
-            predictionErrors.push(`${ev.external_id}: ${e.message}`)
+            return { ok: false, id: ev.external_id, error: e.message }
           }
+        }))
+        for (const r of results) {
+          if (r.ok) predictionsFetched++
+          else if (r.error) predictionErrors.push(`${r.id}: ${r.error}`)
         }
       }
 
@@ -480,12 +484,11 @@ No explanation. No markdown. Just the raw JSON array.`
       const selectedEventsAll = events.filter(e => selectedIds.includes(e.id))
       const needsAi = selectedEventsAll.filter(e => !(e.metadata as any)?.predictions?.percent)
       const aiPredictions = await generateAiPredictions(needsAi)
-      let aiPredictionsFetched = 0
-      for (const [eventId, prediction] of aiPredictions) {
+      const aiPredictionsFetched = aiPredictions.size
+      await Promise.all(Array.from(aiPredictions.entries()).map(([eventId, prediction]) => {
         const ev = selectedEventsAll.find(e => e.id === eventId)
-        await supabase.from("events").update({ metadata: { ...(ev?.metadata || {}), predictions: prediction } }).eq("id", eventId)
-        aiPredictionsFetched++
-      }
+        return supabase.from("events").update({ metadata: { ...(ev?.metadata || {}), predictions: prediction } }).eq("id", eventId)
+      }))
 
       return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
     }

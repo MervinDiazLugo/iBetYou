@@ -213,34 +213,34 @@ export async function GET(request: NextRequest) {
       return nowMs - updatedMs >= PENDING_TIMEOUT_MS
     })
 
-    for (const staleBet of stalePendingBets) {
-      const { error: timeoutUpdateError } = await supabase
+    if (stalePendingBets.length > 0) {
+      const staleIds = stalePendingBets.map(b => b.id)
+      const { data: timedOut } = await supabase
         .from('bets')
         .update({ status: 'disputed' })
-        .eq('id', staleBet.id)
+        .in('id', staleIds)
         .in('status', ['pending_resolution', 'pending_resolution_creator', 'pending_resolution_acceptor'])
+        .select('id')
 
-      if (timeoutUpdateError) {
-        console.error('Failed to timeout pending bet to disputed:', timeoutUpdateError)
-        continue
+      const timedOutSet = new Set((timedOut || []).map(r => r.id))
+      for (const staleBet of stalePendingBets) {
+        if (timedOutSet.has(staleBet.id)) staleBet.status = 'disputed'
       }
 
-      staleBet.status = 'disputed'
-
-      await logArbitrationDecision(supabase, {
-        bet_id: staleBet.id,
-        action: 'pending_timeout_to_dispute',
-        previous_status: 'pending_resolution',
-        new_status: 'disputed',
-        decided_winner_id: staleBet.winner_id || null,
-        reason: 'Sin respuesta de contraparte por 30 minutos. Enviado a moderacion del backoffice',
-        details: {
-          timeout_minutes: 30,
-          updated_at: staleBet.updated_at || null,
-        },
-        decided_by: 'system',
-        source: 'system',
-      })
+      await Promise.all((timedOut || []).map(row => {
+        const orig = stalePendingBets.find(b => b.id === row.id)
+        return logArbitrationDecision(supabase, {
+          bet_id: row.id,
+          action: 'pending_timeout_to_dispute',
+          previous_status: orig?.status || 'pending_resolution',
+          new_status: 'disputed',
+          decided_winner_id: orig?.winner_id || null,
+          reason: 'Sin respuesta de contraparte por 30 minutos. Enviado a moderacion del backoffice',
+          details: { timeout_minutes: 30, updated_at: orig?.updated_at || null },
+          decided_by: 'system',
+          source: 'system',
+        })
+      }))
     }
 
     const betIds = bets.map((b) => b.id)
