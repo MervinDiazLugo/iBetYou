@@ -92,9 +92,7 @@ export default function GroupPage() {
 
   useEffect(() => {
     if (user && groupId) {
-      loadDetail()
-      loadBets()
-      loadLeaderboard()
+      Promise.all([loadDetail(), loadBets(), loadLeaderboard()])
     }
   }, [user, groupId])
 
