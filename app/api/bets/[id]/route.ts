@@ -90,15 +90,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
       return NextResponse.json({ error: 'Unauthorized user scope' }, { status: 403 })
     }
 
-    // Fetch the bet to validate
-    const { data: bet, error: betError } = await supabase
-      .from("bets")
-      .select(`
-        *,
-        event:events(*)
-      `)
-      .eq("id", betId)
-      .single()
+    // Fetch bet and taker profile in parallel — both IDs are known before any DB call
+    const [
+      { data: bet, error: betError },
+      { data: profile, error: profileError },
+    ] = await Promise.all([
+      supabase.from("bets").select(`*, event:events(*)`).eq("id", betId).single(),
+      supabase.from("profiles").select("id, is_banned, role, betting_blocked_until").eq("id", effectiveUserId).single(),
+    ])
 
     if (betError || !bet) {
       return NextResponse.json({ error: 'Bet not found' }, { status: 404 })
@@ -127,12 +126,6 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (bet.creator_id === effectiveUserId) {
       return NextResponse.json({ error: 'You cannot take your own bet' }, { status: 400 })
     }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, is_banned, role, betting_blocked_until")
-      .eq("id", effectiveUserId)
-      .single()
 
     if (profileError) {
       const missingColumn = profileError.message?.includes("betting_blocked_until")

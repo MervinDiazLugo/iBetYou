@@ -131,11 +131,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'El monto debe ser un número positivo' }, { status: 400 })
     }
 
-    const { data: eventRow, error: eventError } = await supabase
-      .from('events')
-      .select('id, sport')
-      .eq('id', event_id)
-      .single()
+    const [
+      { data: eventRow, error: eventError },
+      { data: profile, error: profileError },
+    ] = await Promise.all([
+      supabase.from('events').select('id, sport').eq('id', event_id).single(),
+      supabase.from('profiles').select('id, is_banned, role, betting_blocked_until').eq('id', user_id).single(),
+    ])
 
     if (eventError || !eventRow) {
       return NextResponse.json({ error: 'Event not found' }, { status: 404 })
@@ -144,12 +146,6 @@ export async function POST(request: NextRequest) {
     if (footballOnlyBetTypes.has(bet_type) && eventRow.sport !== 'football') {
       return NextResponse.json({ error: 'Este tipo de apuesta solo esta disponible para futbol' }, { status: 400 })
     }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, is_banned, role, betting_blocked_until')
-      .eq('id', user_id)
-      .single()
 
     if (profileError && !profileError.message?.includes('betting_blocked_until')) {
       return NextResponse.json({ error: 'Failed to validate user profile' }, { status: 500 })

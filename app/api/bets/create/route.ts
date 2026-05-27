@@ -64,11 +64,13 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminSupabaseClient()
 
-    const { data: eventRow, error: eventError } = await supabase
-      .from("events")
-      .select("id, sport, status")
-      .eq("id", eventId)
-      .single()
+    const [
+      { data: eventRow, error: eventError },
+      { data: profile, error: profileError },
+    ] = await Promise.all([
+      supabase.from("events").select("id, sport, status").eq("id", eventId).single(),
+      supabase.from("profiles").select("id, is_banned, role, betting_blocked_until, country, real_betting_enabled").eq("id", user.id).single(),
+    ])
 
     if (eventError || !eventRow) {
       return NextResponse.json(
@@ -87,12 +89,6 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
-
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("id, is_banned, role, betting_blocked_until, country, real_betting_enabled")
-      .eq("id", user.id)
-      .single()
 
     if (profileError) {
       const missingColumn = profileError.message?.includes("betting_blocked_until")
