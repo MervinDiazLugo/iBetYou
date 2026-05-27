@@ -22,32 +22,36 @@ export async function GET(request: NextRequest) {
   )
   const whatsappUrl = `https://wa.me/?text=${whatsappText}`
 
-  const { data: referrals } = await supabase
-    .from("referral_bonuses")
-    .select(`
-      referee_id,
-      wagering_progress,
-      wagering_required,
-      status,
-      created_at,
-      referee:profiles!referral_bonuses_referee_id_fkey(nickname)
-    `)
-    .eq("referrer_id", userId)
-    .eq("beneficiary_id", userId)
-    .order("created_at", { ascending: false })
-
-  const { data: myBonus } = await supabase
-    .from("referral_bonuses")
-    .select("*")
-    .eq("beneficiary_id", userId)
-    .eq("referee_id", userId)
-    .maybeSingle()
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("referral_count, max_referrals")
-    .eq("id", userId)
-    .single()
+  const [
+    { data: referrals },
+    { data: myBonus },
+    { data: profile },
+  ] = await Promise.all([
+    supabase
+      .from("referral_bonuses")
+      .select(`
+        referee_id,
+        wagering_progress,
+        wagering_required,
+        status,
+        created_at,
+        referee:profiles!referral_bonuses_referee_id_fkey(nickname)
+      `)
+      .eq("referrer_id", userId)
+      .eq("beneficiary_id", userId)
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("referral_bonuses")
+      .select("*")
+      .eq("beneficiary_id", userId)
+      .eq("referee_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("referral_count, max_referrals")
+      .eq("id", userId)
+      .single(),
+  ])
 
   return NextResponse.json({
     referral_code: referralCode,
