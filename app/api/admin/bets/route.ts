@@ -184,11 +184,13 @@ export async function GET(request: NextRequest) {
       query = query.eq('mode', mode)
     }
 
-    if (status && status !== 'all') {
+    if (status === 'closed') {
+      query = query.in('status', ['resolved', 'cancelled'])
+    } else if (status && status !== 'all') {
       query = query.eq('status', status)
     } else if (!status) {
-      // Por defecto, mostrar todas excepto 'open' (que se ven en eventos)
-      query = query.in('status', ['taken', 'pending_resolution', 'pending_resolution_creator', 'pending_resolution_acceptor', 'disputed', 'resolved', 'cancelled'])
+      // Default: only active bets (taken/pending/disputed/open)
+      query = query.in('status', ['taken', 'pending_resolution', 'pending_resolution_creator', 'pending_resolution_acceptor', 'disputed', 'open'])
     }
     // Si status === 'all', no aplicar filtro
     

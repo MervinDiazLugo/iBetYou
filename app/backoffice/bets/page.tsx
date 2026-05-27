@@ -130,7 +130,10 @@ export default function BackofficeBets() {
   const [bets, setBets] = useState<Bet[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>("")
-  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<string>("")
+  const [historyBets, setHistoryBets] = useState<Bet[]>([])
+  const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [loadingHistory, setLoadingHistory] = useState(false)
   const [modeFilter, setModeFilter] = useState<string>("all")
   const [selectedBet, setSelectedBet] = useState<Bet | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
@@ -174,9 +177,9 @@ export default function BackofficeBets() {
       setLoading(true)
     }
     try {
-      const statusParam = statusFilter !== 'all' ? `&status=${statusFilter}` : ''
+      const statusParam = statusFilter ? `&status=${statusFilter}` : ''
       const modeParam = modeFilter !== 'all' ? `&mode=${modeFilter}` : ''
-      const res = await authFetch(`/api/admin/bets?limit=100${statusParam}${modeParam}`)
+      const res = await authFetch(`/api/admin/bets?limit=200${statusParam}${modeParam}`)
       const data = await res.json()
       setBets(data.bets || [])
     } catch (err) {
@@ -185,6 +188,21 @@ export default function BackofficeBets() {
       if (!options?.silent) {
         setLoading(false)
       }
+    }
+  }
+
+  async function fetchHistory(options?: { silent?: boolean }) {
+    if (!options?.silent) setLoadingHistory(true)
+    try {
+      const modeParam = modeFilter !== 'all' ? `&mode=${modeFilter}` : ''
+      const res = await authFetch(`/api/admin/bets?status=closed&limit=200${modeParam}`)
+      const data = await res.json()
+      setHistoryBets(data.bets || [])
+      setHistoryLoaded(true)
+    } catch (err) {
+      console.error('Error fetching history:', err)
+    } finally {
+      if (!options?.silent) setLoadingHistory(false)
     }
   }
 
@@ -721,9 +739,10 @@ export default function BackofficeBets() {
             </div>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => { setStatusFilter(e.target.value); setHistoryLoaded(false); setHistoryBets([]) }}
               className="px-3 py-2 rounded-lg border bg-background"
             >
+              <option value="">En curso</option>
               <option value="all">Todos los estados</option>
               <option value="open">Abiertas</option>
               <option value="taken">Tomadas</option>
@@ -1214,6 +1233,84 @@ export default function BackofficeBets() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* History Section — closed bets (resolved/cancelled) */}
+      {!statusFilter && (
+        <div className="flex flex-col items-center gap-3 py-4">
+          {!historyLoaded ? (
+            <Button
+              variant="outline"
+              onClick={() => fetchHistory()}
+              disabled={loadingHistory}
+              className="text-muted-foreground"
+            >
+              {loadingHistory ? 'Cargando historial...' : 'Ver historial (resueltas y canceladas)'}
+            </Button>
+          ) : historyBets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay apuestas en el historial.</p>
+          ) : (
+            <>
+              <div className="w-full flex items-center gap-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-sm text-muted-foreground whitespace-nowrap">Historial ({historyBets.length})</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+              <div className="grid gap-4 w-full opacity-70">
+                {historyBets
+                  .filter(bet => {
+                    if (!filter) return true
+                    const search = filter.toLowerCase()
+                    return (
+                      bet.event.home_team.toLowerCase().includes(search) ||
+                      bet.event.away_team.toLowerCase().includes(search) ||
+                      bet.creator?.nickname?.toLowerCase().includes(search) ||
+                      bet.id.includes(search)
+                    )
+                  })
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map((bet) => {
+                    const status = statusConfig[bet.status] || { label: bet.status, color: 'text-gray-500', bg: 'bg-gray-500/10' }
+                    const betTypeLabel = betTypeLabels[bet.bet_type] || bet.type || bet.bet_type
+                    return (
+                      <Card key={bet.id} className="hover:shadow-md transition-shadow">
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between flex-wrap gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Badge className={status.bg}><span className={status.color}>{status.label}</span></Badge>
+                              <Badge variant="outline" className="text-xs">Tipo: {betTypeLabel}</Badge>
+                              {(bet as any).mode === "real" ? (
+                                <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBY</Badge>
+                              ) : (
+                                <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">Fantasy</Badge>
+                              )}
+                            </div>
+                            <span className="text-xs text-muted-foreground">{formatDate(bet.created_at)}</span>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="pb-3">
+                          <div className="text-sm font-medium">{bet.event.home_team} vs {bet.event.away_team}</div>
+                          <div className="text-xs text-muted-foreground">{bet.event.league} · {formatDate(bet.event.start_time)}</div>
+                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                            <span>Creador: <span className="text-foreground">{bet.creator?.nickname}</span></span>
+                            <span>Selección: <span className="text-foreground">{bet.creator_selection}</span></span>
+                            <span>Monto: <span className="text-foreground">{formatCurrency(bet.amount)}</span></span>
+                            {bet.winner_id && <span>Ganador: <span className="text-green-400">{bet.winner_id === bet.creator_id ? bet.creator?.nickname : bet.acceptor?.nickname}</span></span>}
+                          </div>
+                          {bet.event.home_score !== null && bet.event.away_score !== null && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Marcador: {bet.event.home_team} {bet.event.home_score} — {bet.event.away_score} {bet.event.away_team}
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    )
+                  })
+                }
+              </div>
+            </>
+          )}
         </div>
       )}
 
