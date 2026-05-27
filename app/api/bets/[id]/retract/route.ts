@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { createNotifications } from "@/lib/notifications"
+import { creditGroupWallet } from "@/lib/group-wallet-utils"
 
 const GRACE_MS = 12 * 60 * 60 * 1000
 
@@ -22,7 +23,8 @@ function calcRefunds(
   cancellerId: string,
   creatorId: string,
   timingWindow: "grace" | "pre_game" | "in_game",
-  betStatus: string
+  betStatus: string,
+  isGroupBet = false
 ): { creatorRefund: number; acceptorRefund: number } {
   const creatorStake = Number(bet.amount)
   const creatorFee = Number(bet.fee_amount)
@@ -30,8 +32,7 @@ function calcRefunds(
   const acceptorStake = isAsymmetric
     ? creatorStake * Math.max(1, Number(bet.multiplier))
     : creatorStake
-  // Assumes 3% fee rate is unchanged since acceptance; use a stored acceptor_fee_amount if available
-  const acceptorFee = acceptorStake * 0.03
+  const acceptorFee = isGroupBet ? 0 : acceptorStake * 0.03
 
   if (betStatus === "open") {
     return {
@@ -82,6 +83,10 @@ export async function POST(
 
   if (betError || !bet) {
     return NextResponse.json({ error: "Bet not found" }, { status: 404 })
+  }
+
+  if ((bet as any).house_bet) {
+    return NextResponse.json({ error: "Las apuestas contra la casa no pueden retractarse" }, { status: 400 })
   }
 
   const isCreator = bet.creator_id === userId
@@ -138,8 +143,9 @@ export async function POST(
     return NextResponse.json({ error: "Evento no encontrado" }, { status: 400 })
   }
 
+  const isGroupBet = Boolean((bet as any).group_id)
   const timingWindow = retractWindow(event.start_time, event.status)
-  const refunds = calcRefunds(bet, userId, bet.creator_id, timingWindow, bet.status)
+  const refunds = calcRefunds(bet, userId, bet.creator_id, timingWindow, bet.status, isGroupBet)
   const betMode = bet.mode === "real" ? "real" : "fantasy"
   const action = isCreator ? "retract_creator" : "retract_acceptor"
 
@@ -165,17 +171,29 @@ export async function POST(
     )
   }
 
+  const groupId = (bet as any).group_id ?? null
+
   if (refunds.creatorRefund > 0) {
     try {
-      await payoutToMode(supabase, bet.creator_id, refunds.creatorRefund, betMode)
-      const { error: txError } = await supabase.from("transactions").insert({
-        user_id: bet.creator_id,
-        token_type: tokenTypeForMode(betMode),
-        amount: refunds.creatorRefund,
-        operation: "bet_retracted_refund",
-        reference_id: betId,
-      })
-      if (txError) console.error("TRANSACTION_INSERT_FAILED", { betId, userId: bet.creator_id, txError })
+      if (groupId) {
+        await creditGroupWallet(supabase, groupId, bet.creator_id, refunds.creatorRefund)
+        await supabase.from("transactions").insert({
+          user_id: bet.creator_id,
+          token_type: "group_fantasy",
+          amount: refunds.creatorRefund,
+          operation: "bet_retracted_refund",
+          reference_id: betId,
+        })
+      } else {
+        await payoutToMode(supabase, bet.creator_id, refunds.creatorRefund, betMode)
+        await supabase.from("transactions").insert({
+          user_id: bet.creator_id,
+          token_type: tokenTypeForMode(betMode),
+          amount: refunds.creatorRefund,
+          operation: "bet_retracted_refund",
+          reference_id: betId,
+        })
+      }
     } catch (err) {
       console.error("REFUND_FAILED creator", { betId, userId: bet.creator_id, amount: refunds.creatorRefund, err })
       return NextResponse.json({ error: "Error procesando reembolso del creador" }, { status: 500 })
@@ -184,15 +202,25 @@ export async function POST(
 
   if (bet.status === "taken" && bet.acceptor_id && refunds.acceptorRefund > 0) {
     try {
-      await payoutToMode(supabase, bet.acceptor_id, refunds.acceptorRefund, betMode)
-      const { error: txError } = await supabase.from("transactions").insert({
-        user_id: bet.acceptor_id,
-        token_type: tokenTypeForMode(betMode),
-        amount: refunds.acceptorRefund,
-        operation: "bet_retracted_refund",
-        reference_id: betId,
-      })
-      if (txError) console.error("TRANSACTION_INSERT_FAILED", { betId, userId: bet.acceptor_id, txError })
+      if (groupId) {
+        await creditGroupWallet(supabase, groupId, bet.acceptor_id, refunds.acceptorRefund)
+        await supabase.from("transactions").insert({
+          user_id: bet.acceptor_id,
+          token_type: "group_fantasy",
+          amount: refunds.acceptorRefund,
+          operation: "bet_retracted_refund",
+          reference_id: betId,
+        })
+      } else {
+        await payoutToMode(supabase, bet.acceptor_id, refunds.acceptorRefund, betMode)
+        await supabase.from("transactions").insert({
+          user_id: bet.acceptor_id,
+          token_type: tokenTypeForMode(betMode),
+          amount: refunds.acceptorRefund,
+          operation: "bet_retracted_refund",
+          reference_id: betId,
+        })
+      }
     } catch (err) {
       console.error("REFUND_FAILED acceptor", { betId, userId: bet.acceptor_id, amount: refunds.acceptorRefund, err })
       return NextResponse.json({ error: "Error procesando reembolso del aceptante" }, { status: 500 })

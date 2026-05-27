@@ -2,6 +2,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { createNotifications } from "@/lib/notifications"
 import { creditGroupWallet } from "@/lib/group-wallet-utils"
+import { houseWalletCredit } from "@/lib/house-wallet"
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
@@ -17,7 +18,7 @@ export async function cancelBetsForEvent(
 
   const { data: bets, error } = await supabase
     .from("bets")
-    .select("id, creator_id, acceptor_id, amount, fee_amount, multiplier, bet_type, status, mode, group_id")
+    .select("id, creator_id, acceptor_id, amount, fee_amount, multiplier, bet_type, status, mode, group_id, house_bet, potential_payout")
     .eq("event_id", eventId)
     .in("status", ACTIVE_STATUSES)
 
@@ -70,6 +71,20 @@ export async function cancelBetsForEvent(
       console.error("REFUND_FAILED creator event_postponed", { betId: bet.id, userId: bet.creator_id, err })
       failed++
       continue
+    }
+
+    // 2b. Return house wallet reservation if this was a house bet
+    const isHouseBet = Boolean((bet as any).house_bet)
+    if (isHouseBet) {
+      const potentialPayout = Number((bet as any).potential_payout || 0)
+      const houseRisk = potentialPayout - creatorStake
+      if (houseRisk > 0) {
+        try {
+          await houseWalletCredit(supabase, houseRisk, betMode)
+        } catch (err) {
+          console.error("HOUSE_WALLET_CREDIT_FAILED event_postponed", { betId: bet.id, houseRisk, err })
+        }
+      }
     }
 
     // 3. Refund acceptor if bet was taken
