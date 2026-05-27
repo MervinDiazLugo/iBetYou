@@ -59,32 +59,37 @@ export async function GET(request: NextRequest) {
         const currentBalance = wallet?.balance_fantasy || 0
 
         if (currentAccumulated === 0) {
-          // First time: welcome bonus
-          await supabase
+          // First time: welcome bonus — optimistic lock on fantasy_total_accumulated === 0
+          // prevents double-grant when two concurrent logins both see accumulated === 0
+          const { data: welcomeUpdated } = await supabase
             .from("wallets")
             .update({
               balance_fantasy: currentBalance + bonusPerLogin,
               fantasy_total_accumulated: bonusPerLogin,
             })
             .eq("user_id", userId)
+            .eq("fantasy_total_accumulated", 0)
+            .select("user_id")
 
-          await supabase.from("transactions").insert({
-            user_id: userId,
-            token_type: "fantasy",
-            amount: bonusPerLogin,
-            operation: "welcome_bonus",
-          })
+          if (welcomeUpdated && welcomeUpdated.length > 0) {
+            await supabase.from("transactions").insert({
+              user_id: userId,
+              token_type: "fantasy",
+              amount: bonusPerLogin,
+              operation: "welcome_bonus",
+            })
 
-          await supabase.from("daily_rewards").insert({
-            user_id: userId,
-            reward_amount: bonusPerLogin,
-          })
+            await supabase.from("daily_rewards").insert({
+              user_id: userId,
+              reward_amount: bonusPerLogin,
+            })
 
-          // Process referral code if present (only on first login = new registration)
-          const refCode = request.cookies.get("iby_ref")?.value
-          if (refCode) {
-            await applyReferral(userId, refCode, supabase)
-            response.cookies.delete("iby_ref")
+            // Process referral code if present (only on first login = new registration)
+            const refCode = request.cookies.get("iby_ref")?.value
+            if (refCode) {
+              await applyReferral(userId, refCode, supabase)
+              response.cookies.delete("iby_ref")
+            }
           }
         } else {
           // Subsequent logins: daily login bonus

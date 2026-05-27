@@ -61,15 +61,26 @@ export async function POST(request: NextRequest) {
     // Check if user already has a wallet (not first time signup)
     if (wallet.fantasy_total_accumulated === undefined || wallet.fantasy_total_accumulated === 0) {
       // First time - give welcome bonus outside of daily limit
+      // Optimistic lock: only grant if fantasy_total_accumulated is still 0 at update time
       const welcomeBonus = 50
-      
-      await supabase
+
+      const { data: welcomeUpdated } = await supabase
         .from("wallets")
         .update({
           balance_fantasy: wallet.balance_fantasy + welcomeBonus,
           fantasy_total_accumulated: welcomeBonus,
         })
         .eq("user_id", effectiveUserId)
+        .eq("fantasy_total_accumulated", 0)
+        .select("user_id")
+
+      if (!welcomeUpdated || welcomeUpdated.length === 0) {
+        return NextResponse.json({
+          success: false,
+          bonus: 0,
+          message: "Bono de bienvenida ya procesado",
+        })
+      }
 
       await supabase.from("transactions").insert({
         user_id: effectiveUserId,
