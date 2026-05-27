@@ -565,39 +565,37 @@ function HomeContent() {
     return matchesSearch && matchesSport && matchesBetType && matchesAmount && matchesLeague
   }
 
-  const filteredBets = bets.filter((bet) => {
+  const filteredBets = useMemo(() => bets.filter((bet) => {
     if (bet.status !== 'open') return false
     if (user && bet.creator_id === user.id) return false
     return matchesMarketplaceFilters(bet)
-  })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [bets, user, selectedSport, selectedBetType, selectedAmountRange, searchTerm, selectedLeague])
 
-  const sortedBets = [...filteredBets].sort((a, b) => {
-    if (sortBy === "highest_amount") {
-      return b.amount - a.amount
-    }
-
-    if (sortBy === "newest") {
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-    }
-
+  const sortedBets = useMemo(() => [...filteredBets].sort((a, b) => {
+    if (sortBy === "highest_amount") return b.amount - a.amount
+    if (sortBy === "newest") return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     return new Date(a.event.start_time).getTime() - new Date(b.event.start_time).getTime()
-  })
+  }), [filteredBets, sortBy])
 
-  const opportunities = [...filteredBets]
+  const opportunities = useMemo(() => [...filteredBets]
     .sort((a, b) => {
       const timeA = Math.max(1, new Date(a.event.start_time).getTime() - Date.now())
       const timeB = Math.max(1, new Date(b.event.start_time).getTime() - Date.now())
-      const scoreA = a.amount / timeA
-      const scoreB = b.amount / timeB
-      return scoreB - scoreA
+      return (b.amount / timeB) - (a.amount / timeA)
     })
     .slice(0, 3)
+  , [filteredBets])
 
-  const filteredTakenBets = takenBets.filter((bet) => {
-    const eventStart = new Date(bet.event?.start_time)
-    if (eventStart < new Date()) return false
-    return matchesMarketplaceFilters(bet)
-  })
+  const filteredTakenBets = useMemo(() => {
+    const now = new Date()
+    return takenBets.filter((bet) => {
+      const eventStart = new Date(bet.event?.start_time)
+      if (eventStart < now) return false
+      return matchesMarketplaceFilters(bet)
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [takenBets, selectedSport, selectedBetType, selectedAmountRange, searchTerm, selectedLeague])
 
   // Unique leagues derived from loaded events — scoped to selected sport
   const uniqueLeagues = useMemo(() => {
@@ -1668,9 +1666,11 @@ function HomeContent() {
               <Clock className="h-5 w-5 text-orange-500" />
               <h2 className="text-lg sm:text-xl font-bold">Mis Apuestas en Curso</h2>
             </div>
-            {inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode).length > 0 ? (
+            {(() => {
+              const betsForMode = inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode)
+              return betsForMode.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                {inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode).slice(0, 5).map((bet) => {
+                {betsForMode.slice(0, 5).map((bet) => {
                   const potentialWin = bet.amount * bet.multiplier + bet.amount
                   const betTypeLabels: Record<string, string> = {
                     direct: "Directa",
@@ -1745,7 +1745,8 @@ function HomeContent() {
                   </Button>
                 </CardContent>
               </Card>
-            )}
+            )
+            })()}
           </div>
         )}
       </main>
