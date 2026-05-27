@@ -172,13 +172,36 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const acceptorFee = (bet as any).group_id ? 0 : acceptorStake * 0.03
     const totalNeeded = acceptorStake + acceptorFee
 
-    // Deduct from taker wallet — group bets use group wallet; regular bets use main wallet
+    // 1. Lock bet as taken FIRST (payment ordering invariant: status before money).
+    // .eq("status", "open") is the optimistic lock — concurrent takers get PGRST116.
+    const { data: updatedBet, error: updateError } = await supabase
+      .from("bets")
+      .update({ status: 'taken', acceptor_id: effectiveUserId })
+      .eq("id", betId)
+      .eq("status", "open")
+      .select()
+      .single()
+
+    if (updateError || !updatedBet) {
+      if (updateError?.code === "PGRST116") {
+        return NextResponse.json({ error: 'Esta apuesta ya fue tomada por otro usuario' }, { status: 409 })
+      }
+      return NextResponse.json({ error: updateError?.message || 'No se pudo tomar la apuesta' }, { status: 500 })
+    }
+
+    // Helper: revert bet to open if wallet deduction fails below
+    async function revertBetToOpen() {
+      await supabase.from("bets").update({ status: "open", acceptor_id: null }).eq("id", betId).eq("status", "taken")
+    }
+
+    // 2. Deduct from taker wallet — bet is already locked as "taken"
     if ((bet as any).group_id) {
       const { ensureDailyGrant, deductFromGroupWallet } = await import("@/lib/group-wallet-utils")
       await ensureDailyGrant(supabase, (bet as any).group_id, effectiveUserId)
       try {
         await deductFromGroupWallet(supabase, (bet as any).group_id, effectiveUserId, totalNeeded)
       } catch (err: any) {
+        await revertBetToOpen()
         return NextResponse.json({ error: err.message }, { status: 400 })
       }
     } else if (betMode === "real") {
@@ -188,10 +211,12 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .eq("user_id", effectiveUserId)
         .single()
       if (!ibcWallet) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "IBC wallet not found" }, { status: 404 })
       }
       const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
       if (available < totalNeeded) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "Insufficient IBC balance" }, { status: 400 })
       }
       const takerBalance = Number(ibcWallet.balance)
@@ -203,10 +228,8 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .eq("balance", takerBalance)
         .eq("balance_blocked", takerBlocked)
         .select("user_id")
-      if (ibcUpdateError) {
-        return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
-      }
-      if (!ibcUpdated || ibcUpdated.length === 0) {
+      if (ibcUpdateError || !ibcUpdated || ibcUpdated.length === 0) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
       }
     } else {
@@ -216,9 +239,11 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .eq("user_id", effectiveUserId)
         .single()
       if (!wallet) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
       }
       if (wallet.balance_fantasy < totalNeeded) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
       }
       const takerBalance = wallet.balance_fantasy
@@ -228,39 +253,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         .eq("user_id", effectiveUserId)
         .eq("balance_fantasy", takerBalance)
         .select("user_id")
-      if (fantasyUpdateError) {
-        return NextResponse.json({ error: "Failed to deduct balance" }, { status: 500 })
-      }
-      if (!fantasyUpdated || fantasyUpdated.length === 0) {
+      if (fantasyUpdateError || !fantasyUpdated || fantasyUpdated.length === 0) {
+        await revertBetToOpen()
         return NextResponse.json({ error: "Tu saldo cambió. Recarga e intenta de nuevo." }, { status: 409 })
       }
-    }
-
-    // Mark bet as taken — .eq("status", "open") acts as optimistic lock:
-    // if another request already took this bet, 0 rows are matched and .single() returns PGRST116.
-    const { data: updatedBet, error: updateError } = await supabase
-      .from("bets")
-      .update({ status: 'taken', acceptor_id: effectiveUserId })
-      .eq("id", betId)
-      .eq("status", "open")
-      .select()
-      .single()
-
-    if (updateError || !updatedBet) {
-      try {
-        if ((bet as any).group_id) {
-          const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
-          await creditGroupWallet(supabase, (bet as any).group_id, effectiveUserId, totalNeeded)
-        } else {
-          await payoutToMode(supabase, effectiveUserId, totalNeeded, betMode)
-        }
-      } catch (rollbackErr) {
-        console.error("REFUND_FAILED", { userId: effectiveUserId, amount: totalNeeded, betMode, error: rollbackErr })
-      }
-      if (updateError?.code === "PGRST116") {
-        return NextResponse.json({ error: 'Esta apuesta ya fue tomada por otro usuario' }, { status: 409 })
-      }
-      return NextResponse.json({ error: updateError?.message || 'No se pudo tomar la apuesta' }, { status: 500 })
     }
 
     // Record transaction for taker
