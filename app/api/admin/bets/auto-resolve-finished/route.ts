@@ -405,9 +405,22 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      try { await payoutToMode(supabase, sb.creator_id, stake, betMode) } catch (_) {}
+      try {
+        await payoutToMode(supabase, sb.creator_id, stake, betMode)
+        await supabase.from("transactions").insert({
+          user_id: sb.creator_id,
+          token_type: betMode === "real" ? "iBY" : "fantasy",
+          amount: stake,
+          operation: "bet_cancelled_refund",
+          reference_id: sb.id,
+        })
+      } catch (err) {
+        console.error("STRANDED_HOUSE_BET_PAYOUT_FAILED", { betId: sb.id, userId: sb.creator_id, error: err })
+      }
       if (houseRisk > 0) {
-        try { await houseWalletCredit(supabase, houseRisk, betMode) } catch (_) {}
+        try { await houseWalletCredit(supabase, houseRisk, betMode) } catch (err) {
+          console.error("STRANDED_HOUSE_BET_CREDIT_FAILED", { betId: sb.id, houseRisk, error: err })
+        }
       }
 
       await supabase.from("arbitration_decisions").insert({

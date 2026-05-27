@@ -135,14 +135,21 @@ export async function POST(request: NextRequest) {
     // Calculate actual bonus (min of: per-login, remaining daily, remaining global)
     const actualBonus = Math.min(bonusPerLogin, remainingDaily, remainingGlobal)
 
-    // Update wallet
-    await supabase
+    // Update wallet — optimistic lock on both fields to prevent concurrent double-grant
+    const { data: dailyUpdated } = await supabase
       .from("wallets")
       .update({
         balance_fantasy: wallet.balance_fantasy + actualBonus,
         fantasy_total_accumulated: currentAccumulated + actualBonus,
       })
       .eq("user_id", effectiveUserId)
+      .eq("balance_fantasy", wallet.balance_fantasy)
+      .eq("fantasy_total_accumulated", currentAccumulated)
+      .select("user_id")
+
+    if (!dailyUpdated || dailyUpdated.length === 0) {
+      return NextResponse.json({ success: false, bonus: 0, message: "Saldo cambió. Intenta de nuevo." })
+    }
 
     // Record transaction
     await supabase.from("transactions").insert({
