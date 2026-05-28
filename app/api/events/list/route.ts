@@ -34,19 +34,20 @@ export async function GET(request: NextRequest) {
       query = query.or(`home_team.ilike.%${safeSearch}%,away_team.ilike.%${safeSearch}%`)
     }
 
-    if (status) {
-      query = query.eq('status', status)
-    } else {
-      // Default: include upcoming and just-started events to avoid timezone/status gaps.
-      const acceptanceWindowStart = new Date(Date.now() - 10 * 60 * 1000)
-      query = query.in('status', ['scheduled', 'live'])
-      query = query.gte('start_time', acceptanceWindowStart.toISOString())
-    }
-
-    // Limit to next 30 days
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
-    query = query.lte('start_time', thirtyDaysFromNow.toISOString())
+
+    if (status) {
+      query = query.eq('status', status)
+      query = query.lte('start_time', thirtyDaysFromNow.toISOString())
+    } else {
+      // Scheduled: only show events starting within the next 30 days and not yet expired.
+      // Live: always show (match in progress regardless of start_time).
+      const acceptanceWindowStart = new Date(Date.now() - 10 * 60 * 1000)
+      query = query.or(
+        `and(status.eq.scheduled,start_time.gte.${acceptanceWindowStart.toISOString()},start_time.lte.${thirtyDaysFromNow.toISOString()}),status.eq.live`
+      )
+    }
 
     if (paginated) {
       const { data, error } = await query.range(offset, offset + limit)
