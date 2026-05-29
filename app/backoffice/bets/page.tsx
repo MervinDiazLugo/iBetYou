@@ -969,6 +969,11 @@ export default function BackofficeBets() {
                           Fantasy
                         </Badge>
                       )}
+                      {(bet as any).house_bet && (
+                        <Badge className="bg-purple-500/15 text-purple-400 border border-purple-500/30 text-xs">
+                          🏦 Vs. Casa
+                        </Badge>
+                      )}
                       <span className="text-sm text-muted-foreground">
                         {bet.event.league}
                       </span>

@@ -576,11 +576,9 @@ export default function BetDetailPage() {
       <Navbar />
 
       <main className="container mx-auto px-4 py-6 max-w-2xl" data-mode={bet.mode ?? "fantasy"}>
-        <Button variant="ghost" className="mb-4" asChild>
-          <Link href="/">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Volver
-          </Link>
+        <Button variant="ghost" className="mb-4" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Volver
         </Button>
         
         <Card className="mb-6">
