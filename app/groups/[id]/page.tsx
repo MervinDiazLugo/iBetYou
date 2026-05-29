@@ -33,6 +33,15 @@ interface GroupBet {
 interface EventRow {
   id: number; home_team: string; away_team: string; start_time: string
   sport: string; league: string; status: string
+  home_logo?: string | null; away_logo?: string | null
+  metadata?: {
+    predictions?: {
+      percent?: { home: string; draw: string; away: string } | null
+      advice?: string | null
+      home_league_form?: string | null
+      away_league_form?: string | null
+    }
+  }
 }
 
 const SPORT_LABELS: Record<string, string> = {
@@ -338,7 +347,7 @@ export default function GroupPage() {
                   <div key={ev.id} className="border rounded-xl overflow-hidden">
                     {/* Event header */}
                     <div className={`px-4 py-3 ${isLive ? "bg-red-500/10 border-b border-red-500/20" : "bg-muted/30 border-b"}`}>
-                      <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{ev.league}</span>
                         <div className="flex items-center gap-2">
                           {isLive && (
@@ -352,26 +361,67 @@ export default function GroupPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3 flex-1">
-                          <div className="flex-1 text-center">
-                            <div className="font-semibold text-sm">{ev.home_team}</div>
-                            <div className="text-[10px] text-muted-foreground">Local</div>
+                      {/* Teams with logos */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+                            <span className="font-semibold text-sm truncate text-right">{ev.home_team}</span>
+                            {ev.home_logo
+                              ? <img src={ev.home_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
+                              : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.home_team[0]}</div>
+                            }
                           </div>
-                          <div className="text-muted-foreground font-bold text-sm">vs</div>
-                          <div className="flex-1 text-center">
-                            <div className="font-semibold text-sm">{ev.away_team}</div>
-                            <div className="text-[10px] text-muted-foreground">Visitante</div>
+                          <span className="text-muted-foreground font-bold text-xs shrink-0">vs</span>
+                          <div className="flex-1 flex items-center gap-2 min-w-0">
+                            {ev.away_logo
+                              ? <img src={ev.away_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
+                              : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.away_team[0]}</div>
+                            }
+                            <span className="font-semibold text-sm truncate">{ev.away_team}</span>
                           </div>
                         </div>
                         {group.status === "active" && (
-                          <Link href={`/groups/${groupId}/create-bet?eventId=${ev.id}`} className="ml-3 shrink-0">
+                          <Link href={`/groups/${groupId}/create-bet?eventId=${ev.id}`} className="ml-2 shrink-0">
                             <Button size="sm" variant="outline" className="gap-1 text-xs">
                               <Plus className="w-3 h-3" /> Apostar
                             </Button>
                           </Link>
                         )}
                       </div>
+                      {/* Predictions */}
+                      {ev.metadata?.predictions?.percent && (
+                        <div className="mt-2 flex gap-2">
+                          <div className="flex-1 text-center rounded bg-blue-500/10 border border-blue-500/15 py-1 px-2">
+                            <div className="text-[9px] text-muted-foreground truncate">{ev.home_team}</div>
+                            <div className="text-xs font-bold text-blue-300">{ev.metadata.predictions.percent.home}</div>
+                            {ev.metadata.predictions.home_league_form && (
+                              <div className="flex gap-0.5 justify-center mt-0.5">
+                                {ev.metadata.predictions.home_league_form.slice(-5).split("").map((c, i) => (
+                                  <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex-1 text-center rounded bg-gray-500/10 border border-gray-500/15 py-1 px-2">
+                            <div className="text-[9px] text-muted-foreground">Empate</div>
+                            <div className="text-xs font-bold text-gray-300">{ev.metadata.predictions.percent.draw}</div>
+                          </div>
+                          <div className="flex-1 text-center rounded bg-orange-500/10 border border-orange-500/15 py-1 px-2">
+                            <div className="text-[9px] text-muted-foreground truncate">{ev.away_team}</div>
+                            <div className="text-xs font-bold text-orange-300">{ev.metadata.predictions.percent.away}</div>
+                            {ev.metadata.predictions.away_league_form && (
+                              <div className="flex gap-0.5 justify-center mt-0.5">
+                                {ev.metadata.predictions.away_league_form.slice(-5).split("").map((c, i) => (
+                                  <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      {ev.metadata?.predictions?.advice && (
+                        <p className="mt-1.5 text-[10px] text-center text-amber-300/80">💡 {ev.metadata.predictions.advice}</p>
+                      )}
                     </div>
 
                     {/* Open bets on this event */}
