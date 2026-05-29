@@ -38,7 +38,7 @@ export default function GroupsPage() {
   const [showJoin, setShowJoin] = useState(false)
   const [createName, setCreateName] = useState("")
   const [createSport, setCreateSport] = useState("")
-  const [createLeague, setCreateLeague] = useState("")
+  const [createLeagues, setCreateLeagues] = useState<string[]>([])
   const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
   const [leaguesLoading, setLeaguesLoading] = useState(false)
   const [joinCode, setJoinCode] = useState("")
@@ -68,14 +68,15 @@ export default function GroupsPage() {
   useEffect(() => { if (user) loadGroups() }, [user])
 
   useEffect(() => {
-    setCreateLeague("")
+    setCreateLeagues([])
     if (!createSport) { setAvailableLeagues([]); return }
     setLeaguesLoading(true)
-    fetch("/api/events/list")
+    fetch(`/api/events/list?sport=${createSport}&limit=50`)
       .then(r => r.json())
       .then(d => {
+        const evs = Array.isArray(d) ? d : (d.events || [])
         const leagues = [...new Set<string>(
-          (d.events || []).filter((e: { sport: string; league: string }) => e.sport === createSport).map((e: { league: string }) => e.league).filter(Boolean)
+          evs.map((e: { league: string }) => e.league).filter(Boolean)
         )].sort() as string[]
         setAvailableLeagues(leagues)
       })
@@ -89,7 +90,7 @@ export default function GroupsPage() {
       const res = await authFetch("/api/groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: createName.trim(), sport: createSport || null, league: createLeague || null }),
+        body: JSON.stringify({ name: createName.trim(), sport: createSport || null, leagues: createLeagues }),
       })
       const data = await res.json()
       if (!res.ok) { showToast(data.error || "Error al crear grupo", "error"); return }
@@ -97,7 +98,7 @@ export default function GroupsPage() {
       setShowCreate(false)
       setCreateName("")
       setCreateSport("")
-      setCreateLeague("")
+      setCreateLeagues([])
       loadGroups()
     } finally {
       setSubmitting(false)
@@ -165,15 +166,31 @@ export default function GroupsPage() {
             <option value="baseball">Béisbol</option>
           </select>
           {createSport && (
-            <select
-              className="w-full border rounded px-3 py-2 text-sm bg-background"
-              value={createLeague}
-              onChange={(e) => setCreateLeague(e.target.value)}
-              disabled={leaguesLoading}
-            >
-              <option value="">Todos los torneos</option>
-              {availableLeagues.map(l => <option key={l} value={l}>{l}</option>)}
-            </select>
+            <div className="border rounded px-3 py-2 bg-background">
+              <p className="text-xs text-muted-foreground mb-2">
+                {leaguesLoading ? "Cargando torneos..." : availableLeagues.length === 0 ? "No hay torneos disponibles" : "Torneos (dejar vacío = todos)"}
+              </p>
+              {!leaguesLoading && availableLeagues.length > 0 && (
+                <div className="max-h-40 overflow-y-auto space-y-1">
+                  {availableLeagues.map(l => (
+                    <label key={l} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 px-1 py-0.5 rounded">
+                      <input
+                        type="checkbox"
+                        checked={createLeagues.includes(l)}
+                        onChange={(e) => setCreateLeagues(prev =>
+                          e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
+                        )}
+                        className="rounded"
+                      />
+                      {l}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {createLeagues.length > 0 && (
+                <p className="text-xs text-primary mt-2">{createLeagues.length} torneo(s) seleccionado(s)</p>
+              )}
+            </div>
           )}
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => setShowCreate(false)}>Cancelar</Button>

@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   const { data: memberships, error } = await supabase
     .from("group_members")
-    .select("role, group:groups(id, name, code, sport, league, status, created_at)")
+    .select("role, group:groups(id, name, code, sport, leagues, status, created_at)")
     .eq("user_id", userId)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -62,14 +62,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Los grupos no están disponibles en tu país" }, { status: 403 })
   }
 
-  const { name, sport, league } = await request.json() as { name?: string; sport?: string | null; league?: string | null }
+  const { name, sport, leagues } = await request.json() as { name?: string; sport?: string | null; leagues?: string[] }
 
   if (!name?.trim()) return NextResponse.json({ error: "El nombre del grupo es requerido" }, { status: 400 })
   if (name.trim().length > 40) return NextResponse.json({ error: "El nombre no puede superar 40 caracteres" }, { status: 400 })
 
   const validSports = ["football", "basketball", "baseball"]
   const cleanSport = sport && validSports.includes(sport) ? sport : null
-  const cleanLeague = cleanSport && league?.trim() ? league.trim() : null
+  const cleanLeagues = cleanSport && Array.isArray(leagues) && leagues.length > 0
+    ? leagues.map((l: string) => l.trim()).filter(Boolean)
+    : []
 
   let code: string = ""
   for (let i = 0; i < 5; i++) {
@@ -81,7 +83,7 @@ export async function POST(request: NextRequest) {
 
   const { data: group, error: createErr } = await supabase
     .from("groups")
-    .insert({ name: name.trim(), code, creator_id: userId, sport: cleanSport, league: cleanLeague })
+    .insert({ name: name.trim(), code, creator_id: userId, sport: cleanSport, leagues: cleanLeagues })
     .select()
     .single()
 

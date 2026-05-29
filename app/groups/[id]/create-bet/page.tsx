@@ -27,7 +27,7 @@ export default function CreateGroupBetPage() {
   const { showToast } = useToast()
   const router = useRouter()
 
-  const [group, setGroup] = useState<{ name: string; sport: string | null } | null>(null)
+  const [group, setGroup] = useState<{ name: string; sport: string | null; leagues: string[] } | null>(null)
   const [events, setEvents] = useState<EventRow[]>([])
   const [selectedEvent, setSelectedEvent] = useState<EventRow | null>(null)
   const [betType, setBetType] = useState("direct")
@@ -55,7 +55,7 @@ export default function CreateGroupBetPage() {
         ])
         if (groupRes.ok) {
           const d = await groupRes.json()
-          setGroup({ name: d.group.name, sport: d.group.sport })
+          setGroup({ name: d.group.name, sport: d.group.sport, leagues: d.group.leagues || [] })
         }
         if (eventsRes.ok) {
           const d = await eventsRes.json()
@@ -69,9 +69,11 @@ export default function CreateGroupBetPage() {
     load()
   }, [user, groupId])
 
-  const filteredEvents = group?.sport
-    ? events.filter((e) => e.sport === group.sport)
-    : events
+  const filteredEvents = events.filter((e) => {
+    if (group?.sport && e.sport !== group.sport) return false
+    if (group?.leagues && group.leagues.length > 0 && !group.leagues.includes(e.league)) return false
+    return true
+  })
 
   async function handleSubmit() {
     if (!selectedEvent || !amount || !user) return
