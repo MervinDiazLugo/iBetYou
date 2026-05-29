@@ -75,6 +75,7 @@ export default function GroupPage() {
   const [events, setEvents] = useState<EventRow[]>([])
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [tab, setTab] = useState<"bets" | "leaderboard" | "members" | "settings">("bets")
+  const [betSubTab, setBetSubTab] = useState<"crear" | "tomar">("crear")
   const [loading, setLoading] = useState(true)
   const [takingBetId, setTakingBetId] = useState<string | null>(null)
 
@@ -348,143 +349,196 @@ export default function GroupPage() {
         ))}
       </div>
 
-      {/* Bets tab — group marketplace */}
-      {tab === "bets" && (
-        <div>
-          {events.length === 0 ? (
-            <div className="text-center text-muted-foreground py-12">
-              <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>No hay eventos disponibles para este grupo.</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {events.map((ev) => {
-                const eventBets = betsByEvent.get(ev.id) || []
-                const isLive = ev.status === "live"
-                return (
-                  <div key={ev.id} className="border rounded-xl overflow-hidden">
-                    {/* Event header */}
-                    <div className={`px-4 py-3 ${isLive ? "bg-red-500/10 border-b border-red-500/20" : "bg-muted/30 border-b"}`}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{ev.league}</span>
-                        <div className="flex items-center gap-2">
-                          {isLive && (
-                            <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 uppercase">
-                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                              En vivo
-                            </span>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(ev.start_time).toLocaleString("es-ES", { timeZone: "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                          </span>
-                        </div>
-                      </div>
-                      {/* Teams with logos */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-3 flex-1 min-w-0">
-                          <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
-                            <span className="font-semibold text-sm truncate text-right">{ev.home_team}</span>
-                            {ev.home_logo
-                              ? <img src={ev.home_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
-                              : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.home_team[0]}</div>
-                            }
-                          </div>
-                          <span className="text-muted-foreground font-bold text-xs shrink-0">vs</span>
-                          <div className="flex-1 flex items-center gap-2 min-w-0">
-                            {ev.away_logo
-                              ? <img src={ev.away_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
-                              : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.away_team[0]}</div>
-                            }
-                            <span className="font-semibold text-sm truncate">{ev.away_team}</span>
-                          </div>
-                        </div>
-                        {group.status === "active" && (
-                          <Button size="sm" variant="outline" className="gap-1 text-xs ml-2 shrink-0" onClick={() => setBetModalEvent(ev)}>
-                            <Plus className="w-3 h-3" /> Apostar
-                          </Button>
-                        )}
-                      </div>
-                      {/* Predictions */}
-                      {ev.metadata?.predictions?.percent && (
-                        <div className="mt-2 flex gap-2">
-                          <div className="flex-1 text-center rounded bg-blue-500/10 border border-blue-500/15 py-1 px-2">
-                            <div className="text-[9px] text-muted-foreground truncate">{ev.home_team}</div>
-                            <div className="text-xs font-bold text-blue-300">{ev.metadata.predictions.percent.home}</div>
-                            {ev.metadata.predictions.home_league_form && (
-                              <div className="flex gap-0.5 justify-center mt-0.5">
-                                {ev.metadata.predictions.home_league_form.slice(-5).split("").map((c, i) => (
-                                  <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          <div className="flex-1 text-center rounded bg-gray-500/10 border border-gray-500/15 py-1 px-2">
-                            <div className="text-[9px] text-muted-foreground">Empate</div>
-                            <div className="text-xs font-bold text-gray-300">{ev.metadata.predictions.percent.draw}</div>
-                          </div>
-                          <div className="flex-1 text-center rounded bg-orange-500/10 border border-orange-500/15 py-1 px-2">
-                            <div className="text-[9px] text-muted-foreground truncate">{ev.away_team}</div>
-                            <div className="text-xs font-bold text-orange-300">{ev.metadata.predictions.percent.away}</div>
-                            {ev.metadata.predictions.away_league_form && (
-                              <div className="flex gap-0.5 justify-center mt-0.5">
-                                {ev.metadata.predictions.away_league_form.slice(-5).split("").map((c, i) => (
-                                  <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                      {ev.metadata?.predictions?.advice && (
-                        <p className="mt-1.5 text-[10px] text-center text-amber-300/80">💡 {ev.metadata.predictions.advice}</p>
-                      )}
-                    </div>
+      {/* Bets tab — sub-tabs: Crear / Tomar */}
+      {tab === "bets" && (() => {
+        const eventsWithBets = events.filter(ev => (betsByEvent.get(ev.id) || []).length > 0)
+        const takableCount = eventsWithBets.reduce((n, ev) => {
+          const bs = betsByEvent.get(ev.id) || []
+          return n + bs.filter(b => b.creator_id !== user.id).length
+        }, 0)
 
-                    {/* Open bets on this event */}
-                    {eventBets.length > 0 && (
-                      <div className="divide-y">
-                        {eventBets.map((bet) => {
-                          const canTake = myWallet.balance >= bet.amount && bet.creator_id !== user.id
-                          return (
-                            <div key={bet.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-sm font-medium">{selectionLabel(bet.creator_selection, bet.event)}</div>
-                                <div className="text-xs text-muted-foreground">
-                                  {BET_TYPE_LABELS[bet.bet_type] ?? bet.bet_type} · por {bet.creator?.nickname ?? "—"}
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <div className="flex items-center gap-1 text-sm font-semibold">
-                                  <Coins className="w-3.5 h-3.5 text-yellow-500" />
-                                  {bet.amount.toLocaleString()}
-                                </div>
-                                {bet.creator_id === user.id ? (
-                                  <Badge variant="outline" className="text-[10px]">Tuya</Badge>
-                                ) : (
-                                  <Button
-                                    size="sm"
-                                    variant="default"
-                                    className="h-7 text-xs"
-                                    onClick={() => handleTakeBet(bet)}
-                                    disabled={takingBetId === bet.id || !canTake}
-                                    title={!canTake ? "Tokens insuficientes" : undefined}
-                                  >
-                                    {takingBetId === bet.id ? "..." : "Tomar"}
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        })}
+        function EventHeader({ ev, showApostar }: { ev: EventRow; showApostar: boolean }) {
+          const isLive = ev.status === "live"
+          return (
+            <div className={`px-4 py-3 ${isLive ? "bg-red-500/10 border-b border-red-500/20" : "bg-muted/30 border-b"}`}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{ev.league}</span>
+                <div className="flex items-center gap-2">
+                  {isLive && (
+                    <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 uppercase">
+                      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                      En vivo
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(ev.start_time).toLocaleString("es-ES", { timeZone: "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="flex-1 flex items-center justify-end gap-2 min-w-0">
+                    <span className="font-semibold text-sm truncate text-right">{ev.home_team}</span>
+                    {ev.home_logo
+                      ? <img src={ev.home_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
+                      : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.home_team[0]}</div>
+                    }
+                  </div>
+                  <span className="text-muted-foreground font-bold text-xs shrink-0">vs</span>
+                  <div className="flex-1 flex items-center gap-2 min-w-0">
+                    {ev.away_logo
+                      ? <img src={ev.away_logo} alt="" className="w-7 h-7 object-contain shrink-0" />
+                      : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold shrink-0">{ev.away_team[0]}</div>
+                    }
+                    <span className="font-semibold text-sm truncate">{ev.away_team}</span>
+                  </div>
+                </div>
+                {showApostar && group.status === "active" && (
+                  <Button size="sm" variant="outline" className="gap-1 text-xs ml-2 shrink-0" onClick={() => setBetModalEvent(ev)}>
+                    <Plus className="w-3 h-3" /> Apostar
+                  </Button>
+                )}
+              </div>
+              {ev.metadata?.predictions?.percent && (
+                <div className="mt-2 flex gap-2">
+                  <div className="flex-1 text-center rounded bg-blue-500/10 border border-blue-500/15 py-1 px-2">
+                    <div className="text-[9px] text-muted-foreground truncate">{ev.home_team}</div>
+                    <div className="text-xs font-bold text-blue-300">{ev.metadata.predictions.percent.home}</div>
+                    {ev.metadata.predictions.home_league_form && (
+                      <div className="flex gap-0.5 justify-center mt-0.5">
+                        {ev.metadata.predictions.home_league_form.slice(-5).split("").map((c, i) => (
+                          <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                        ))}
                       </div>
                     )}
                   </div>
-                )
-              })}
+                  <div className="flex-1 text-center rounded bg-gray-500/10 border border-gray-500/15 py-1 px-2">
+                    <div className="text-[9px] text-muted-foreground">Empate</div>
+                    <div className="text-xs font-bold text-gray-300">{ev.metadata.predictions.percent.draw}</div>
+                  </div>
+                  <div className="flex-1 text-center rounded bg-orange-500/10 border border-orange-500/15 py-1 px-2">
+                    <div className="text-[9px] text-muted-foreground truncate">{ev.away_team}</div>
+                    <div className="text-xs font-bold text-orange-300">{ev.metadata.predictions.percent.away}</div>
+                    {ev.metadata.predictions.away_league_form && (
+                      <div className="flex gap-0.5 justify-center mt-0.5">
+                        {ev.metadata.predictions.away_league_form.slice(-5).split("").map((c, i) => (
+                          <span key={i} className={`inline-block w-1.5 h-1.5 rounded-full ${c === "W" ? "bg-green-500" : c === "D" ? "bg-gray-400" : "bg-red-500"}`} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {ev.metadata?.predictions?.advice && (
+                <p className="mt-1.5 text-[10px] text-center text-amber-300/80">💡 {ev.metadata.predictions.advice}</p>
+              )}
             </div>
-          )}
-        </div>
-      )}
+          )
+        }
+
+        return (
+          <div>
+            {/* Sub-tabs */}
+            <div className="flex gap-1 mb-4 border rounded-lg p-1 bg-muted/30 w-fit">
+              <button
+                onClick={() => setBetSubTab("crear")}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${betSubTab === "crear" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Crear apuesta
+              </button>
+              <button
+                onClick={() => setBetSubTab("tomar")}
+                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${betSubTab === "tomar" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                Tomar apuesta
+                {takableCount > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${betSubTab === "tomar" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/30 text-foreground"}`}>
+                    {takableCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Crear sub-tab */}
+            {betSubTab === "crear" && (
+              events.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12">
+                  <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p>No hay eventos disponibles para este grupo.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {events.map((ev) => (
+                    <div key={ev.id} className="border rounded-xl overflow-hidden">
+                      <EventHeader ev={ev} showApostar={true} />
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* Tomar sub-tab */}
+            {betSubTab === "tomar" && (
+              eventsWithBets.length === 0 ? (
+                <div className="text-center text-muted-foreground py-12">
+                  <Coins className="w-8 h-8 mx-auto mb-2 opacity-40" />
+                  <p>No hay apuestas abiertas en este grupo.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {eventsWithBets.map((ev) => {
+                    const eventBets = betsByEvent.get(ev.id) || []
+                    return (
+                      <div key={ev.id} className="border rounded-xl overflow-hidden">
+                        <EventHeader ev={ev} showApostar={false} />
+                        <div className="divide-y">
+                          {eventBets.map((bet) => {
+                            const isOwn = bet.creator_id === user.id
+                            const hasBalance = myWallet.balance >= bet.amount
+                            const canTake = !isOwn && hasBalance
+                            return (
+                              <div key={bet.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-medium">{selectionLabel(bet.creator_selection, bet.event)}</div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {BET_TYPE_LABELS[bet.bet_type] ?? bet.bet_type} · por {bet.creator?.nickname ?? "—"}
+                                  </div>
+                                  {!isOwn && !hasBalance && (
+                                    <div className="text-[10px] text-red-400 mt-0.5">Saldo insuficiente ({myWallet.balance.toLocaleString()} / {bet.amount.toLocaleString()})</div>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <div className="flex items-center gap-1 text-sm font-semibold">
+                                    <Coins className="w-3.5 h-3.5 text-yellow-500" />
+                                    {bet.amount.toLocaleString()}
+                                  </div>
+                                  {isOwn ? (
+                                    <Badge variant="outline" className="text-[10px]">Tuya</Badge>
+                                  ) : (
+                                    <Button
+                                      size="sm"
+                                      variant="default"
+                                      className="h-7 text-xs"
+                                      onClick={() => handleTakeBet(bet)}
+                                      disabled={takingBetId === bet.id || !canTake}
+                                    >
+                                      {takingBetId === bet.id ? "..." : "Tomar"}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            )}
+          </div>
+        )
+      })()}
 
       {/* Leaderboard tab */}
       {tab === "leaderboard" && (

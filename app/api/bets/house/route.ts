@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     if (sport === "football") {
       allowedBetTypes = ["direct", "exact_score"]
     } else if (sport === "basketball") {
-      allowedBetTypes = isNBALeague ? ["direct", "score_margin"] : ["direct"]
+      allowedBetTypes = ["direct", "score_margin"]
     } else if (sport === "baseball") {
       allowedBetTypes = isMLBLeague
         ? ["direct", "exact_score", "run_line", "total_runs"]
@@ -111,12 +111,6 @@ export async function POST(request: NextRequest) {
     }
 
     if (!allowedBetTypes.includes(betType)) {
-      if (betType === "score_margin" && sport === "basketball" && !isNBALeague) {
-        return NextResponse.json(
-          { error: "El tipo de apuesta 'score_margin' solo está disponible para ligas NBA" },
-          { status: 400 }
-        )
-      }
       if (betType === "run_line" && sport === "baseball" && !isMLBLeague) {
         return NextResponse.json(
           { error: "El tipo de apuesta 'run_line' solo está disponible para ligas MLB" },
