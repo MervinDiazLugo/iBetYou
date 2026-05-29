@@ -65,7 +65,8 @@ export default function GroupsPage() {
     }
   }
 
-  useEffect(() => { if (user) loadGroups() }, [user])
+  const userId = user?.id
+  useEffect(() => { if (userId) loadGroups() }, [userId])
 
   useEffect(() => {
     setCreateLeagues([])
@@ -130,7 +131,7 @@ export default function GroupsPage() {
   return (
     <>
     <Navbar />
-    <div className="container mx-auto px-4 py-8 max-w-3xl">
+    <div className="container mx-auto px-4 py-8 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Users className="w-6 h-6" /> Mis Grupos

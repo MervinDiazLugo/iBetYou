@@ -1,4 +1,4 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect, useRef } from "react"
 import { Bell } from "lucide-react"
@@ -13,6 +13,7 @@ interface Notification {
   title: string
   body: string
   bet_id: string | null
+  group_id: string | null
   mode?: string | null
   read: boolean
   created_at: string
@@ -24,6 +25,7 @@ const TYPE_ICON: Record<string, string> = {
   bet_resolved_win: "🏆",
   bet_resolved_loss: "😔",
   bet_disputed: "⚖️",
+  group_invite: "👥",
 }
 
 interface Props {
@@ -34,6 +36,7 @@ interface Props {
 export function NotificationBell({ userId, sessionToken }: Props) {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [open, setOpen] = useState(false)
+  const [respondingId, setRespondingId] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   const { showToast } = useToast()
   const supabase = createBrowserSupabaseClient()
@@ -58,16 +61,39 @@ export function NotificationBell({ userId, sessionToken }: Props) {
       headers,
       body: JSON.stringify({ all: true }),
     })
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    setNotifications((prev) => prev.map((n) => n.type === "group_invite" ? n : { ...n, read: true }))
   }
 
-  // Initial load — wait for session token before fetching
+  async function handleInviteRespond(notif: Notification, action: "accept" | "decline") {
+    if (!notif.group_id) return
+    setRespondingId(notif.id)
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/json" }
+      if (sessionToken) headers.Authorization = `Bearer ${sessionToken}`
+      const res = await fetch(`/api/groups/${notif.group_id}/invite/respond`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ action, notification_id: notif.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al procesar invitación", "error"); return }
+      if (action === "accept" && data.joined) {
+        showToast(`Te uniste al grupo "${data.group_name}"`, "success")
+      } else if (action === "decline") {
+        showToast("Invitación rechazada", "notification")
+      }
+      // Remove from list
+      setNotifications(prev => prev.filter(n => n.id !== notif.id))
+    } finally {
+      setRespondingId(null)
+    }
+  }
+
   useEffect(() => {
     if (!sessionToken) return
     fetchNotifications()
   }, [userId, sessionToken])
 
-  // Realtime: new notification arrives → add to list + show toast
   useEffect(() => {
     const channel = supabase
       .channel(`notifications-${userId}`)
@@ -86,14 +112,13 @@ export function NotificationBell({ userId, sessionToken }: Props) {
     return () => { supabase.removeChannel(channel) }
   }, [userId])
 
-  // Mark all as read when dropdown opens
+  // Mark non-invite notifications as read when dropdown opens
   useEffect(() => {
     if (open && unreadCount > 0) {
       markAllRead()
     }
   }, [open])
 
-  // Close on outside click
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -142,6 +167,8 @@ export function NotificationBell({ userId, sessionToken }: Props) {
               </div>
             ) : (
               notifications.map((n) => {
+                const isInvite = n.type === "group_invite"
+
                 const inner = (
                   <div className={`px-3 py-2.5 border-b border-border last:border-0 transition-colors ${!n.read ? "bg-primary/5" : "hover:bg-secondary/50"}`}>
                     <div className="flex items-start gap-2">
@@ -158,17 +185,36 @@ export function NotificationBell({ userId, sessionToken }: Props) {
                             {n.mode === "real" ? "Real iBY" : "Fantasy"}
                           </span>
                         )}
+                        {isInvite && n.group_id && (
+                          <div className="flex gap-2 mt-2">
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleInviteRespond(n, "accept") }}
+                              disabled={respondingId === n.id}
+                              className="px-3 py-1 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                            >
+                              {respondingId === n.id ? "..." : "Aceptar"}
+                            </button>
+                            <button
+                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleInviteRespond(n, "decline") }}
+                              disabled={respondingId === n.id}
+                              className="px-3 py-1 text-xs font-semibold rounded border hover:bg-secondary/50 disabled:opacity-50 transition-colors"
+                            >
+                              Rechazar
+                            </button>
+                          </div>
+                        )}
                         <div className="text-xs text-muted-foreground mt-1">
                           {formatDate(n.created_at)}
                         </div>
                       </div>
-                      {!n.read && (
+                      {!n.read && !isInvite && (
                         <span className="h-2 w-2 rounded-full bg-primary mt-1 flex-shrink-0" />
                       )}
                     </div>
                   </div>
                 )
 
+                if (isInvite) return <div key={n.id}>{inner}</div>
                 return n.bet_id ? (
                   <Link key={n.id} href={`/bet/${n.bet_id}`} onClick={() => setOpen(false)}>
                     {inner}

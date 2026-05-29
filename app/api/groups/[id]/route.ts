@@ -41,7 +41,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   if (!membership) return NextResponse.json({ error: "No eres miembro de este grupo" }, { status: 403 })
   if (membership.role !== "admin") return NextResponse.json({ error: "Solo los admins pueden modificar el grupo" }, { status: 403 })
 
-  const { name, status } = await request.json() as { name?: string; status?: string }
+  const { name, status, leagues } = await request.json() as { name?: string; status?: string; leagues?: string[] }
   const updates: Record<string, unknown> = {}
 
   if (name !== undefined) {
@@ -50,6 +50,37 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     updates.name = name.trim()
   }
   if (status === "archived") updates.status = "archived"
+
+  if (leagues !== undefined) {
+    if (!Array.isArray(leagues)) return NextResponse.json({ error: "leagues debe ser un arreglo" }, { status: 400 })
+    const cleanLeagues = leagues.map((l: string) => l.trim()).filter(Boolean)
+
+    // Check which leagues are being removed — block if active group bets exist for those events
+    const { data: currentGroup } = await supabase.from("groups").select("leagues").eq("id", groupId).single()
+    const currentLeagues: string[] = currentGroup?.leagues || []
+    const removedLeagues = currentLeagues.filter(l => !cleanLeagues.includes(l))
+
+    if (removedLeagues.length > 0) {
+      // Find events in removed leagues that have open/taken bets in this group
+      const { data: blockedBets } = await supabase
+        .from("bets")
+        .select("event:events(league)")
+        .eq("group_id", groupId)
+        .in("status", ["open", "taken"])
+      const blockedLeagues = new Set<string>()
+      for (const b of blockedBets || []) {
+        const league = (b.event as any)?.league
+        if (league && removedLeagues.includes(league)) blockedLeagues.add(league)
+      }
+      if (blockedLeagues.size > 0) {
+        return NextResponse.json({
+          error: `No puedes quitar estos torneos porque tienen apuestas activas: ${[...blockedLeagues].join(", ")}`,
+        }, { status: 422 })
+      }
+    }
+    updates.leagues = cleanLeagues
+  }
+
   if (Object.keys(updates).length === 0) return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 })
 
   const { data, error } = await supabase.from("groups").update(updates).eq("id", groupId).select().single()

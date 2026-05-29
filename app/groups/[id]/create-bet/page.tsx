@@ -1,8 +1,8 @@
 // app/groups/[id]/create-bet/page.tsx
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useState, useEffect, Suspense } from "react"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useAuth } from "@/components/providers"
 import { useToast } from "@/components/toast"
@@ -21,8 +21,10 @@ const SELECTION_LABELS: Record<string, string> = {
   home: "Local", draw: "Empate", away: "Visitante"
 }
 
-export default function CreateGroupBetPage() {
+function CreateGroupBetInner() {
   const { id: groupId } = useParams<{ id: string }>()
+  const searchParams = useSearchParams()
+  const presetEventId = searchParams.get("eventId") ? Number(searchParams.get("eventId")) : null
   const { user } = useAuth()
   const { showToast } = useToast()
   const router = useRouter()
@@ -51,7 +53,7 @@ export default function CreateGroupBetPage() {
       try {
         const [groupRes, eventsRes] = await Promise.all([
           authFetch(`/api/groups/${groupId}`),
-          authFetch("/api/events/list"),
+          fetch("/api/events/list?limit=50"),
         ])
         if (groupRes.ok) {
           const d = await groupRes.json()
@@ -59,15 +61,24 @@ export default function CreateGroupBetPage() {
         }
         if (eventsRes.ok) {
           const d = await eventsRes.json()
-          const evs: EventRow[] = d.events || []
-          setEvents(evs.filter((e) => e.status === "scheduled"))
+          // /api/events/list without paginated=1 returns a plain array
+          const evs: EventRow[] = Array.isArray(d) ? d : (d.events || [])
+          setEvents(evs.filter((e) => e.status === "scheduled" || e.status === "live"))
         }
       } finally {
         setLoading(false)
       }
     }
     load()
-  }, [user, groupId])
+  }, [user?.id, groupId])
+
+  // Pre-select event from URL param once events are loaded
+  useEffect(() => {
+    if (presetEventId && events.length > 0 && !selectedEvent) {
+      const found = events.find(e => e.id === presetEventId)
+      if (found) setSelectedEvent(found)
+    }
+  }, [presetEventId, events])
 
   const filteredEvents = events.filter((e) => {
     if (group?.sport && e.sport !== group.sport) return false
@@ -131,7 +142,7 @@ export default function CreateGroupBetPage() {
                 key={ev.id}
                 onClick={() => setSelectedEvent(ev)}
                 className={`w-full text-left px-4 py-3 text-sm border-b last:border-b-0 transition-colors ${
-                  selectedEvent?.id === ev.id ? "bg-primary/10" : "hover:bg-muted/50"
+                  selectedEvent?.id === ev.id ? "bg-primary/10 border-primary/20" : "hover:bg-muted/50"
                 }`}
               >
                 <div className="font-medium">{ev.home_team} vs {ev.away_team}</div>
@@ -167,7 +178,7 @@ export default function CreateGroupBetPage() {
                     selection === s ? "bg-primary text-primary-foreground border-primary" : "hover:bg-muted/50"
                   }`}
                 >
-                  {SELECTION_LABELS[s] ?? s}
+                  {s === "home" ? selectedEvent.home_team : s === "away" ? selectedEvent.away_team : SELECTION_LABELS[s]}
                 </button>
               ))}
             </div>
@@ -192,5 +203,13 @@ export default function CreateGroupBetPage() {
       )}
     </div>
     </>
+  )
+}
+
+export default function CreateGroupBetPage() {
+  return (
+    <Suspense fallback={<><Navbar /><div className="p-8 text-center text-muted-foreground">Cargando...</div></>}>
+      <CreateGroupBetInner />
+    </Suspense>
   )
 }

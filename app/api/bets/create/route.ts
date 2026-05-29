@@ -157,7 +157,7 @@ export async function POST(request: NextRequest) {
       }
       const { data: gRow } = await supabase
         .from("groups")
-        .select("id, sport, league, status")
+        .select("id, sport, leagues, status")
         .eq("id", group_id)
         .single()
       if (!gRow) return NextResponse.json({ error: "Grupo no encontrado" }, { status: 404 })
@@ -166,6 +166,13 @@ export async function POST(request: NextRequest) {
       }
       if (gRow.sport && eventRow.sport !== gRow.sport) {
         return NextResponse.json({ error: "Este evento no coincide con el deporte del grupo" }, { status: 400 })
+      }
+      const groupLeagues: string[] = gRow.leagues || []
+      if (groupLeagues.length > 0) {
+        const { data: ev } = await supabase.from("events").select("league").eq("id", eventId).single()
+        if (ev && !groupLeagues.includes(ev.league)) {
+          return NextResponse.json({ error: "Este evento no pertenece a los torneos del grupo" }, { status: 400 })
+        }
       }
       groupRow = gRow
     }

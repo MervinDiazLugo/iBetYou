@@ -9,13 +9,13 @@ import { useToast } from "@/components/toast"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import {
-  Users, Trophy, Coins, ChevronLeft, Calendar
+  Users, Trophy, Coins, ChevronLeft, Calendar, Settings, UserPlus, Plus
 } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
 
 interface GroupDetail {
-  id: string; name: string; code: string; sport: string | null; league: string | null; status: string
+  id: string; name: string; code: string; sport: string | null; leagues: string[]; status: string
 }
 interface GroupMember {
   user_id: string; role: string; profile: { nickname: string; avatar_url: string | null } | null
@@ -27,12 +27,28 @@ interface LeaderboardEntry {
 interface GroupBet {
   id: string; event_id: number; creator_id: string; bet_type: string
   creator_selection: string; amount: number; created_at: string
-  event: { home_team: string; away_team: string; start_time: string; sport: string } | null
+  event: { home_team: string; away_team: string; start_time: string; sport: string; league: string } | null
   creator: { nickname: string } | null
+}
+interface EventRow {
+  id: number; home_team: string; away_team: string; start_time: string
+  sport: string; league: string; status: string
 }
 
 const SPORT_LABELS: Record<string, string> = {
   football: "Fútbol", basketball: "Basketball", baseball: "Béisbol"
+}
+const BET_TYPE_LABELS: Record<string, string> = {
+  direct: "Ganador directo", exact_score: "Score exacto",
+  half_time: "Medio tiempo", first_scorer: "1er Anotador",
+}
+
+function selectionLabel(sel: string, event: GroupBet["event"] | null): string {
+  if (!event) return sel
+  if (sel === "home") return event.home_team
+  if (sel === "away") return event.away_team
+  if (sel === "draw") return "Empate"
+  return sel
 }
 
 export default function GroupPage() {
@@ -42,14 +58,25 @@ export default function GroupPage() {
   const router = useRouter()
 
   const [group, setGroup] = useState<GroupDetail | null>(null)
+  const [myRole, setMyRole] = useState<"admin" | "member" | null>(null)
   const [members, setMembers] = useState<GroupMember[]>([])
   const [myWallet, setMyWallet] = useState<{ balance: number; last_daily_grant: string | null }>({ balance: 0, last_daily_grant: null })
   const [bets, setBets] = useState<GroupBet[]>([])
+  const [events, setEvents] = useState<EventRow[]>([])
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
-  const [tab, setTab] = useState<"bets" | "leaderboard" | "members">("bets")
+  const [tab, setTab] = useState<"bets" | "leaderboard" | "members" | "settings">("bets")
   const [loading, setLoading] = useState(true)
-  const [grantLoading, setGrantLoading] = useState(false)
   const [takingBetId, setTakingBetId] = useState<string | null>(null)
+
+  // Invite state
+  const [inviteNickname, setInviteNickname] = useState("")
+  const [inviting, setInviting] = useState(false)
+
+  // Settings state
+  const [settingsLeagues, setSettingsLeagues] = useState<string[]>([])
+  const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
 
   async function authFetch(input: RequestInfo, init?: RequestInit) {
     const supabase = createBrowserSupabaseClient()
@@ -58,21 +85,6 @@ export default function GroupPage() {
     if (session?.access_token) headers.set("Authorization", `Bearer ${session.access_token}`)
     return fetch(input, { ...init, headers })
   }
-
-  const loadDetail = useCallback(async () => {
-    setLoading(true)
-    try {
-      const res = await authFetch(`/api/groups/${groupId}`)
-      if (res.status === 403 || res.status === 404) { router.push("/groups"); return }
-      if (!res.ok) return
-      const data = await res.json()
-      setGroup(data.group)
-      setMembers(data.members || [])
-      setMyWallet(data.my_wallet || { balance: 0, last_daily_grant: null })
-    } finally {
-      setLoading(false)
-    }
-  }, [groupId])
 
   const loadBets = useCallback(async () => {
     const res = await authFetch(`/api/groups/${groupId}/bets`)
@@ -90,23 +102,77 @@ export default function GroupPage() {
     }
   }, [groupId])
 
-  useEffect(() => {
-    if (user && groupId) {
-      Promise.all([loadDetail(), loadBets(), loadLeaderboard()])
-    }
-  }, [user, groupId])
-
-  async function handleDailyGrant() {
-    setGrantLoading(true)
+  const loadAll = useCallback(async () => {
+    setLoading(true)
     try {
-      const res = await authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
+      const res = await authFetch(`/api/groups/${groupId}`)
+      if (res.status === 403 || res.status === 404) { router.push("/groups"); return }
+      if (!res.ok) return
       const data = await res.json()
-      showToast(data.message || (data.granted ? "+500 tokens acreditados" : "Ya recibiste tus tokens de hoy"), data.granted ? "success" : "error")
-      if (data.granted) setMyWallet((w) => ({ ...w, balance: Number(data.balance) }))
+      const g: GroupDetail = data.group
+      const wallet = data.my_wallet || { balance: 0, last_daily_grant: null }
+
+      setGroup(g)
+      setMyRole(data.my_role)
+      setMembers(data.members || [])
+      setMyWallet(wallet)
+
+      // Auto-grant daily tokens silently
+      const todayUTC = new Date().toISOString().split("T")[0]
+      if (wallet.last_daily_grant !== todayUTC) {
+        authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
+          .then(r => r.json())
+          .then(d => {
+            if (d.granted) {
+              setMyWallet(w => ({ ...w, balance: Number(d.balance), last_daily_grant: todayUTC }))
+              showToast("+1.000 tokens de grupo acreditados", "success")
+            }
+          })
+          .catch(() => {})
+      }
+
+      // Load events for group's sport/leagues
+      const params = new URLSearchParams({ limit: "50" })
+      if (g.sport) params.set("sport", g.sport)
+      const evRes = await fetch(`/api/events/list?${params}`)
+      if (evRes.ok) {
+        const evData = await evRes.json()
+        const evs: EventRow[] = Array.isArray(evData) ? evData : (evData.events || [])
+        const relevant = evs.filter(e =>
+          (e.status === "scheduled" || e.status === "live") &&
+          (g.leagues && g.leagues.length > 0 ? g.leagues.includes(e.league) : true)
+        )
+        setEvents(relevant)
+      }
     } finally {
-      setGrantLoading(false)
+      setLoading(false)
     }
-  }
+  }, [groupId])
+
+  const userId = user?.id
+  useEffect(() => {
+    if (userId && groupId) {
+      Promise.all([loadAll(), loadBets(), loadLeaderboard()])
+    }
+  }, [userId, groupId])
+
+  // Load available leagues when settings tab opens
+  useEffect(() => {
+    if (tab !== "settings" || !group?.sport) return
+    setSettingsLoading(true)
+    fetch(`/api/events/list?sport=${group.sport}&limit=50`)
+      .then(r => r.json())
+      .then(d => {
+        const evs: EventRow[] = Array.isArray(d) ? d : (d.events || [])
+        const leagues = [...new Set<string>(evs.map(e => e.league).filter(Boolean))].sort()
+        setAvailableLeagues(leagues)
+      })
+      .finally(() => setSettingsLoading(false))
+  }, [tab, group?.sport])
+
+  useEffect(() => {
+    if (tab === "settings" && group) setSettingsLeagues(group.leagues || [])
+  }, [tab, group])
 
   async function handleTakeBet(bet: GroupBet) {
     if (!user) return
@@ -126,14 +192,61 @@ export default function GroupPage() {
       if (!res.ok) { showToast(data.error || "Error al tomar apuesta", "error"); return }
       showToast("Apuesta tomada exitosamente", "success")
       loadBets()
-      loadDetail()
+      loadAll()
     } finally {
       setTakingBetId(null)
     }
   }
 
-  const todayUTC = new Date().toISOString().split("T")[0]
-  const alreadyGrantedToday = myWallet.last_daily_grant === todayUTC
+  async function handleInvite() {
+    if (!inviteNickname.trim()) return
+    setInviting(true)
+    try {
+      const res = await authFetch(`/api/groups/${groupId}/invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: inviteNickname.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al enviar invitación", "error"); return }
+      showToast(`Invitación enviada a ${inviteNickname.trim()}`, "success")
+      setInviteNickname("")
+    } finally {
+      setInviting(false)
+    }
+  }
+
+  async function handleSaveSettings() {
+    setSettingsSaving(true)
+    try {
+      const res = await authFetch(`/api/groups/${groupId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ leagues: settingsLeagues }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al guardar configuración", "error"); return }
+      showToast("Configuración guardada", "success")
+      setGroup(g => g ? { ...g, leagues: settingsLeagues } : g)
+    } finally {
+      setSettingsSaving(false)
+    }
+  }
+
+  const tabs = [
+    { id: "bets" as const, label: "Apuestas" },
+    { id: "leaderboard" as const, label: "Leaderboard" },
+    { id: "members" as const, label: "Miembros" },
+    ...(myRole === "admin" ? [{ id: "settings" as const, label: "Configuración" }] : []),
+  ]
+
+  // Build event → bets map
+  const betsByEvent = new Map<number, GroupBet[]>()
+  for (const bet of bets) {
+    const arr = betsByEvent.get(bet.event_id) || []
+    arr.push(bet)
+    betsByEvent.set(bet.event_id, arr)
+  }
 
   if (!user) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Inicia sesión para ver este grupo</div></>
   if (loading) return <><Navbar /><div className="p-8 text-center text-muted-foreground">Cargando grupo...</div></>
@@ -142,7 +255,8 @@ export default function GroupPage() {
   return (
     <>
     <Navbar />
-    <div className="container mx-auto px-4 py-6 max-w-3xl">
+    <div className="container mx-auto px-4 py-6 max-w-6xl">
+      {/* Header */}
       <div className="mb-4">
         <Link href="/groups" className="text-sm text-muted-foreground flex items-center gap-1 mb-3 hover:text-foreground">
           <ChevronLeft className="w-4 h-4" /> Mis Grupos
@@ -151,89 +265,139 @@ export default function GroupPage() {
           <div>
             <h1 className="text-2xl font-bold">{group.name}</h1>
             <div className="text-sm text-muted-foreground mt-0.5">
-              {group.sport ? SPORT_LABELS[group.sport] : "Todos los deportes"} · {members.length} miembros · Código: <span className="font-mono font-semibold">{group.code}</span>
+              {group.sport ? SPORT_LABELS[group.sport] : "Todos los deportes"}
+              {group.leagues && group.leagues.length > 0 && (
+                <span> · {group.leagues.length} torneo{group.leagues.length !== 1 ? "s" : ""}</span>
+              )}
+              {" "}· {members.length} miembro{members.length !== 1 ? "s" : ""} · Código: <span className="font-mono font-semibold">{group.code}</span>
             </div>
           </div>
           {group.status === "archived" && <Badge variant="outline">Archivado</Badge>}
         </div>
       </div>
 
-      <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg mb-5">
-        <div className="flex items-center gap-2">
-          <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="font-semibold">{myWallet.balance.toLocaleString()} tokens de grupo</span>
-        </div>
-        <Button
-          size="sm"
-          variant={alreadyGrantedToday ? "outline" : "default"}
-          onClick={handleDailyGrant}
-          disabled={grantLoading || alreadyGrantedToday}
-        >
-          {alreadyGrantedToday ? "Tokens reclamados hoy" : grantLoading ? "Cargando..." : "+500 tokens diarios"}
-        </Button>
+      {/* Wallet bar */}
+      <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg mb-5">
+        <Coins className="w-5 h-5 text-yellow-500" />
+        <span className="font-semibold">{myWallet.balance.toLocaleString()} tokens de grupo</span>
+        <span className="text-xs text-muted-foreground ml-auto">+1.000 diarios automáticos</span>
       </div>
 
-      <div className="flex gap-1 mb-5 border-b">
-        {(["bets", "leaderboard", "members"] as const).map((t) => (
+      {/* Tabs */}
+      <div className="flex gap-1 mb-5 border-b overflow-x-auto">
+        {tabs.map((t) => (
           <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
-              tab === t ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors whitespace-nowrap ${
+              tab === t.id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {t === "bets" ? "Apuestas" : t === "leaderboard" ? "Leaderboard" : "Miembros"}
+            {t.label}
           </button>
         ))}
       </div>
 
+      {/* Bets tab — group marketplace */}
       {tab === "bets" && (
         <div>
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm text-muted-foreground">{bets.length} apuesta{bets.length !== 1 ? "s" : ""} disponible{bets.length !== 1 ? "s" : ""}</span>
-            {group.status === "active" && (
-              <Link href={`/groups/${groupId}/create-bet`}>
-                <Button size="sm">Crear apuesta</Button>
-              </Link>
-            )}
-          </div>
-
-          {bets.length === 0 ? (
+          {events.length === 0 ? (
             <div className="text-center text-muted-foreground py-12">
               <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>No hay apuestas abiertas en este grupo.</p>
+              <p>No hay eventos disponibles para este grupo.</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {bets.map((bet) => (
-                <div key={bet.id} className="border rounded-lg p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-sm">
-                        {bet.event?.home_team} vs {bet.event?.away_team}
+            <div className="space-y-4">
+              {events.map((ev) => {
+                const eventBets = betsByEvent.get(ev.id) || []
+                const isLive = ev.status === "live"
+                return (
+                  <div key={ev.id} className="border rounded-xl overflow-hidden">
+                    {/* Event header */}
+                    <div className={`px-4 py-3 ${isLive ? "bg-red-500/10 border-b border-red-500/20" : "bg-muted/30 border-b"}`}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{ev.league}</span>
+                        <div className="flex items-center gap-2">
+                          {isLive && (
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 uppercase">
+                              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                              En vivo
+                            </span>
+                          )}
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(ev.start_time).toLocaleString("es-ES", { timeZone: "UTC", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-0.5">
-                        {bet.bet_type} · {bet.creator_selection} · por {bet.creator?.nickname ?? "—"}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className="flex-1 text-center">
+                            <div className="font-semibold text-sm">{ev.home_team}</div>
+                            <div className="text-[10px] text-muted-foreground">Local</div>
+                          </div>
+                          <div className="text-muted-foreground font-bold text-sm">vs</div>
+                          <div className="flex-1 text-center">
+                            <div className="font-semibold text-sm">{ev.away_team}</div>
+                            <div className="text-[10px] text-muted-foreground">Visitante</div>
+                          </div>
+                        </div>
+                        {group.status === "active" && (
+                          <Link href={`/groups/${groupId}/create-bet?eventId=${ev.id}`} className="ml-3 shrink-0">
+                            <Button size="sm" variant="outline" className="gap-1 text-xs">
+                              <Plus className="w-3 h-3" /> Apostar
+                            </Button>
+                          </Link>
+                        )}
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <span className="font-semibold text-sm">{bet.amount.toLocaleString()} tokens</span>
-                      <Button
-                        size="sm"
-                        onClick={() => handleTakeBet(bet)}
-                        disabled={takingBetId === bet.id || myWallet.balance < bet.amount}
-                      >
-                        {takingBetId === bet.id ? "Tomando..." : "Tomar"}
-                      </Button>
-                    </div>
+
+                    {/* Open bets on this event */}
+                    {eventBets.length > 0 && (
+                      <div className="divide-y">
+                        {eventBets.map((bet) => {
+                          const canTake = myWallet.balance >= bet.amount && bet.creator_id !== user.id
+                          return (
+                            <div key={bet.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium">{selectionLabel(bet.creator_selection, bet.event)}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {BET_TYPE_LABELS[bet.bet_type] ?? bet.bet_type} · por {bet.creator?.nickname ?? "—"}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <div className="flex items-center gap-1 text-sm font-semibold">
+                                  <Coins className="w-3.5 h-3.5 text-yellow-500" />
+                                  {bet.amount.toLocaleString()}
+                                </div>
+                                {bet.creator_id === user.id ? (
+                                  <Badge variant="outline" className="text-[10px]">Tuya</Badge>
+                                ) : (
+                                  <Button
+                                    size="sm"
+                                    variant="default"
+                                    className="h-7 text-xs"
+                                    onClick={() => handleTakeBet(bet)}
+                                    disabled={takingBetId === bet.id || !canTake}
+                                    title={!canTake ? "Tokens insuficientes" : undefined}
+                                  >
+                                    {takingBetId === bet.id ? "..." : "Tomar"}
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
       )}
 
+      {/* Leaderboard tab */}
       {tab === "leaderboard" && (
         <div className="space-y-2">
           {leaderboard.length === 0 ? (
@@ -264,17 +428,95 @@ export default function GroupPage() {
         </div>
       )}
 
+      {/* Members tab */}
       {tab === "members" && (
-        <div className="space-y-2">
-          {members.map((m) => (
-            <div key={m.user_id} className="flex items-center gap-3 p-3 border rounded-lg">
-              <div className="flex-1">
-                <span className="font-medium text-sm">{m.profile?.nickname ?? m.user_id.slice(0, 8)}</span>
-                {m.user_id === user.id && <span className="text-xs text-muted-foreground ml-1">(tú)</span>}
+        <div>
+          {myRole === "admin" && (
+            <div className="mb-4 p-3 border rounded-lg bg-card">
+              <p className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                <UserPlus className="w-4 h-4" /> Invitar por nickname
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 border rounded px-3 py-1.5 text-sm bg-background"
+                  placeholder="Nickname del usuario"
+                  value={inviteNickname}
+                  onChange={(e) => setInviteNickname(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleInvite()}
+                />
+                <Button size="sm" onClick={handleInvite} disabled={inviting || !inviteNickname.trim()}>
+                  {inviting ? "Enviando..." : "Invitar"}
+                </Button>
               </div>
-              {m.role === "admin" && <Badge variant="secondary">Admin</Badge>}
             </div>
-          ))}
+          )}
+          <div className="space-y-2">
+            {members.map((m) => (
+              <div key={m.user_id} className="flex items-center gap-3 p-3 border rounded-lg">
+                <div className="flex-1">
+                  <span className="font-medium text-sm">{m.profile?.nickname ?? m.user_id.slice(0, 8)}</span>
+                  {m.user_id === user.id && <span className="text-xs text-muted-foreground ml-1">(tú)</span>}
+                </div>
+                {m.role === "admin" && <Badge variant="secondary">Admin</Badge>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Settings tab (admin only) */}
+      {tab === "settings" && myRole === "admin" && (
+        <div className="space-y-5">
+          <div>
+            <h3 className="text-sm font-semibold mb-1 flex items-center gap-1.5">
+              <Settings className="w-4 h-4" /> Torneos del grupo
+            </h3>
+            <p className="text-xs text-muted-foreground mb-3">
+              Solo puedes quitar torneos si no hay apuestas del grupo en esos torneos.
+            </p>
+            {!group.sport ? (
+              <p className="text-sm text-muted-foreground">Este grupo acepta todos los deportes — el filtro de torneo no aplica.</p>
+            ) : settingsLoading ? (
+              <p className="text-sm text-muted-foreground">Cargando torneos disponibles...</p>
+            ) : availableLeagues.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No hay torneos disponibles para este deporte.</p>
+            ) : (
+              <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
+                {availableLeagues.map((l) => (
+                  <label key={l} className="flex items-center gap-3 px-3 py-2.5 text-sm border-b last:border-b-0 hover:bg-muted/40 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settingsLeagues.includes(l)}
+                      onChange={(e) => setSettingsLeagues(prev =>
+                        e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
+                      )}
+                      className="rounded"
+                    />
+                    <span>{l}</span>
+                    {group.leagues?.includes(l) && !settingsLeagues.includes(l) && (
+                      <span className="ml-auto text-xs text-destructive">Se quitará</span>
+                    )}
+                    {!group.leagues?.includes(l) && settingsLeagues.includes(l) && (
+                      <span className="ml-auto text-xs text-primary">Se agregará</span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            )}
+            {group.sport && settingsLeagues.length > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                {settingsLeagues.length} torneo{settingsLeagues.length !== 1 ? "s" : ""} seleccionado{settingsLeagues.length !== 1 ? "s" : ""}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSaveSettings} disabled={settingsSaving}>
+              {settingsSaving ? "Guardando..." : "Guardar configuración"}
+            </Button>
+            <Button variant="outline" onClick={() => setSettingsLeagues(group.leagues || [])} disabled={settingsSaving}>
+              Cancelar
+            </Button>
+          </div>
         </div>
       )}
     </div>

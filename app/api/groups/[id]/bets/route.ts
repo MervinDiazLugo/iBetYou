@@ -10,7 +10,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
   const supabase = createAdminSupabaseClient()
 
   const [groupRes, membershipRes] = await Promise.all([
-    supabase.from("groups").select("id, sport, league, status").eq("id", groupId).single(),
+    supabase.from("groups").select("id, sport, leagues, status").eq("id", groupId).single(),
     supabase.from("group_members").select("role").eq("group_id", groupId).eq("user_id", userId).maybeSingle(),
   ])
 

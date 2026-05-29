@@ -59,7 +59,32 @@
       "Bash(curl -s -H \"x-apisports-key: f5fb1bff35488f7e2380baf8a1c7087c\" -H \"Accept-Language: es\" \"https://v3.football.api-sports.io/predictions?fixture=1535204\")",
       "Bash(curl -s -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\" \"https://i-bet-you.vercel.app/api/cron/sync-predictions\")",
       "Bash(curl -s -X POST https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/rpc/exec_sql -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Content-Type: application/json' -d '{\"query\": \"SELECT COUNT\\(*\\) FROM events WHERE sport = '\\\\''football'\\\\'' AND status = '\\\\''scheduled'\\\\'' AND \\(metadata->'\\\\''predictions'\\\\''\\) IS NULL AND id NOT IN \\(SELECT DISTINCT event_id FROM bets WHERE status IN \\(\\('\\\\''open'\\\\'', '\\\\''taken'\\\\'', '\\\\''pending_resolution'\\\\'', '\\\\''disputed'\\\\''\\)\\)\\);\"}')",
-      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://i-bet-you.vercel.app/api/admin/cleanup-no-predictions\" -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\")"
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" -X POST \"https://i-bet-you.vercel.app/api/admin/cleanup-no-predictions\" -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\")",
+      "Bash(curl -s -H \"Authorization: Bearer a3f8c2d1e9b4671058dfae23c7904b65\" \"https://i-bet-you.vercel.app/api/cron/auto-featured\")",
+      "Bash(curl -s \"https://i-bet-you.vercel.app/api/events/list?sport=football&paginated=1&limit=5\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(e['id'], e.get\\('featured'\\), e.get\\('league'\\), bool\\(e.get\\('metadata',{}\\).get\\('predictions'\\)\\)\\) for e in d.get\\('events',[]\\)]\")",
+      "Bash(curl -s \"https://i-bet-you.vercel.app/api/events/list?sport=football&paginated=1&limit=50\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); featured=[e for e in d.get\\('events',[]\\) if e.get\\('featured'\\)]; print\\('featured count:', len\\(featured\\)\\); [print\\(e['id'], e['league'], e['home_team'], 'vs', e['away_team']\\) for e in featured[:5]]\")",
+      "Bash(curl -s 'https://ahiqwpzqeketizsgxydm.supabase.co/rest/v1/events?featured=eq.true&select=id,sport,league,home_team,away_team,featured,start_time&limit=10' -H 'apikey: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg' -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaXF3cHpxZWtldGl6c2d4eWRtIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NTA1Nzg3MSwiZXhwIjoyMDkwNjMzODcxfQ.6ylxWWZwGHkoXkK4v-UB9VAItyE1geLomlUdM2ue8sg')",
+      "Bash(curl -s \"https://i-bet-you.vercel.app/api/events/list?sport=baseball&paginated=1&limit=12\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('total returned:', len\\(d.get\\('events',[]\\)\\)\\); [print\\(e['id'], e.get\\('featured'\\), e['league'], e['start_time'][:16]\\) for e in d.get\\('events',[]\\)]\")",
+      "Bash(powershell -Command \"New-Item -ItemType Directory -Force -Path 'd:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\docs\\\\superpowers\\\\plans'\")",
+      "Bash(cd \"d:\\\\\\\\Documents\\\\\\\\Documentos\\\\\\\\p2pBets\\\\\\\\app\")",
+      "Bash(git show *)",
+      "Bash(git diff *)",
+      "Bash(Get-ChildItem -Recurse -Filter \"*.tsx\")",
+      "Bash(Select-String -Pattern \"como.jugar|how.to.play|jugar\" -l)",
+      "Bash(Select-Object -First 10)",
+      "Bash(New-Item -ItemType Directory -Path \"d:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\bets\\\\house\" -Force)",
+      "Bash(mkdir -p \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\join\")",
+      "Bash(mkdir -p \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\leave\")",
+      "Bash(mkdir -p \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\daily-grant\")",
+      "Bash(mkdir -p \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\bets\")",
+      "Bash(mkdir -p \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\leaderboard\")",
+      "Bash(curl \"https://i-bet-you.vercel.app/api/bets/house\" -H \"accept: */*\" -H \"authorization: Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjJjNGI2NWM1LTRjMDgtNGEwZS05ZTU0LTJjNDY5OTM4ZGM4YSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FoaXF3cHpxZWtldGl6c2d4eWRtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI2MGI0N2IyNy0zMTMyLTRjMzktYmYwOC1mZGNjNTgzNmE4MDMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc5NzM0NDIyLCJpYXQiOjE3Nzk3MzA4MjIsImVtYWlsIjoidGhlb25laXNiZXR0aW5nQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiY291bnRyeSI6IlZlbmV6dWVsYSIsImVtYWlsIjoidGhlb25laXNiZXR0aW5nQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJuaWNrbmFtZSI6IlRoZU9uZUlzQmV0dGluZyIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiNjBiNDdiMjctMzEzMi00YzM5LWJmMDgtZmRjYzU4MzZhODAzIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3Nzk3MzA4MjJ9XSwic2Vzc2lvbl9pZCI6ImNhNGM2ZGY5LWI4MGEtNGE1Mi05ZDcwLWRkMjlhZDJlOTg0NyIsImlzX2Fub255bW91cyI6ZmFsc2V9.thymrpoE795BTIYZZVDGBX1fL4AqDX5WXlUMAc1xgQwg2se_pJV3ycZuFnnvbJRanuAlf5K9x94kZD8iV5rUHw\" -H \"content-type: application/json\" --data-raw \"{\\\\\"userId\\\\\":\\\\\"60b47b27-3132-4c39-bf08-fdcc5836a803\\\\\",\\\\\"eventId\\\\\":46957,\\\\\"betType\\\\\":\\\\\"direct\\\\\",\\\\\"selection\\\\\":\\\\\"home\\\\\",\\\\\"amount\\\\\":20,\\\\\"mode\\\\\":\\\\\"fantasy\\\\\"}\")",
+      "Bash(grep -rn \"\\\\.or\\(\\\\`\" app/api/)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "Bash(python3)"
     ]
   }
 }

@@ -2,7 +2,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 
 type AdminClient = ReturnType<typeof createAdminSupabaseClient>
 
-const DAILY_GRANT_AMOUNT = 500
+const DAILY_GRANT_AMOUNT = 1000
 
 export async function ensureDailyGrant(
   supabase: AdminClient,

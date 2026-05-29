@@ -20,7 +20,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       success: true,
       granted,
       balance: wallet?.balance ?? 0,
-      message: granted ? "+500 tokens de grupo acreditados" : "Ya recibiste tus tokens de hoy",
+      message: granted ? "+1.000 tokens de grupo acreditados" : "Ya recibiste tus tokens de hoy",
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
