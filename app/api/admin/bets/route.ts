@@ -1066,8 +1066,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true, pending_approval: false,
       homeScore, awayScore, score_source: scoreSource,
-      winner_id: winnerId, outcome: outcome.kind, bet_id,
-      message: outcome.kind === 'winner' ? `Apuesta resuelta: Ganador = ${winnerId}` : `Apuesta resuelta: ${outcome.kind}`,
+      winner_id: dbWinnerId, outcome: outcome.kind, bet_id,
+      message: outcome.kind === 'winner' ? `Apuesta resuelta: Ganador = ${dbWinnerId}` : `Apuesta resuelta: ${outcome.kind}`,
     })
 
   } catch (error: unknown) {
