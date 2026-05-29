@@ -197,6 +197,7 @@ function HomeContent() {
   const [houseBetType, setHouseBetType] = useState<string>("direct")
   const [houseBetAmount, setHouseBetAmount] = useState("")
   const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
+  const [houseBetLoadingPredictions, setHouseBetLoadingPredictions] = useState(false)
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
   const sessionTokenRef = useRef<string | null>(null)
@@ -644,40 +645,66 @@ function HomeContent() {
     ? inProgressBets.filter((bet) => bet.status === 'open' && bet.creator_id === user.id).length
     : 0
 
+  function calcOddsFromPercent(percent: any) {
+    const home = parseFloat(String(percent.home).replace("%", "")) / 100
+    const away = parseFloat(String(percent.away).replace("%", "")) / 100
+    const draw = percent.draw !== undefined ? parseFloat(String(percent.draw).replace("%", "")) / 100 : undefined
+    const odds = home > 0 && away > 0 ? {
+      home: parseFloat((1 / (home * 1.10)).toFixed(4)),
+      away: parseFloat((1 / (away * 1.10)).toFixed(4)),
+      ...(draw !== undefined && draw > 0 ? { draw: parseFloat((1 / (draw * 1.10)).toFixed(4)) } : {}),
+    } : null
+    const homeWinProb = home
+    const runLineOdds = homeWinProb > 0 && homeWinProb < 1 ? (() => {
+      const pHomeRL = homeWinProb * 0.68
+      const pAwayRL = 1 - pHomeRL
+      return {
+        home_rl: parseFloat((1 / (pHomeRL * 1.10)).toFixed(2)),
+        away_rl: parseFloat((1 / (pAwayRL * 1.10)).toFixed(2)),
+      }
+    })() : null
+    return { odds, runLineOdds }
+  }
+
   const openHouseBetModal = (event: Event) => {
     const percent = (event.metadata as any)?.predictions?.percent
-    let odds: { home: number; draw?: number; away: number } | null = null
-    if (percent) {
-      const home = parseFloat(String(percent.home).replace("%", "")) / 100
-      const away = parseFloat(String(percent.away).replace("%", "")) / 100
-      const draw = percent.draw !== undefined ? parseFloat(String(percent.draw).replace("%", "")) / 100 : undefined
-      if (home > 0 && away > 0) {
-        odds = {
-          home: parseFloat((1 / (home * 1.10)).toFixed(4)),
-          away: parseFloat((1 / (away * 1.10)).toFixed(4)),
-          ...(draw !== undefined && draw > 0 ? { draw: parseFloat((1 / (draw * 1.10)).toFixed(4)) } : {}),
-        }
-      }
-    }
-    let runLineOdds: { home_rl: number; away_rl: number } | null = null
-    if (percent) {
-      const homeWinProb = parseFloat(String(percent.home).replace("%", "")) / 100
-      if (homeWinProb > 0 && homeWinProb < 1) {
-        const pHomeRL = homeWinProb * 0.68
-        const pAwayRL = 1 - pHomeRL
-        runLineOdds = {
-          home_rl: parseFloat((1 / (pHomeRL * 1.10)).toFixed(2)),
-          away_rl: parseFloat((1 / (pAwayRL * 1.10)).toFixed(2)),
-        }
-      }
-    }
+    const { odds, runLineOdds } = percent ? calcOddsFromPercent(percent) : { odds: null, runLineOdds: null }
+
+    // Default to first non-direct tab if predictions missing
+    const hasPredictions = odds !== null
+    const houseBetTypes = getHouseBetTypes(event.sport)
+    const defaultType = hasPredictions
+      ? "direct"
+      : (houseBetTypes.find(t => t.id !== "direct")?.id ?? "direct")
+
     setHouseBetModal({ event, odds, runLineOdds })
     setHouseBetSelection(null)
     setHouseBetExactScore("")
     setHouseBetHomeGoals("")
     setHouseBetAwayGoals("")
     setHouseBetAmount("")
-    setHouseBetType("direct")
+    setHouseBetType(defaultType)
+
+    // Auto-fetch predictions in background if missing
+    if (!hasPredictions) {
+      setHouseBetLoadingPredictions(true)
+      fetch(`/api/events/${event.id}/predictions`, { method: "POST" })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.predictions?.percent) {
+            const { odds: newOdds, runLineOdds: newRL } = calcOddsFromPercent(data.predictions.percent)
+            setHouseBetModal(prev => prev ? {
+              ...prev,
+              odds: newOdds,
+              runLineOdds: newRL,
+              event: { ...prev.event, metadata: { ...(prev.event.metadata as any || {}), predictions: data.predictions } },
+            } : prev)
+            setHouseBetType("direct")
+          }
+        })
+        .catch(() => {})
+        .finally(() => setHouseBetLoadingPredictions(false))
+    }
   }
 
   const getActiveHouseOdds = (): number | null => {
@@ -1807,10 +1834,11 @@ function HomeContent() {
                   <div className="text-sm font-bold leading-tight">{houseBetModal.event.away_team}</div>
                 </div>
               </div>
-              {/* Prediction widget */}
-              {(houseBetModal.event.metadata as any)?.predictions?.percent && (() => {
-                const pct = (houseBetModal.event.metadata as any).predictions.percent
-                const pred = (houseBetModal.event.metadata as any).predictions
+              {/* Prediction widget — use live odds when available, fall back to event metadata */}
+              {(houseBetModal.odds || (houseBetModal.event.metadata as any)?.predictions?.percent) && (() => {
+                const predSrc = (houseBetModal.event.metadata as any)?.predictions ?? {}
+                const pct = predSrc.percent
+                const pred = predSrc
                 return (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
                     <div className="text-xs font-semibold text-blue-300">🤖 Predicción</div>
@@ -1838,17 +1866,34 @@ function HomeContent() {
               })()}
               {/* Bet type tabs */}
               <div className="flex gap-2 flex-wrap">
-                {houseBetTypes.map(bt => (
-                  <Button
-                    key={bt.id}
-                    variant={houseBetType === bt.id ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
-                  >
-                    {bt.label}
-                  </Button>
-                ))}
+                {houseBetTypes.map(bt => {
+                  const isDirectWithoutOdds = bt.id === "direct" && !houseBetModal.odds
+                  return (
+                    <Button
+                      key={bt.id}
+                      variant={houseBetType === bt.id ? "default" : "outline"}
+                      size="sm"
+                      disabled={isDirectWithoutOdds && houseBetLoadingPredictions}
+                      onClick={() => { if (!isDirectWithoutOdds || !houseBetLoadingPredictions) { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") } }}
+                    >
+                      {bt.label}
+                      {isDirectWithoutOdds && houseBetLoadingPredictions && <span className="ml-1 opacity-60">⏳</span>}
+                    </Button>
+                  )
+                })}
               </div>
+              {/* Direct — loading predicciones */}
+              {houseBetType === "direct" && !houseBetModal.odds && houseBetLoadingPredictions && (
+                <div className="text-center text-sm text-muted-foreground py-4 animate-pulse">
+                  Cargando predicciones...
+                </div>
+              )}
+              {/* Direct — no predicciones y no cargando */}
+              {houseBetType === "direct" && !houseBetModal.odds && !houseBetLoadingPredictions && (
+                <div className="text-center text-sm text-muted-foreground py-4">
+                  No hay predicciones disponibles para este evento.
+                </div>
+              )}
               {/* Direct — outcome buttons */}
               {houseBetType === "direct" && houseBetModal.odds && (
                 <div className={`grid gap-2 ${houseBetModal.odds.draw !== undefined ? "grid-cols-3" : "grid-cols-2"}`}>
