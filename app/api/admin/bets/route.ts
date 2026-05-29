@@ -1005,6 +1005,7 @@ export async function POST(request: NextRequest) {
 
     // ── Phase 4: execute financial ops after confirmed bet update ────────────
     const betModeAuto = (bet as any).mode ?? "fantasy"
+    const totalPrize = isHouseBet ? 0 : (outcome.kind === 'winner' ? creatorStake + acceptorStake : 0)
 
     if (isHouseBet) {
       const potentialPayout = Number((bet as any).potential_payout || 0)
@@ -1022,7 +1023,6 @@ export async function POST(request: NextRequest) {
         console.error("HOUSE_BET_PAYOUT_FAILED", { betId: bet_id, betMode: betModeAuto, userWon, error: payoutErr })
       }
     } else {
-      const totalPrize = outcome.kind === 'winner' ? creatorStake + acceptorStake : 0
       try {
         if (outcome.kind === 'winner') {
           await payoutToMode(supabase, outcome.winnerId, totalPrize, betModeAuto)
@@ -1044,7 +1044,7 @@ export async function POST(request: NextRequest) {
     await logArbitrationDecision(supabase, {
       bet_id, action: 'auto_resolve_completed',
       previous_status: previousStatus, new_status: 'resolved',
-      decided_winner_id: winnerId,
+      decided_winner_id: dbWinnerId,
       reason: resolutionMethod === 'admin_force' ? `Resolucion forzada por administrador` : `Auto-resuelto: ${outcome.kind}`,
       details: { homeScore, awayScore, halftimeHomeScore, halftimeAwayScore, firstScorerTeam, bet_type: bet.bet_type, resolution_method: resolutionMethod, outcome: outcome.kind, total_prize: totalPrize },
       decided_by: decidedBy, source: 'auto',
