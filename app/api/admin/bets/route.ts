@@ -880,13 +880,16 @@ export async function POST(request: NextRequest) {
       ? Number(bet.amount) * Math.max(1, Number(bet.multiplier) || 1)
       : Number(bet.amount)
 
+    const isHouseBet = Boolean((bet as any).house_bet) || bet.acceptor_id === null
+
     if (bet.bet_type === 'direct') {
       const selNorm = (creatorSelection || '').toLowerCase().trim()
       const homeNorm = (event.home_team || '').toLowerCase().trim()
       const awayNorm = (event.away_team || '').toLowerCase().trim()
       const choseDraw = ['empate', 'draw', 'tie'].includes(selNorm)
-      const choseHome = !choseDraw && selNorm === homeNorm
-      const choseAway = !choseDraw && selNorm === awayNorm
+      // "home"/"away" are valid house bet keywords in addition to full team name match
+      const choseHome = !choseDraw && (selNorm === homeNorm || selNorm === 'home')
+      const choseAway = !choseDraw && (selNorm === awayNorm || selNorm === 'away')
 
       if (!choseDraw && !choseHome && !choseAway) {
         outcome = { kind: 'conflict', reason: `creator_selection "${creatorSelection}" no coincide con equipos "${event.home_team}" vs "${event.away_team}"` }
@@ -895,18 +898,21 @@ export async function POST(request: NextRequest) {
         const awayWon = (awayScore as number) > (homeScore as number)
         const isDraw = homeScore === awayScore
 
+        // For house bets with no acceptor, use null sentinel for "house wins"
+        const houseOrAcceptor = isHouseBet ? null : bet.acceptor_id
+
         if (choseDraw) {
-          outcome = { kind: 'winner', winnerId: isDraw ? bet.creator_id : bet.acceptor_id }
+          outcome = { kind: 'winner', winnerId: isDraw ? bet.creator_id : (houseOrAcceptor ?? bet.creator_id) }
         } else if (choseHome) {
           if (homeWon) outcome = { kind: 'winner', winnerId: bet.creator_id }
-          else if (awayWon) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+          else if (awayWon) outcome = { kind: 'winner', winnerId: isHouseBet ? '__house__' : bet.acceptor_id }
           else if (event.sport === 'baseball') outcome = { kind: 'conflict', reason: 'Empate en béisbol - requiere revisión' }
-          else outcome = { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
+          else outcome = isHouseBet ? { kind: 'winner', winnerId: '__house__' } : { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
         } else {
           if (awayWon) outcome = { kind: 'winner', winnerId: bet.creator_id }
-          else if (homeWon) outcome = { kind: 'winner', winnerId: bet.acceptor_id }
+          else if (homeWon) outcome = { kind: 'winner', winnerId: isHouseBet ? '__house__' : bet.acceptor_id }
           else if (event.sport === 'baseball') outcome = { kind: 'conflict', reason: 'Empate en béisbol - requiere revisión' }
-          else outcome = { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
+          else outcome = isHouseBet ? { kind: 'winner', winnerId: '__house__' } : { kind: 'tie', creatorRefund: creatorStake, acceptorRefund: acceptorStake }
         }
       }
     } else if (bet.bet_type === 'exact_score') {
@@ -979,10 +985,12 @@ export async function POST(request: NextRequest) {
 
     // ── Phase 3: update bet status FIRST ────────────────────────────────────
     // .in("status") guard prevents double-resolution if resolved concurrently
-    const winnerId = outcome.kind === 'winner' ? outcome.winnerId : null
+    const rawWinnerId = outcome.kind === 'winner' ? outcome.winnerId : null
+    // "__house__" sentinel = house wins; winner_id stays null in DB (no UUID FK for house)
+    const dbWinnerId = (rawWinnerId === '__house__' || rawWinnerId === null) ? null : rawWinnerId
     const { data: resolvedBetResult, error: betUpdateError } = await supabase
       .from('bets')
-      .update({ status: 'resolved', winner_id: winnerId, resolved_at: new Date().toISOString() })
+      .update({ status: 'resolved', winner_id: dbWinnerId, resolved_at: new Date().toISOString() })
       .eq('id', bet_id)
       .in('status', ['taken', 'disputed'])
       .select('id')
@@ -996,23 +1004,40 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Phase 4: execute financial ops after confirmed bet update ────────────
-    const totalPrize = outcome.kind === 'winner' ? creatorStake + acceptorStake : 0
-
     const betModeAuto = (bet as any).mode ?? "fantasy"
-    try {
-      if (outcome.kind === 'winner') {
-        await payoutToMode(supabase, outcome.winnerId, totalPrize, betModeAuto)
-        await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: tokenTypeForMode(betModeAuto), amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
-      } else {
-        // tie or split — refund each party their original stake
-        await payoutToMode(supabase, bet.creator_id, outcome.creatorRefund, betModeAuto)
-        await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
-        await payoutToMode(supabase, bet.acceptor_id, outcome.acceptorRefund, betModeAuto)
-        await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+
+    if (isHouseBet) {
+      const potentialPayout = Number((bet as any).potential_payout || 0)
+      const stake = Number(bet.amount || 0)
+      const userWon = rawWinnerId !== '__house__' && rawWinnerId !== null
+      try {
+        if (userWon) {
+          await payoutToMode(supabase, bet.creator_id, potentialPayout, betModeAuto)
+          await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: potentialPayout, operation: `house_bet_won_${bet.bet_type}`, reference_id: bet_id })
+        } else {
+          await houseWalletCredit(supabase, potentialPayout, betModeAuto)
+          await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: -stake, operation: `house_bet_lost_${bet.bet_type}`, reference_id: bet_id })
+        }
+      } catch (payoutErr) {
+        console.error("HOUSE_BET_PAYOUT_FAILED", { betId: bet_id, betMode: betModeAuto, userWon, error: payoutErr })
       }
-    } catch (payoutErr) {
-      console.error("PAYOUT_FAILED", { betId: bet_id, betMode: betModeAuto, outcome: outcome.kind, error: payoutErr })
-      return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
+    } else {
+      const totalPrize = outcome.kind === 'winner' ? creatorStake + acceptorStake : 0
+      try {
+        if (outcome.kind === 'winner') {
+          await payoutToMode(supabase, outcome.winnerId, totalPrize, betModeAuto)
+          await supabase.from('transactions').insert({ user_id: outcome.winnerId, token_type: tokenTypeForMode(betModeAuto), amount: totalPrize, operation: 'bet_won_auto_resolved', reference_id: bet_id })
+        } else {
+          // tie or split — refund each party their original stake
+          await payoutToMode(supabase, bet.creator_id, outcome.creatorRefund, betModeAuto)
+          await supabase.from('transactions').insert({ user_id: bet.creator_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.creatorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+          await payoutToMode(supabase, bet.acceptor_id, outcome.acceptorRefund, betModeAuto)
+          await supabase.from('transactions').insert({ user_id: bet.acceptor_id, token_type: tokenTypeForMode(betModeAuto), amount: outcome.acceptorRefund, operation: outcome.kind === 'tie' ? 'bet_tie_refund' : 'bet_refund_admin_decision', reference_id: bet_id })
+        }
+      } catch (payoutErr) {
+        console.error("PAYOUT_FAILED", { betId: bet_id, betMode: betModeAuto, outcome: outcome.kind, error: payoutErr })
+        return NextResponse.json({ error: "Pago fallido. Contactar soporte." }, { status: 500 })
+      }
     }
 
     // ── Phase 5: audit log + notifications ──────────────────────────────────
