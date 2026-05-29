@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 
     // --- Group bet validation ---
-    let groupRow: { id: string; sport: string | null; league: string | null; status: string } | null = null
+    let groupRow: { id: string; sport: string | null; leagues: string[]; status: string } | null = null
     if (isGroupBet) {
       const { data: gMembership } = await supabase
         .from("group_members")
