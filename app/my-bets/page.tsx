@@ -1,12 +1,12 @@
 ﻿"use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useMyBets } from "@/app/my-bets/hooks"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Trophy } from "lucide-react"
+import { Trophy, TrendingUp, TrendingDown, Minus } from "lucide-react"
 import Link from "next/link"
 import { formatCurrency } from "@/lib/utils"
 import { ReferralBonusBanner } from "@/components/referral-bonus-banner"
@@ -48,6 +48,35 @@ export default function MyBetsPage() {
   const { user, bets, loading, error } = useMyBets()
   const [activeTab, setActiveTab] = useState<"all" | "created" | "taken">("all")
   const [modeTab, setModeTab] = useState<"all" | "fantasy" | "real">("all")
+
+  // Wagered vs Won stats — computed from resolved bets matching modeTab only
+  const wagerStats = useMemo(() => {
+    if (!user) return null
+    const resolved = bets.filter(b => {
+      if (b.status !== "resolved") return false
+      if (modeTab !== "all" && ((b as any).mode ?? "fantasy") !== modeTab) return false
+      const isParticipant = b.creator_id === user.id || b.acceptor_id === user.id
+      return isParticipant
+    })
+    let wagered = 0
+    let won = 0
+    for (const bet of resolved) {
+      const isCreator = bet.creator_id === user.id
+      const isAsymmetric = bet.bet_type === "exact_score"
+      const mult = Math.max(1, Number(bet.multiplier) || 1)
+      const amt = Number(bet.amount) || 0
+      const acceptorStake = isAsymmetric ? amt * mult : amt
+      if (isCreator) {
+        wagered += amt + Number(bet.fee_amount || 0)
+      } else {
+        wagered += acceptorStake + acceptorStake * 0.03
+      }
+      if (bet.winner_id === user.id) {
+        won += amt + acceptorStake
+      }
+    }
+    return { wagered: Math.round(wagered), won: Math.round(won), net: Math.round(won - wagered), resolved: resolved.length }
+  }, [bets, user, modeTab])
 
   const filteredBets = bets
     .filter((bet) => {
@@ -116,6 +145,30 @@ export default function MyBetsPage() {
             Real iBY
           </button>
         </div>
+
+        {/* Wagered vs Won stats */}
+        {wagerStats && wagerStats.resolved > 0 && (
+          <div className="grid grid-cols-3 gap-3 mb-5">
+            <div className="border rounded-lg p-3 bg-card">
+              <div className="text-xs text-muted-foreground mb-1">Apostado</div>
+              <div className="font-bold text-sm">{formatCurrency(wagerStats.wagered)}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{wagerStats.resolved} apuestas</div>
+            </div>
+            <div className="border rounded-lg p-3 bg-card">
+              <div className="text-xs text-muted-foreground mb-1">Ganado</div>
+              <div className="font-bold text-sm text-green-400">{formatCurrency(wagerStats.won)}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">bruto retornado</div>
+            </div>
+            <div className={`border rounded-lg p-3 ${wagerStats.net >= 0 ? "bg-green-500/5 border-green-500/20" : "bg-red-500/5 border-red-500/20"}`}>
+              <div className="text-xs text-muted-foreground mb-1">Neto</div>
+              <div className={`font-bold text-sm flex items-center gap-1 ${wagerStats.net >= 0 ? "text-green-400" : "text-red-400"}`}>
+                {wagerStats.net > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : wagerStats.net < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
+                {wagerStats.net >= 0 ? "+" : ""}{formatCurrency(wagerStats.net)}
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">ganado − apostado</div>
+            </div>
+          </div>
+        )}
 
         {/* Role tabs */}
         <div className="flex gap-2 mb-6">

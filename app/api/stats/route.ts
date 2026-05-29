@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
     // Single query for all bets — split into resolved/active in JS
     const { data: allBets } = await supabase
       .from("bets")
-      .select("id, creator_id, acceptor_id, winner_id, bet_type, status, resolved_at, event:events(home_team, away_team, league, sport)")
+      .select("id, creator_id, acceptor_id, winner_id, bet_type, amount, multiplier, status, resolved_at, event:events(home_team, away_team, league, sport)")
       .eq("mode", modeFilter)
 
     const resolvedBets = (allBets || [])
@@ -24,16 +24,22 @@ export async function GET(request: NextRequest) {
     ).length
 
     // ── User win stats ─────────────────────────────────────────────────────
-    const userMap: Record<string, { wins: number; participated: number; recentWins: number }> = {}
+    const userMap: Record<string, { wins: number; participated: number; recentWins: number; totalEarned: number }> = {}
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
     for (const bet of resolvedBets || []) {
       const participants = [bet.creator_id, bet.acceptor_id].filter(Boolean) as string[]
+      const amt = Number(bet.amount) || 0
+      const mult = Number(bet.multiplier) || 1
+      // Winner's gross payout: for asymmetric both sides risk different amounts
+      const isAsymmetric = bet.bet_type === "exact_score"
+      const winnerPayout = isAsymmetric ? amt + amt * mult : amt * 2
       for (const uid of participants) {
-        if (!userMap[uid]) userMap[uid] = { wins: 0, participated: 0, recentWins: 0 }
+        if (!userMap[uid]) userMap[uid] = { wins: 0, participated: 0, recentWins: 0, totalEarned: 0 }
         userMap[uid].participated++
         if (bet.winner_id === uid) {
           userMap[uid].wins++
+          userMap[uid].totalEarned += winnerPayout
           if (bet.resolved_at && bet.resolved_at >= thirtyDaysAgo) {
             userMap[uid].recentWins++
           }
@@ -62,6 +68,7 @@ export async function GET(request: NextRequest) {
         losses: stats.participated - stats.wins,
         winRate: stats.participated > 0 ? Math.round((stats.wins / stats.participated) * 100) : 0,
         recentWins: stats.recentWins,
+        totalEarned: Math.round(stats.totalEarned),
       }))
 
     // ── Top by wins ────────────────────────────────────────────────────────
@@ -85,6 +92,12 @@ export async function GET(request: NextRequest) {
       .filter((e) => e.recentWins > 0)
       .sort((a, b) => b.recentWins - a.recentWins)
       .slice(0, 5)
+
+    // ── Top by total earned ────────────────────────────────────────────────
+    const topByEarnings = [...rankingEntries]
+      .filter((e) => e.totalEarned > 0)
+      .sort((a, b) => b.totalEarned - a.totalEarned)
+      .slice(0, 10)
 
     // ── Platform stats ─────────────────────────────────────────────────────
     const totalResolved = (resolvedBets || []).length
@@ -130,6 +143,7 @@ export async function GET(request: NextRequest) {
         topByRate,
         topByActivity,
         topHot,
+        topByEarnings,
       },
       platform: {
         totalBets,

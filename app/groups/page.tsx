@@ -39,7 +39,7 @@ export default function GroupsPage() {
   const [createName, setCreateName] = useState("")
   const [createSport, setCreateSport] = useState("")
   const [createLeagues, setCreateLeagues] = useState<string[]>([])
-  const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
+  const [availableLeagues, setAvailableLeagues] = useState<{ league: string; country: string }[]>([])
   const [leaguesLoading, setLeaguesLoading] = useState(false)
   const [leagueSearch, setLeagueSearch] = useState("")
   const [joinCode, setJoinCode] = useState("")
@@ -75,14 +75,14 @@ export default function GroupsPage() {
     baseball: ["MLB", "KBO", "NPB", "LMB", "LMBP"],
   }
 
-  function sortLeagues(leagues: string[], sport: string): string[] {
+  function sortLeagues(leagues: { league: string; country: string }[], sport: string): { league: string; country: string }[] {
     const priority = PRIORITY_LEAGUES[sport] || []
     const prioritySet = new Map(priority.map((l, i) => [l.toLowerCase(), i]))
     return [...leagues].sort((a, b) => {
-      const ai = prioritySet.get(a.toLowerCase()) ?? 9999
-      const bi = prioritySet.get(b.toLowerCase()) ?? 9999
+      const ai = prioritySet.get(a.league.toLowerCase()) ?? 9999
+      const bi = prioritySet.get(b.league.toLowerCase()) ?? 9999
       if (ai !== bi) return ai - bi
-      return a.localeCompare(b)
+      return a.league.localeCompare(b.league)
     })
   }
 
@@ -95,8 +95,12 @@ export default function GroupsPage() {
       .then(r => r.json())
       .then(d => {
         const evs = Array.isArray(d) ? d : (d.events || [])
-        const unique = [...new Set<string>(evs.map((e: { league: string }) => e.league).filter(Boolean))]
-        setAvailableLeagues(sortLeagues(unique, createSport))
+        const leagueMap = new Map<string, string>()
+        for (const e of evs) {
+          if (e.league && !leagueMap.has(e.league)) leagueMap.set(e.league, e.country || "")
+        }
+        const entries = [...leagueMap.entries()].map(([league, country]) => ({ league, country }))
+        setAvailableLeagues(sortLeagues(entries, createSport))
       })
       .finally(() => setLeaguesLoading(false))
   }, [createSport])
@@ -200,25 +204,28 @@ export default function GroupsPage() {
                 )}
               </div>
               {!leaguesLoading && availableLeagues.length > 0 && (() => {
-                const filtered = availableLeagues.filter(l =>
-                  l.toLowerCase().includes(leagueSearch.toLowerCase())
+                const filtered = availableLeagues.filter(({ league }) =>
+                  league.toLowerCase().includes(leagueSearch.toLowerCase())
                 )
                 return (
                   <>
                     <div className="max-h-48 overflow-y-auto">
                       {filtered.length === 0 ? (
                         <p className="text-xs text-muted-foreground px-3 py-2">Sin resultados</p>
-                      ) : filtered.map(l => (
-                        <label key={l} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 px-3 py-1.5 border-b last:border-b-0">
+                      ) : filtered.map(({ league, country }) => (
+                        <label key={league} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 px-3 py-1.5 border-b last:border-b-0">
                           <input
                             type="checkbox"
-                            checked={createLeagues.includes(l)}
+                            checked={createLeagues.includes(league)}
                             onChange={(e) => setCreateLeagues(prev =>
-                              e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
+                              e.target.checked ? [...prev, league] : prev.filter(x => x !== league)
                             )}
                             className="rounded"
                           />
-                          {l}
+                          <span>
+                            {country && <span className="text-muted-foreground text-xs">{country} · </span>}
+                            {league}
+                          </span>
                         </label>
                       ))}
                     </div>

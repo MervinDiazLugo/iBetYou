@@ -21,6 +21,7 @@ interface RankingEntry {
   losses: number
   winRate: number
   recentWins: number
+  totalEarned: number
 }
 
 interface Stats {
@@ -29,6 +30,7 @@ interface Stats {
     topByRate: RankingEntry[]
     topByActivity: RankingEntry[]
     topHot: RankingEntry[]
+    topByEarnings: RankingEntry[]
   }
   platform: {
     totalBets: number
@@ -69,7 +71,7 @@ function MedalIcon({ rank }: { rank: number }) {
   return <span className="text-muted-foreground text-sm font-bold w-6 text-center">{rank}</span>
 }
 
-function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "wins" | "winRate" | "participated" | "recentWins" }) {
+function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "wins" | "winRate" | "participated" | "recentWins" | "totalEarned" }) {
   if (entries.length === 0) {
     return <p className="text-center text-muted-foreground py-6 text-sm">Sin datos aún</p>
   }
@@ -92,6 +94,7 @@ function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "w
             {metric === "winRate" && <div className="font-bold text-blue-400">{entry.winRate}%</div>}
             {metric === "participated" && <div className="font-bold text-purple-400">{entry.participated} apuestas</div>}
             {metric === "recentWins" && <div className="font-bold text-orange-400">{entry.recentWins} victorias</div>}
+            {metric === "totalEarned" && <div className="font-bold text-yellow-400">{entry.totalEarned.toLocaleString()}</div>}
           </div>
         </div>
       ))}
@@ -99,7 +102,7 @@ function RankingTable({ entries, metric }: { entries: RankingEntry[]; metric: "w
   )
 }
 
-type Tab = "wins" | "rate" | "active" | "hot"
+type Tab = "wins" | "rate" | "active" | "hot" | "earnings"
 
 export default function LeaderboardPage() {
   const [stats, setStats] = useState<Stats | null>(null)
@@ -197,6 +200,7 @@ export default function LeaderboardPage() {
                 {/* Tabs */}
                 <div className="flex gap-2 flex-wrap">
                   {([
+                    { id: "earnings", label: "Más ganado 💰", icon: TrendingUp },
                     { id: "wins", label: "Más victorias", icon: Trophy },
                     { id: "rate", label: "Mejor racha", icon: Target },
                     { id: "active", label: "Más activos", icon: Activity },
@@ -218,6 +222,7 @@ export default function LeaderboardPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-base">
+                      {tab === "earnings" && "Top por dinero ganado"}
                       {tab === "wins" && "Top por victorias totales"}
                       {tab === "rate" && "Top por porcentaje de victoria (mín. 3 apuestas)"}
                       {tab === "active" && "Apostadores más activos"}
@@ -225,6 +230,7 @@ export default function LeaderboardPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
+                    {tab === "earnings" && <RankingTable entries={stats.rankings.topByEarnings} metric="totalEarned" />}
                     {tab === "wins" && <RankingTable entries={stats.rankings.topByWins} metric="wins" />}
                     {tab === "rate" && <RankingTable entries={stats.rankings.topByRate} metric="winRate" />}
                     {tab === "active" && <RankingTable entries={stats.rankings.topByActivity} metric="participated" />}

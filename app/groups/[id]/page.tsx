@@ -74,9 +74,27 @@ export default function GroupPage() {
 
   // Settings state
   const [settingsLeagues, setSettingsLeagues] = useState<string[]>([])
-  const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
+  const [availableLeagues, setAvailableLeagues] = useState<{ league: string; country: string }[]>([])
+  const [settingsLeagueSearch, setSettingsLeagueSearch] = useState("")
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [settingsSaving, setSettingsSaving] = useState(false)
+
+  const PRIORITY_LEAGUES: Record<string, string[]> = {
+    football: ["UEFA Champions League", "UEFA Europa League", "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "MLS", "Copa Libertadores", "Copa Sudamericana", "Liga MX", "Eredivisie", "Primeira Liga"],
+    basketball: ["NBA", "Euroleague", "EuroBasket", "NCAA"],
+    baseball: ["MLB", "KBO", "NPB", "LMB", "LMBP"],
+  }
+
+  function sortLeagueEntries(leagues: { league: string; country: string }[], sport: string): { league: string; country: string }[] {
+    const priority = PRIORITY_LEAGUES[sport] || []
+    const prioritySet = new Map(priority.map((l, i) => [l.toLowerCase(), i]))
+    return [...leagues].sort((a, b) => {
+      const ai = prioritySet.get(a.league.toLowerCase()) ?? 9999
+      const bi = prioritySet.get(b.league.toLowerCase()) ?? 9999
+      if (ai !== bi) return ai - bi
+      return a.league.localeCompare(b.league)
+    })
+  }
 
   async function authFetch(input: RequestInfo, init?: RequestInit) {
     const supabase = createBrowserSupabaseClient()
@@ -160,12 +178,17 @@ export default function GroupPage() {
   useEffect(() => {
     if (tab !== "settings" || !group?.sport) return
     setSettingsLoading(true)
-    fetch(`/api/events/list?sport=${group.sport}&limit=50`)
+    setSettingsLeagueSearch("")
+    fetch(`/api/events/list?sport=${group.sport}&status=all&limit=200`)
       .then(r => r.json())
       .then(d => {
         const evs: EventRow[] = Array.isArray(d) ? d : (d.events || [])
-        const leagues = [...new Set<string>(evs.map(e => e.league).filter(Boolean))].sort()
-        setAvailableLeagues(leagues)
+        const leagueMap = new Map<string, string>()
+        for (const e of evs) {
+          if (e.league && !leagueMap.has(e.league)) leagueMap.set(e.league, (e as any).country || "")
+        }
+        const entries = [...leagueMap.entries()].map(([league, country]) => ({ league, country }))
+        setAvailableLeagues(sortLeagueEntries(entries, group.sport!))
       })
       .finally(() => setSettingsLoading(false))
   }, [tab, group?.sport])
@@ -480,29 +503,49 @@ export default function GroupPage() {
               <p className="text-sm text-muted-foreground">Cargando torneos disponibles...</p>
             ) : availableLeagues.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hay torneos disponibles para este deporte.</p>
-            ) : (
-              <div className="border rounded-lg overflow-hidden max-h-60 overflow-y-auto">
-                {availableLeagues.map((l) => (
-                  <label key={l} className="flex items-center gap-3 px-3 py-2.5 text-sm border-b last:border-b-0 hover:bg-muted/40 cursor-pointer">
+            ) : (() => {
+              const filtered = availableLeagues.filter(({ league }) =>
+                league.toLowerCase().includes(settingsLeagueSearch.toLowerCase())
+              )
+              return (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="px-3 pt-2 pb-1.5 border-b">
                     <input
-                      type="checkbox"
-                      checked={settingsLeagues.includes(l)}
-                      onChange={(e) => setSettingsLeagues(prev =>
-                        e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
-                      )}
-                      className="rounded"
+                      className="w-full border rounded px-2 py-1 text-xs bg-muted/30 placeholder:text-muted-foreground/60"
+                      placeholder="Buscar torneo..."
+                      value={settingsLeagueSearch}
+                      onChange={(e) => setSettingsLeagueSearch(e.target.value)}
                     />
-                    <span>{l}</span>
-                    {group.leagues?.includes(l) && !settingsLeagues.includes(l) && (
-                      <span className="ml-auto text-xs text-destructive">Se quitará</span>
-                    )}
-                    {!group.leagues?.includes(l) && settingsLeagues.includes(l) && (
-                      <span className="ml-auto text-xs text-primary">Se agregará</span>
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
+                  </div>
+                  <div className="max-h-56 overflow-y-auto">
+                    {filtered.length === 0 ? (
+                      <p className="text-xs text-muted-foreground px-3 py-2">Sin resultados</p>
+                    ) : filtered.map(({ league, country }) => (
+                      <label key={league} className="flex items-center gap-3 px-3 py-2.5 text-sm border-b last:border-b-0 hover:bg-muted/40 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={settingsLeagues.includes(league)}
+                          onChange={(e) => setSettingsLeagues(prev =>
+                            e.target.checked ? [...prev, league] : prev.filter(x => x !== league)
+                          )}
+                          className="rounded"
+                        />
+                        <span className="flex-1 min-w-0">
+                          {country && <span className="text-muted-foreground text-xs">{country} · </span>}
+                          {league}
+                        </span>
+                        {group.leagues?.includes(league) && !settingsLeagues.includes(league) && (
+                          <span className="shrink-0 text-xs text-destructive">Se quitará</span>
+                        )}
+                        {!group.leagues?.includes(league) && settingsLeagues.includes(league) && (
+                          <span className="shrink-0 text-xs text-primary">Se agregará</span>
+                        )}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
             {group.sport && settingsLeagues.length > 0 && (
               <p className="text-xs text-muted-foreground mt-2">
                 {settingsLeagues.length} torneo{settingsLeagues.length !== 1 ? "s" : ""} seleccionado{settingsLeagues.length !== 1 ? "s" : ""}
