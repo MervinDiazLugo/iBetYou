@@ -393,7 +393,7 @@ export default function GroupPage() {
                     <span className="font-semibold text-sm truncate">{ev.away_team}</span>
                   </div>
                 </div>
-                {showApostar && group.status === "active" && (
+                {showApostar && group?.status === "active" && (
                   <Button size="sm" variant="outline" className="gap-1 text-xs ml-2 shrink-0" onClick={() => setBetModalEvent(ev)}>
                     <Plus className="w-3 h-3" /> Apostar
                   </Button>
