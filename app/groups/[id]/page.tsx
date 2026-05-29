@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
+import { GroupBetModal } from "./group-bet-modal"
 
 interface GroupDetail {
   id: string; name: string; code: string; sport: string | null; leagues: string[]; status: string
@@ -76,6 +77,9 @@ export default function GroupPage() {
   const [tab, setTab] = useState<"bets" | "leaderboard" | "members" | "settings">("bets")
   const [loading, setLoading] = useState(true)
   const [takingBetId, setTakingBetId] = useState<string | null>(null)
+
+  // Bet modal state
+  const [betModalEvent, setBetModalEvent] = useState<EventRow | null>(null)
 
   // Invite state
   const [inviteNickname, setInviteNickname] = useState("")
@@ -381,11 +385,9 @@ export default function GroupPage() {
                           </div>
                         </div>
                         {group.status === "active" && (
-                          <Link href={`/groups/${groupId}/create-bet?eventId=${ev.id}`} className="ml-2 shrink-0">
-                            <Button size="sm" variant="outline" className="gap-1 text-xs">
-                              <Plus className="w-3 h-3" /> Apostar
-                            </Button>
-                          </Link>
+                          <Button size="sm" variant="outline" className="gap-1 text-xs ml-2 shrink-0" onClick={() => setBetModalEvent(ev)}>
+                            <Plus className="w-3 h-3" /> Apostar
+                          </Button>
                         )}
                       </div>
                       {/* Predictions */}
@@ -613,6 +615,22 @@ export default function GroupPage() {
         </div>
       )}
     </div>
+
+    {/* Bet creation modal */}
+    {betModalEvent && (
+      <GroupBetModal
+        groupId={groupId}
+        groupBalance={myWallet.balance}
+        initialEvent={betModalEvent}
+        groupSport={group.sport}
+        onClose={() => setBetModalEvent(null)}
+        onSuccess={() => {
+          setBetModalEvent(null)
+          loadBets()
+          loadAll()
+        }}
+      />
+    )}
     </>
   )
 }
