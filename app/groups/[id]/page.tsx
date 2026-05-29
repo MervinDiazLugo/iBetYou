@@ -80,6 +80,7 @@ export default function GroupPage() {
 
   // Bet modal state
   const [betModalEvent, setBetModalEvent] = useState<EventRow | null>(null)
+  const [leavingGroup, setLeavingGroup] = useState(false)
 
   // Invite state
   const [inviteNickname, setInviteNickname] = useState("")
@@ -249,6 +250,19 @@ export default function GroupPage() {
       setInviteNickname("")
     } finally {
       setInviting(false)
+    }
+  }
+
+  async function handleLeaveGroup() {
+    setLeavingGroup(true)
+    try {
+      const res = await authFetch(`/api/groups/${groupId}/leave`, { method: "DELETE" })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al salir del grupo", "error"); return }
+      showToast("Saliste del grupo", "success")
+      router.push("/groups")
+    } finally {
+      setLeavingGroup(false)
     }
   }
 
@@ -535,6 +549,17 @@ export default function GroupPage() {
                 {m.role === "admin" && <Badge variant="secondary">Admin</Badge>}
               </div>
             ))}
+          </div>
+          <div className="mt-6 pt-4 border-t">
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              onClick={handleLeaveGroup}
+              disabled={leavingGroup}
+            >
+              {leavingGroup ? "Saliendo..." : "Salir del grupo"}
+            </Button>
           </div>
         </div>
       )}
