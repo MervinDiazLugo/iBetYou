@@ -31,7 +31,7 @@ export async function ensureDailyGrant(
     })
     .eq("group_id", groupId)
     .eq("user_id", userId)
-    .neq("last_daily_grant", todayUTC)
+    .or(`last_daily_grant.is.null,last_daily_grant.neq.${todayUTC}`)
     .select("user_id")
 
   return !!(updated && updated.length > 0)
