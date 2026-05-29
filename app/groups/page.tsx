@@ -41,6 +41,7 @@ export default function GroupsPage() {
   const [createLeagues, setCreateLeagues] = useState<string[]>([])
   const [availableLeagues, setAvailableLeagues] = useState<string[]>([])
   const [leaguesLoading, setLeaguesLoading] = useState(false)
+  const [leagueSearch, setLeagueSearch] = useState("")
   const [joinCode, setJoinCode] = useState("")
   const [submitting, setSubmitting] = useState(false)
 
@@ -68,18 +69,34 @@ export default function GroupsPage() {
   const userId = user?.id
   useEffect(() => { if (userId) loadGroups() }, [userId])
 
+  const PRIORITY_LEAGUES: Record<string, string[]> = {
+    football: ["UEFA Champions League", "UEFA Europa League", "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "MLS", "Copa Libertadores", "Copa Sudamericana", "Liga MX", "Eredivisie", "Primeira Liga"],
+    basketball: ["NBA", "Euroleague", "EuroBasket", "NCAA"],
+    baseball: ["MLB", "KBO", "NPB", "LMB", "LMBP"],
+  }
+
+  function sortLeagues(leagues: string[], sport: string): string[] {
+    const priority = PRIORITY_LEAGUES[sport] || []
+    const prioritySet = new Map(priority.map((l, i) => [l.toLowerCase(), i]))
+    return [...leagues].sort((a, b) => {
+      const ai = prioritySet.get(a.toLowerCase()) ?? 9999
+      const bi = prioritySet.get(b.toLowerCase()) ?? 9999
+      if (ai !== bi) return ai - bi
+      return a.localeCompare(b)
+    })
+  }
+
   useEffect(() => {
     setCreateLeagues([])
+    setLeagueSearch("")
     if (!createSport) { setAvailableLeagues([]); return }
     setLeaguesLoading(true)
-    fetch(`/api/events/list?sport=${createSport}&limit=50`)
+    fetch(`/api/events/list?sport=${createSport}&status=all&limit=200`)
       .then(r => r.json())
       .then(d => {
         const evs = Array.isArray(d) ? d : (d.events || [])
-        const leagues = [...new Set<string>(
-          evs.map((e: { league: string }) => e.league).filter(Boolean)
-        )].sort() as string[]
-        setAvailableLeagues(leagues)
+        const unique = [...new Set<string>(evs.map((e: { league: string }) => e.league).filter(Boolean))]
+        setAvailableLeagues(sortLeagues(unique, createSport))
       })
       .finally(() => setLeaguesLoading(false))
   }, [createSport])
@@ -100,6 +117,7 @@ export default function GroupsPage() {
       setCreateName("")
       setCreateSport("")
       setCreateLeagues([])
+      setLeagueSearch("")
       loadGroups()
     } finally {
       setSubmitting(false)
@@ -167,30 +185,49 @@ export default function GroupsPage() {
             <option value="baseball">Béisbol</option>
           </select>
           {createSport && (
-            <div className="border rounded px-3 py-2 bg-background">
-              <p className="text-xs text-muted-foreground mb-2">
-                {leaguesLoading ? "Cargando torneos..." : availableLeagues.length === 0 ? "No hay torneos disponibles" : "Torneos (dejar vacío = todos)"}
-              </p>
-              {!leaguesLoading && availableLeagues.length > 0 && (
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {availableLeagues.map(l => (
-                    <label key={l} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 px-1 py-0.5 rounded">
-                      <input
-                        type="checkbox"
-                        checked={createLeagues.includes(l)}
-                        onChange={(e) => setCreateLeagues(prev =>
-                          e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
-                        )}
-                        className="rounded"
-                      />
-                      {l}
-                    </label>
-                  ))}
-                </div>
-              )}
-              {createLeagues.length > 0 && (
-                <p className="text-xs text-primary mt-2">{createLeagues.length} torneo(s) seleccionado(s)</p>
-              )}
+            <div className="border rounded bg-background">
+              <div className="px-3 pt-2 pb-1 border-b">
+                <p className="text-xs text-muted-foreground mb-1.5">
+                  {leaguesLoading ? "Cargando torneos..." : availableLeagues.length === 0 ? "No hay torneos disponibles" : "Torneos (dejar vacío = todos los del deporte)"}
+                </p>
+                {!leaguesLoading && availableLeagues.length > 0 && (
+                  <input
+                    className="w-full border rounded px-2 py-1 text-xs bg-muted/30 placeholder:text-muted-foreground/60"
+                    placeholder="Buscar torneo..."
+                    value={leagueSearch}
+                    onChange={(e) => setLeagueSearch(e.target.value)}
+                  />
+                )}
+              </div>
+              {!leaguesLoading && availableLeagues.length > 0 && (() => {
+                const filtered = availableLeagues.filter(l =>
+                  l.toLowerCase().includes(leagueSearch.toLowerCase())
+                )
+                return (
+                  <>
+                    <div className="max-h-48 overflow-y-auto">
+                      {filtered.length === 0 ? (
+                        <p className="text-xs text-muted-foreground px-3 py-2">Sin resultados</p>
+                      ) : filtered.map(l => (
+                        <label key={l} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-muted/40 px-3 py-1.5 border-b last:border-b-0">
+                          <input
+                            type="checkbox"
+                            checked={createLeagues.includes(l)}
+                            onChange={(e) => setCreateLeagues(prev =>
+                              e.target.checked ? [...prev, l] : prev.filter(x => x !== l)
+                            )}
+                            className="rounded"
+                          />
+                          {l}
+                        </label>
+                      ))}
+                    </div>
+                    {createLeagues.length > 0 && (
+                      <p className="text-xs text-primary px-3 py-1.5 border-t">{createLeagues.length} torneo(s) seleccionado(s)</p>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
           <div className="flex gap-2 justify-end">

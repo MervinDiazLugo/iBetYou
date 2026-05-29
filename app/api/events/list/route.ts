@@ -37,7 +37,9 @@ export async function GET(request: NextRequest) {
     const thirtyDaysFromNow = new Date()
     thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
 
-    if (status) {
+    if (status === "all") {
+      // no status or time filter — used for league discovery
+    } else if (status) {
       query = query.eq('status', status)
       query = query.lte('start_time', thirtyDaysFromNow.toISOString())
     } else {
