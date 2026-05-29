@@ -28,8 +28,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
   if (!notif) return NextResponse.json({ error: "Invitación no encontrada" }, { status: 404 })
   if (notif.group_id !== groupId) return NextResponse.json({ error: "Invitación inválida" }, { status: 400 })
 
-  // Mark notification as read regardless of action
-  await supabase.from("notifications").update({ read: true }).eq("id", notification_id)
+  // Delete notification — once acted upon it shouldn't reappear
+  await supabase.from("notifications").delete().eq("id", notification_id)
 
   if (action === "decline") {
     return NextResponse.json({ success: true, joined: false })

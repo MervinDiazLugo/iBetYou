@@ -147,21 +147,21 @@ export default function GroupPage() {
       setGroup(g)
       setMyRole(data.my_role)
       setMembers(data.members || [])
-      setMyWallet(wallet)
 
-      // Auto-grant daily tokens silently
+      // Await daily grant so balance is correct before page renders
       const todayUTC = new Date().toISOString().split("T")[0]
       if (wallet.last_daily_grant !== todayUTC) {
-        authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
-          .then(r => r.json())
-          .then(d => {
-            if (d.granted) {
-              setMyWallet(w => ({ ...w, balance: Number(d.balance), last_daily_grant: todayUTC }))
-              showToast("+1.000 tokens de grupo acreditados", "success")
-            }
-          })
-          .catch(() => {})
+        try {
+          const grantRes = await authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
+          const grantData = await grantRes.json()
+          if (grantData.granted) {
+            wallet.balance = Number(grantData.balance)
+            wallet.last_daily_grant = todayUTC
+            showToast("+1.000 tokens de grupo acreditados", "success")
+          }
+        } catch {}
       }
+      setMyWallet(wallet)
 
       // Load events for group's sport/leagues
       const params = new URLSearchParams({ limit: "50" })
