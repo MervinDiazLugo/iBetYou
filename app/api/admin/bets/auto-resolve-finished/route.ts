@@ -452,6 +452,80 @@ export async function POST(request: NextRequest) {
       ? body.bet_types.filter((t: string) => RESOLVABLE_TYPES.includes(t))
       : RESOLVABLE_TYPES
 
+    // ── Cancel open bets on finished events (never accepted) ─────────────────
+    let openQuery = supabase
+      .from("bets")
+      .select("id, creator_id, amount, mode, group_id, event_id, bet_type, event:events(status)")
+      .eq("status", "open")
+      .is("acceptor_id", null)
+
+    if (hasEventFilter) openQuery = openQuery.eq("event_id", eventId)
+
+    const { data: openBets } = await openQuery
+    const cancelledOpen: string[] = []
+
+    for (const ob of (openBets || [])) {
+      const evStatus = (Array.isArray((ob as any).event) ? (ob as any).event[0] : (ob as any).event)?.status
+      if (evStatus !== "finished") continue
+
+      if (!dryRun) {
+        const { error: cancelErr } = await supabase
+          .from("bets")
+          .update({ status: "cancelled", resolved_at: new Date().toISOString() })
+          .eq("id", ob.id)
+          .eq("status", "open")
+
+        if (cancelErr) {
+          console.error("OPEN_BET_CANCEL_FAILED", { betId: ob.id, error: cancelErr })
+          continue
+        }
+
+        const stake = Number(ob.amount || 0)
+        const betMode = (ob as any).mode ?? "fantasy"
+        const betGroupId = (ob as any).group_id ?? null
+
+        try {
+          if (betGroupId) {
+            const { creditGroupWallet } = await import("@/lib/group-wallet-utils")
+            await creditGroupWallet(supabase, betGroupId, ob.creator_id, stake)
+          } else {
+            await payoutToMode(supabase, ob.creator_id, stake, betMode)
+          }
+          await supabase.from("transactions").insert({
+            user_id: ob.creator_id,
+            token_type: betGroupId ? "group_fantasy" : tokenTypeForMode(betMode),
+            amount: stake,
+            operation: "bet_cancelled_event_finished",
+            reference_id: ob.id,
+          })
+        } catch (refundErr) {
+          console.error("OPEN_BET_REFUND_FAILED", { betId: ob.id, userId: ob.creator_id, error: refundErr })
+        }
+
+        await supabase.from("arbitration_decisions").insert({
+          bet_id: ob.id,
+          action: "auto_cancel_event_finished",
+          previous_status: "open",
+          new_status: "cancelled",
+          decided_winner_id: null,
+          reason: "Evento finalizado sin aceptante — stake devuelto al creador",
+          details: { bet_type: ob.bet_type, event_id: ob.event_id, group_id: betGroupId },
+          decided_by: "system",
+          source: "system",
+        })
+
+        await createNotifications([{
+          userId: ob.creator_id,
+          type: "bet_cancelled",
+          title: "Apuesta cancelada — evento finalizado",
+          body: "Nadie tomó tu apuesta antes de que terminara el evento. Tu stake fue devuelto.",
+          betId: ob.id,
+        }], supabase)
+      }
+
+      cancelledOpen.push(ob.id)
+    }
+
     let query = supabase
       .from("bets")
       .select(`
@@ -779,6 +853,7 @@ export async function POST(request: NextRequest) {
       success: true,
       dry_run: dryRun,
       bet_types: betTypes,
+      cancelled_open: cancelledOpen.length,
       scanned,
       eligible,
       resolved,
