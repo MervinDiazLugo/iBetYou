@@ -581,10 +581,10 @@ export async function POST(request: NextRequest) {
         creator_selection: (bet as any).creator_selection,
         selection: (bet as any).selection,
       })
-      const isHouseBet = Boolean((bet as any).house_bet)
+      // Treat as house bet if flag is set OR acceptor is null (P2P bets always have an acceptor in "taken" status)
+      const isHouseBet = Boolean((bet as any).house_bet) || (bet as any).acceptor_id === null
       const betForResolver = {
         creator_id: (bet as any).creator_id as string,
-        // For house bets acceptor is null; use "house" sentinel so resolver returns creator_id when user wins
         acceptor_id: (isHouseBet ? "house" : (bet as any).acceptor_id) as string,
       }
 
