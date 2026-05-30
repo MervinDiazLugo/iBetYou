@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
+import { generateAiPredictions } from "@/lib/ai-predictions"
 
 const CRON_SECRET = process.env.CRON_SECRET
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
@@ -32,7 +33,26 @@ export async function GET(request: NextRequest) {
   }
   const userId = profile.id
 
-  // 2. Get top featured upcoming events
+  // 2. Refresh AI predictions for featured events missing them (replaces separate 12:15 cron)
+  {
+    const { data: featuredForPred } = await supabase
+      .from("events")
+      .select("id, external_id, sport, league, home_team, away_team, metadata")
+      .eq("featured", true)
+      .in("status", ["scheduled", "live"])
+    const needsAi = (featuredForPred || []).filter(e => !(e as any).metadata?.predictions?.percent)
+    if (needsAi.length > 0) {
+      try {
+        const aiPreds = await generateAiPredictions(needsAi as any)
+        await Promise.all(Array.from(aiPreds.entries()).map(([eventId, prediction]) => {
+          const ev = needsAi.find(e => e.id === eventId)
+          return supabase.from("events").update({ metadata: { ...((ev as any)?.metadata || {}), predictions: prediction } }).eq("id", eventId)
+        }))
+      } catch (_) {}
+    }
+  }
+
+  // 2b. Get top featured upcoming events
   const minStart = new Date(Date.now() + 30 * 60 * 1000).toISOString()
   const { data: featuredEvents, error: eventsErr } = await supabase
     .from("events")
@@ -65,26 +85,15 @@ export async function GET(request: NextRequest) {
   }
 
   // 4. Ask Claude to pick the most likely winner for each event
-  const eventSummaries = eligibleEvents.map(e => ({
-    id: e.id,
-    sport: e.sport,
-    league: e.league,
-    home: e.home_team,
-    away: e.away_team,
-  }))
+  const matchLines = eligibleEvents
+    .map(e => `${e.id}|${e.sport}|${e.home_team} vs ${e.away_team}`)
+    .join("\n")
 
-  const prompt = `You are a sports analyst for a Venezuelan betting platform.
+  const prompt = `Pick the most likely winner for each match. Football: home team name, away team name, or "Empate". Basketball/baseball: home or away team name only. Favor clear favorites; if even, pick home.
 
-For each match below, pick the most likely winning selection for our house account to bet on.
-- For football: return the home team name, away team name, or "Empate" (draw)
-- For basketball/baseball: return the home or away team name (no draws)
-- Favor clear favorites. If evenly matched, pick home team.
+${matchLines}
 
-Matches:
-${JSON.stringify(eventSummaries, null, 2)}
-
-Respond with ONLY a JSON array: [{"id": 123, "selection": "Team Name"}, ...]
-No explanation. No markdown. Raw JSON array only.`
+Reply ONLY: [{"id":123,"selection":"Team Name"},...]`
 
   let selections: Array<{ id: number; selection: string }> = []
 

@@ -18,10 +18,6 @@
     },
     {
       "path": "/api/cron/refresh-featured-predictions",
-      "schedule": "15 12 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-featured-predictions",
       "schedule": "0 19 * * *"
     }
   ]
