@@ -1217,17 +1217,19 @@ function HomeContent() {
                       >
                         🤝 Apostar P2P
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
-                        onClick={() => {
-                          if (!user) { window.location.href = '/login'; return }
-                          openHouseBetModal(event)
-                        }}
-                      >
-                        🏦 Vs. la casa
-                      </Button>
+                      {(event.metadata as any)?.predictions?.percent && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
+                          onClick={() => {
+                            if (!user) { window.location.href = '/login'; return }
+                            openHouseBetModal(event)
+                          }}
+                        >
+                          🏦 Vs. la casa
+                        </Button>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
