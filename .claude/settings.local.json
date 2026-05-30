@@ -84,7 +84,16 @@
       "Bash(curl \"https://i-bet-you.vercel.app/api/bets/house\" -H \"accept: */*\" -H \"authorization: Bearer eyJhbGciOiJFUzI1NiIsImtpZCI6IjJjNGI2NWM1LTRjMDgtNGEwZS05ZTU0LTJjNDY5OTM4ZGM4YSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJodHRwczovL2FoaXF3cHpxZWtldGl6c2d4eWRtLnN1cGFiYXNlLmNvL2F1dGgvdjEiLCJzdWIiOiI2MGI0N2IyNy0zMTMyLTRjMzktYmYwOC1mZGNjNTgzNmE4MDMiLCJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzc5NzM0NDIyLCJpYXQiOjE3Nzk3MzA4MjIsImVtYWlsIjoidGhlb25laXNiZXR0aW5nQGdtYWlsLmNvbSIsInBob25lIjoiIiwiYXBwX21ldGFkYXRhIjp7InByb3ZpZGVyIjoiZW1haWwiLCJwcm92aWRlcnMiOlsiZW1haWwiXX0sInVzZXJfbWV0YWRhdGEiOnsiY291bnRyeSI6IlZlbmV6dWVsYSIsImVtYWlsIjoidGhlb25laXNiZXR0aW5nQGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJuaWNrbmFtZSI6IlRoZU9uZUlzQmV0dGluZyIsInBob25lX3ZlcmlmaWVkIjpmYWxzZSwic3ViIjoiNjBiNDdiMjctMzEzMi00YzM5LWJmMDgtZmRjYzU4MzZhODAzIn0sInJvbGUiOiJhdXRoZW50aWNhdGVkIiwiYWFsIjoiYWFsMSIsImFtciI6W3sibWV0aG9kIjoicGFzc3dvcmQiLCJ0aW1lc3RhbXAiOjE3Nzk3MzA4MjJ9XSwic2Vzc2lvbl9pZCI6ImNhNGM2ZGY5LWI4MGEtNGE1Mi05ZDcwLWRkMjlhZDJlOTg0NyIsImlzX2Fub255bW91cyI6ZmFsc2V9.thymrpoE795BTIYZZVDGBX1fL4AqDX5WXlUMAc1xgQwg2se_pJV3ycZuFnnvbJRanuAlf5K9x94kZD8iV5rUHw\" -H \"content-type: application/json\" --data-raw \"{\\\\\"userId\\\\\":\\\\\"60b47b27-3132-4c39-bf08-fdcc5836a803\\\\\",\\\\\"eventId\\\\\":46957,\\\\\"betType\\\\\":\\\\\"direct\\\\\",\\\\\"selection\\\\\":\\\\\"home\\\\\",\\\\\"amount\\\\\":20,\\\\\"mode\\\\\":\\\\\"fantasy\\\\\"}\")",
       "Bash(grep -rn \"\\\\.or\\(\\\\`\" app/api/)",
       "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
-      "Bash(python3)"
+      "Bash(python3)",
+      "Bash(neq)",
+      "Bash(mkdir -p \"d:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\events\\\\[id]\")",
+      "Bash(npm run *)",
+      "Bash(Remove-Item \"d:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\events\\\\[id]\\\\predictions\\\\route.ts\" -Force)",
+      "Bash(rm \"d:/Documents/Documentos/p2pBets/app/app/api/events/[id]/predictions/route.ts\" && echo \"deleted\")"
+    ],
+    "additionalDirectories": [
+      "d:\\Documents\\Documentos\\p2pBets\\app\\app\\api\\events",
+      "d:\\Documents\\Documentos\\p2pBets\\app\\app\\api\\events\\[id]\\predictions"
     ]
   }
 }

@@ -143,27 +143,19 @@ Reply ONLY with a JSON array of ${MAX_FEATURED} IDs: [123,456,...]`
     return NextResponse.json({ error: `Failed to parse Claude response: ${e.message}` }, { status: 500 })
   }
 
-  // Clear all current featured flags, then set the new ones
-  const { error: clearErr } = await supabase
-    .from("events")
-    .update({ featured: false })
-    .eq("featured", true)
-
-  if (clearErr) return NextResponse.json({ error: clearErr.message }, { status: 500 })
-
-  if (selectedIds.length > 0) {
-    const { error: setErr } = await supabase
-      .from("events")
-      .update({ featured: true })
-      .in("id", selectedIds)
-
-    if (setErr) return NextResponse.json({ error: setErr.message }, { status: 500 })
-  }
-
-  // Fetch predictions for featured football events and store in metadata (in parallel)
+  // Generate predictions FIRST — only events with confirmed predictions get marked featured
   const selectedEvents = events.filter(e => selectedIds.includes(e.id))
-  const footballEvents = selectedEvents.filter(e => e.sport === "football" && e.external_id?.startsWith("football_"))
+  const eventsWithPredictions = new Set<number>()
   const predictionErrors: string[] = []
+
+  // Events that already have predictions from a previous cron run
+  selectedEvents.forEach(ev => {
+    if ((ev.metadata as any)?.predictions?.percent) eventsWithPredictions.add(ev.id)
+  })
+
+  // Football: try api-sports first
+  const footballEvents = selectedEvents.filter(e => e.sport === "football" && e.external_id?.startsWith("football_"))
+  const footballWithApi = new Set<number>()
 
   const footballResults = await Promise.all(footballEvents.map(async (ev) => {
     const fixtureId = ev.external_id.replace("football_", "")
@@ -196,11 +188,15 @@ Reply ONLY with a JSON array of ${MAX_FEATURED} IDs: [123,456,...]`
         })),
       }
 
+      if (!predictions.percent) return false
+
       const existingMd = ev.metadata || {}
       await supabase.from("events")
         .update({ metadata: { ...existingMd, predictions } })
         .eq("id", ev.id)
 
+      footballWithApi.add(ev.id)
+      eventsWithPredictions.add(ev.id)
       return true
     } catch (e: any) {
       predictionErrors.push(`${ev.external_id}: ${e.message}`)
@@ -209,12 +205,9 @@ Reply ONLY with a JSON array of ${MAX_FEATURED} IDs: [123,456,...]`
   }))
   const predictionsFetched = footballResults.filter(Boolean).length
 
-  // Generate AI predictions for selected events still missing them (baseball, basketball, football without API data)
-  const selectedEventsForAi = selectedEvents.filter(e => {
-    const existing = (e.metadata as any)?.predictions
-    return !existing?.percent
-  })
-  const aiPredictions = await generateAiPredictions(selectedEventsForAi)
+  // AI predictions for: non-football + football events that failed api-sports
+  const needsAi = selectedEvents.filter(e => !footballWithApi.has(e.id) && !eventsWithPredictions.has(e.id))
+  const aiPredictions = await generateAiPredictions(needsAi)
   const aiPredictionsFetched = aiPredictions.size
 
   await Promise.all(Array.from(aiPredictions.entries()).map(async ([eventId, prediction]) => {
@@ -223,9 +216,30 @@ Reply ONLY with a JSON array of ${MAX_FEATURED} IDs: [123,456,...]`
     await supabase.from("events")
       .update({ metadata: { ...existingMd, predictions: prediction } })
       .eq("id", eventId)
+    eventsWithPredictions.add(eventId)
   }))
 
-  console.log("[cron/auto-featured]", { total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
+  // Only mark as featured events that have confirmed predictions
+  const confirmedIds = selectedIds.filter(id => eventsWithPredictions.has(id))
 
-  return NextResponse.json({ success: true, total: events.length, featured: selectedIds, predictionsFetched, aiPredictionsFetched, predictionErrors })
+  const { error: clearErr } = await supabase
+    .from("events")
+    .update({ featured: false })
+    .eq("featured", true)
+
+  if (clearErr) return NextResponse.json({ error: clearErr.message }, { status: 500 })
+
+  if (confirmedIds.length > 0) {
+    const { error: setErr } = await supabase
+      .from("events")
+      .update({ featured: true })
+      .in("id", confirmedIds)
+
+    if (setErr) return NextResponse.json({ error: setErr.message }, { status: 500 })
+  }
+
+  const skipped = selectedIds.filter(id => !eventsWithPredictions.has(id))
+  console.log("[cron/auto-featured]", { total: events.length, confirmed: confirmedIds.length, skipped: skipped.length, predictionsFetched, aiPredictionsFetched, predictionErrors })
+
+  return NextResponse.json({ success: true, total: events.length, featured: confirmedIds, skipped, predictionsFetched, aiPredictionsFetched, predictionErrors })
 }

@@ -197,7 +197,6 @@ function HomeContent() {
   const [houseBetType, setHouseBetType] = useState<string>("direct")
   const [houseBetAmount, setHouseBetAmount] = useState("")
   const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
-  const [houseBetLoadingPredictions, setHouseBetLoadingPredictions] = useState(false)
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
   const sessionTokenRef = useRef<string | null>(null)
@@ -675,41 +674,13 @@ function HomeContent() {
     const percent = (event.metadata as any)?.predictions?.percent
     const { odds, runLineOdds } = percent ? calcOddsFromPercent(percent) : { odds: null, runLineOdds: null }
 
-    // Default to first non-direct tab if predictions missing
-    const hasPredictions = odds !== null
-    const houseBetTypes = getHouseBetTypes(event.sport)
-    const defaultType = hasPredictions
-      ? "direct"
-      : (houseBetTypes.find(t => t.id !== "direct")?.id ?? "direct")
-
     setHouseBetModal({ event, odds, runLineOdds })
     setHouseBetSelection(null)
     setHouseBetExactScore("")
     setHouseBetHomeGoals("")
     setHouseBetAwayGoals("")
     setHouseBetAmount("")
-    setHouseBetType(defaultType)
-
-    // Auto-fetch predictions in background if missing
-    if (!hasPredictions) {
-      setHouseBetLoadingPredictions(true)
-      fetch(`/api/events/${event.id}/predictions`, { method: "POST" })
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.predictions?.percent) {
-            const { odds: newOdds, runLineOdds: newRL } = calcOddsFromPercent(data.predictions.percent)
-            setHouseBetModal(prev => prev ? {
-              ...prev,
-              odds: newOdds,
-              runLineOdds: newRL,
-              event: { ...prev.event, metadata: { ...(prev.event.metadata as any || {}), predictions: data.predictions } },
-            } : prev)
-            setHouseBetType("direct")
-          }
-        })
-        .catch(() => {})
-        .finally(() => setHouseBetLoadingPredictions(false))
-    }
+    setHouseBetType("direct")
   }
 
   const getActiveHouseOdds = (): number | null => {
@@ -1871,30 +1842,19 @@ function HomeContent() {
               })()}
               {/* Bet type tabs */}
               <div className="flex gap-2 flex-wrap">
-                {houseBetTypes.map(bt => {
-                  const isDirectWithoutOdds = bt.id === "direct" && !houseBetModal.odds
-                  return (
-                    <Button
-                      key={bt.id}
-                      variant={houseBetType === bt.id ? "default" : "outline"}
-                      size="sm"
-                      disabled={isDirectWithoutOdds && houseBetLoadingPredictions}
-                      onClick={() => { if (!isDirectWithoutOdds || !houseBetLoadingPredictions) { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") } }}
-                    >
-                      {bt.label}
-                      {isDirectWithoutOdds && houseBetLoadingPredictions && <span className="ml-1 opacity-60">⏳</span>}
-                    </Button>
-                  )
-                })}
+                {houseBetTypes.map(bt => (
+                  <Button
+                    key={bt.id}
+                    variant={houseBetType === bt.id ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
+                  >
+                    {bt.label}
+                  </Button>
+                ))}
               </div>
-              {/* Direct — loading predicciones */}
-              {houseBetType === "direct" && !houseBetModal.odds && houseBetLoadingPredictions && (
-                <div className="text-center text-sm text-muted-foreground py-4 animate-pulse">
-                  Cargando predicciones...
-                </div>
-              )}
-              {/* Direct — no predicciones y no cargando */}
-              {houseBetType === "direct" && !houseBetModal.odds && !houseBetLoadingPredictions && (
+              {/* Direct — no predicciones */}
+              {houseBetType === "direct" && !houseBetModal.odds && (
                 <div className="text-center text-sm text-muted-foreground py-4">
                   No hay predicciones disponibles para este evento.
                 </div>
