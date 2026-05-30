@@ -2065,7 +2065,7 @@ function HomeContent() {
                     <div className="flex justify-between text-muted-foreground">
                       <span>Balance disponible</span>
                       <span className={stake > walletBal ? "text-red-500 font-medium" : "font-medium text-foreground"}>
-                        {walletBal.toLocaleString()} tokens
+                        {walletBal.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} tokens
                       </span>
                     </div>
                     {activeOdds !== null && stake === 0 && (
