@@ -610,36 +610,18 @@ export default function BackofficeEvents() {
       })
       const data = await res.json()
       if (res.ok) {
-        const msg = data.message || `IA destacó ${data.featured?.length ?? 0} eventos, ${data.predictionsFetched} predicciones`
-        showToast(msg, 'success')
+        const confirmed = data.featured?.length ?? 0
+        const skipped = data.skipped?.length ?? 0
+        const preds = (data.predictionsFetched ?? 0) + (data.aiPredictionsFetched ?? 0)
+        const skipMsg = skipped > 0 ? ` · ${skipped} sin predicciones` : ''
+        showToast(`${confirmed} eventos destacados · ${preds} predicciones${skipMsg}`, 'success')
         fetchSavedEvents(0)
         fetchFeaturedPanel()
       } else {
-        showToast(data.error || 'Error al ejecutar auto-featured', 'error')
+        showToast(data.error || 'Error al ejecutar auto-destacar', 'error')
       }
     } catch {
-      showToast('Error al ejecutar auto-featured', 'error')
-    }
-  }
-
-  async function handleRefreshFeaturedPredictions() {
-    try {
-      const res = await authFetch('/api/admin/events', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'refresh_featured_predictions' }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        const errMsg = data.errors?.length ? ` (${data.errors.length} errores)` : ''
-        showToast(`Predicciones actualizadas: ${data.fetched}/${data.total}${errMsg}`, data.errors?.length ? 'error' : 'success')
-        fetchSavedEvents(0)
-        fetchFeaturedPanel()
-      } else {
-        showToast(data.error || 'Error al actualizar predicciones', 'error')
-      }
-    } catch {
-      showToast('Error al actualizar predicciones', 'error')
+      showToast('Error al ejecutar auto-destacar', 'error')
     }
   }
 
@@ -850,13 +832,9 @@ export default function BackofficeEvents() {
           <p className="text-muted-foreground">Gestiona los eventos disponibles para apuestas</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={handleRunAutoFeatured} title="IA selecciona los mejores eventos para destacar">
+          <Button variant="outline" onClick={handleRunAutoFeatured} title="IA selecciona eventos destacados y genera predicciones para todos">
             <Star className="h-4 w-4 mr-2 text-amber-400" />
-            Auto-Destacar IA
-          </Button>
-          <Button variant="outline" onClick={handleRefreshFeaturedPredictions} title="Actualiza predicciones IA para todos los eventos destacados">
-            <Star className="h-4 w-4 mr-2 text-amber-400" />
-            Predicciones ⭐
+            ⭐ Destacar + Predicciones IA
           </Button>
           <Button variant="outline" onClick={handleCleanupNoBets}>
             <Trash2 className="h-4 w-4 mr-2" />
@@ -1124,13 +1102,13 @@ export default function BackofficeEvents() {
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">{featured.length} eventos destacados · {withPredictions.length} con predicciones</span>
               {featured.length > 0 && featured.length > withPredictions.length && (
-                <span className="text-xs text-amber-400">{featured.length - withPredictions.length} sin estadísticas — usa &quot;Predicciones ⭐&quot; para actualizarlas</span>
+                <span className="text-xs text-amber-400">{featured.length - withPredictions.length} sin predicciones — usa &quot;⭐ Destacar + Predicciones IA&quot; para regenerar</span>
               )}
             </div>
             {loadingFeatured ? (
               <Card><CardContent className="py-8 text-center text-muted-foreground">Cargando eventos destacados...</CardContent></Card>
             ) : featured.length === 0 ? (
-              <Card><CardContent className="py-8 text-center text-muted-foreground">No hay eventos destacados. Usa &quot;Auto-Destacar IA&quot; para seleccionarlos.</CardContent></Card>
+              <Card><CardContent className="py-8 text-center text-muted-foreground">No hay eventos destacados. Usa &quot;⭐ Destacar + Predicciones IA&quot; para seleccionarlos.</CardContent></Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {featured.map(event => {
@@ -1192,7 +1170,7 @@ export default function BackofficeEvents() {
                           </div>
                         ) : (
                           <div className="border-t pt-2 text-xs text-muted-foreground">
-                            {event.sport === 'football' ? '⚠️ Sin predicciones — pulsa "Predicciones ⭐" para obtenerlas' : 'ℹ️ Predicciones solo disponibles para fútbol'}
+                            ⚠️ Sin predicciones — usa &quot;⭐ Destacar + Predicciones IA&quot; para regenerar
                           </div>
                         )}
                       </CardContent>
