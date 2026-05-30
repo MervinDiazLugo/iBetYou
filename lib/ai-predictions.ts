@@ -22,7 +22,7 @@ export async function generateAiPredictions(
   const result = new Map<number, AiPrediction>()
   if (!ANTHROPIC_API_KEY) return result
 
-  const needsPredictions = events.filter(e => !e.metadata?.predictions)
+  const needsPredictions = events.filter(e => !(e.metadata as any)?.predictions?.percent)
   if (!needsPredictions.length) return result
 
   const matchList = needsPredictions

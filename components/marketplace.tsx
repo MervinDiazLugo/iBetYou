@@ -424,12 +424,17 @@ function HomeContent() {
     return () => clearTimeout(timer)
   }, [searchTerm])
 
-  // Load featured events independently of sport filter
+  // Load featured events independently of sport filter; refresh every 5 min to pick up new predictions
   useEffect(() => {
-    fetch("/api/events/list?featured=true&limit=16")
-      .then(r => r.json())
-      .then(data => setFeaturedEvents(Array.isArray(data) ? data : data.events || []))
-      .catch(() => {})
+    function loadFeatured() {
+      fetch("/api/events/list?featured=true&limit=16")
+        .then(r => r.json())
+        .then(data => setFeaturedEvents(Array.isArray(data) ? data : data.events || []))
+        .catch(() => {})
+    }
+    loadFeatured()
+    const interval = setInterval(loadFeatured, 5 * 60 * 1000)
+    return () => clearInterval(interval)
   }, [])
 
   // Debounced exact_score odds fetch for house bet modal
