@@ -1117,6 +1117,11 @@ function HomeContent() {
           const visibleFeatured = featuredEvents
             .filter(e => selectedSport === "all" || e.sport === selectedSport)
             .filter(e => selectedLeague === "all" || e.league === selectedLeague)
+            .sort((a, b) => {
+              const aHas = !!( (a.metadata as any)?.predictions?.percent)
+              const bHas = !!( (b.metadata as any)?.predictions?.percent)
+              return (bHas ? 1 : 0) - (aHas ? 1 : 0)
+            })
           return visibleFeatured.length > 0 ? (
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-4">
