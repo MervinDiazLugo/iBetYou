@@ -699,39 +699,41 @@ export async function POST(request: NextRequest) {
         const stake = Number((bet as any).amount || 0)
         const betMode = (bet as any).mode ?? "fantasy"
         const userWon = winnerId !== "house"
+        const isSimulation = Boolean((bet as any).is_simulation)
 
-        if (userWon) {
-          try {
-            await payoutToMode(supabase, winnerId, potentialPayout, betMode)
-          } catch (payoutErr) {
-            failed += 1
-            console.error("HOUSE_BET_PAYOUT_FAILED", { userId: winnerId, amount: potentialPayout, betId: (bet as any).id, error: payoutErr })
-            const { error: revertErr } = await supabase.from("bets").update({ status: (bet as any).status, resolved_at: null, winner_id: null }).eq("id", (bet as any).id).eq("status", "resolved")
-            if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: (bet as any).id, error: revertErr })
-            results.push({ bet_id: (bet as any).id, status: "failed", reason: "User payout failed" })
-            continue
+        if (!isSimulation) {
+          if (userWon) {
+            try {
+              await payoutToMode(supabase, winnerId, potentialPayout, betMode)
+            } catch (payoutErr) {
+              failed += 1
+              console.error("HOUSE_BET_PAYOUT_FAILED", { userId: winnerId, amount: potentialPayout, betId: (bet as any).id, error: payoutErr })
+              const { error: revertErr } = await supabase.from("bets").update({ status: (bet as any).status, resolved_at: null, winner_id: null }).eq("id", (bet as any).id).eq("status", "resolved")
+              if (revertErr) console.error("PAYOUT_REVERT_FAILED", { betId: (bet as any).id, error: revertErr })
+              results.push({ bet_id: (bet as any).id, status: "failed", reason: "User payout failed" })
+              continue
+            }
+            await supabase.from("transactions").insert({
+              user_id: winnerId,
+              token_type: tokenTypeForMode(betMode),
+              amount: potentialPayout,
+              operation: `house_bet_won_${betType}`,
+              reference_id: (bet as any).id,
+            })
+          } else {
+            try {
+              await houseWalletCredit(supabase, potentialPayout, betMode)
+            } catch (creditErr) {
+              console.error("HOUSE_WALLET_CREDIT_FAILED", { amount: potentialPayout, betId: (bet as any).id, error: creditErr })
+            }
+            await supabase.from("transactions").insert({
+              user_id: (bet as any).creator_id,
+              token_type: tokenTypeForMode(betMode),
+              amount: -stake,
+              operation: `house_bet_lost_${betType}`,
+              reference_id: (bet as any).id,
+            })
           }
-          await supabase.from("transactions").insert({
-            user_id: winnerId,
-            token_type: tokenTypeForMode(betMode),
-            amount: potentialPayout,
-            operation: `house_bet_won_${betType}`,
-            reference_id: (bet as any).id,
-          })
-        } else {
-          // User lost — house reclaims reservation + stake (stake was already deducted at creation)
-          try {
-            await houseWalletCredit(supabase, potentialPayout, betMode)
-          } catch (creditErr) {
-            console.error("HOUSE_WALLET_CREDIT_FAILED", { amount: potentialPayout, betId: (bet as any).id, error: creditErr })
-          }
-          await supabase.from("transactions").insert({
-            user_id: (bet as any).creator_id,
-            token_type: tokenTypeForMode(betMode),
-            amount: -stake,
-            operation: `house_bet_lost_${betType}`,
-            reference_id: (bet as any).id,
-          })
         }
 
         await supabase.from("arbitration_decisions").insert({
@@ -755,24 +757,26 @@ export async function POST(request: NextRequest) {
           source: "system",
         })
 
-        const matchInfo = `${eventRow.home_team} vs ${eventRow.away_team}` +
-          (eventRow.home_score !== null && eventRow.away_score !== null ? ` (${eventRow.home_score}-${eventRow.away_score})` : "")
-
-        await createNotifications([{
-          userId: (bet as any).creator_id,
-          type: userWon ? "bet_resolved_win" : "bet_resolved_loss",
-          title: userWon
-            ? `¡Ganaste ${potentialPayout.toFixed(0)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`
-            : "Perdiste tu apuesta contra la casa",
-          body: matchInfo,
-          betId: (bet as any).id,
-        }], supabase)
+        if (!isSimulation) {
+          const matchInfo = `${eventRow.home_team} vs ${eventRow.away_team}` +
+            (eventRow.home_score !== null && eventRow.away_score !== null ? ` (${eventRow.home_score}-${eventRow.away_score})` : "")
+          await createNotifications([{
+            userId: (bet as any).creator_id,
+            type: userWon ? "bet_resolved_win" : "bet_resolved_loss",
+            title: userWon
+              ? `¡Ganaste ${potentialPayout.toFixed(0)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`
+              : "Perdiste tu apuesta contra la casa",
+            body: matchInfo,
+            betId: (bet as any).id,
+          }], supabase)
+        }
 
         resolved += 1
         results.push({
           bet_id: (bet as any).id,
           bet_type: betType,
           house_bet: true,
+          is_simulation: isSimulation,
           status: "resolved",
           winner_id: winnerId,
           user_won: userWon,
