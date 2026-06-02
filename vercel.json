@@ -9,16 +9,8 @@
       "schedule": "0 12 * * *"
     },
     {
-      "path": "/api/cron/sync-predictions",
-      "schedule": "10 12 * * *"
-    },
-    {
       "path": "/api/cron/auto-bets",
       "schedule": "30 12 * * *"
-    },
-    {
-      "path": "/api/cron/refresh-featured-predictions",
-      "schedule": "0 19 * * *"
     }
   ]
 }
