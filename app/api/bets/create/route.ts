@@ -18,11 +18,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Parse body after JWT is validated
-    const { userId, eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode, group_id } = await request.json()
-    if (userId && userId !== user.id) {
-      return NextResponse.json({ error: "Unauthorized user scope" }, { status: 403 })
-    }
+    // Parse body after JWT is validated — user.id from JWT is authoritative, userId from body is ignored
+    const { eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode, group_id } = await request.json()
 
     if (rawMode !== "real" && rawMode !== "fantasy" && rawMode !== undefined && rawMode !== null) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })

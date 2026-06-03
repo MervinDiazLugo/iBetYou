@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     // Get profile
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id, email, nickname, role, kyc_status, country, is_banned, betting_blocked_until, false_claim_count, created_at")
       .eq("id", userId)
       .single()
 

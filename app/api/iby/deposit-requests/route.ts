@@ -36,6 +36,10 @@ export async function POST(request: NextRequest) {
   if (!deposit_account_id) return NextResponse.json({ error: "Cuenta de depósito requerida" }, { status: 400 })
   if (!amount || Number(amount) <= 0) return NextResponse.json({ error: "Monto inválido" }, { status: 400 })
   if (!transaction_date) return NextResponse.json({ error: "Fecha requerida" }, { status: 400 })
+  const parsedDate = new Date(transaction_date)
+  if (isNaN(parsedDate.getTime())) return NextResponse.json({ error: "Fecha inválida" }, { status: 400 })
+  const oneDayFromNow = new Date(Date.now() + 24 * 60 * 60 * 1000)
+  if (parsedDate > oneDayFromNow) return NextResponse.json({ error: "La fecha no puede ser futura" }, { status: 400 })
 
   const supabase = createAdminSupabaseClient()
 
