@@ -411,8 +411,8 @@ export default function BetDetailPage() {
       ? (bet.acceptor?.nickname || "Aceptante")
       : ""
   const potentialWin = bet.amount * bet.multiplier + bet.amount
-  // Net gain = what you earn from the opponent's stake
-  const creatorNetGain = bet.amount * bet.multiplier
+  // Net gain = opponent's stake minus own fee (symmetric with acceptorNetGain)
+  const creatorNetGain = bet.amount * bet.multiplier - Number(bet.fee_amount || 0)
   // What the acceptor must put up (symmetric: same amount; asymmetric: amount * multiplier)
   const acceptorStake = isAsymmetric ? bet.amount * bet.multiplier : bet.amount
   const acceptorFee = acceptorStake * 0.03
