@@ -474,7 +474,7 @@ export default function SimulationPage() {
                       <CardContent className="flex items-center justify-center">
                         <ResponsiveContainer width="100%" height={220}>
                           <PieChart>
-                            <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={({ name, percent }: { name: string; percent?: number }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
+                            <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value" label={(props: any) => `${props.name ?? ""} ${(((props.percent) ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
                               <Cell fill={CHART_COLORS.win} />
                               <Cell fill={CHART_COLORS.loss} />
                             </Pie>
