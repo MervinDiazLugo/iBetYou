@@ -17,6 +17,8 @@ import { useToast } from "@/components/toast"
 import { useMode } from "@/components/mode-provider"
 import { CreateBetForm } from "@/components/create-bet-form"
 import { Countdown } from "@/components/countdown"
+import { calcDirectOdds, calcRunLineOddsAll } from "@/lib/house-odds"
+import { calculateTotalPrize } from "@/lib/bet-resolution"
 
 interface BetWithDetails extends Bet {
   event: Event
@@ -649,30 +651,11 @@ function HomeContent() {
     ? inProgressBets.filter((bet) => bet.status === 'open' && bet.creator_id === user.id).length
     : 0
 
-  function calcOddsFromPercent(percent: any) {
-    const home = parseFloat(String(percent.home).replace("%", "")) / 100
-    const away = parseFloat(String(percent.away).replace("%", "")) / 100
-    const draw = percent.draw !== undefined ? parseFloat(String(percent.draw).replace("%", "")) / 100 : undefined
-    const odds = home > 0 && away > 0 ? {
-      home: parseFloat((1 / (home * 1.10)).toFixed(4)),
-      away: parseFloat((1 / (away * 1.10)).toFixed(4)),
-      ...(draw !== undefined && draw > 0 ? { draw: parseFloat((1 / (draw * 1.10)).toFixed(4)) } : {}),
-    } : null
-    const homeWinProb = home
-    const runLineOdds = homeWinProb > 0 && homeWinProb < 1 ? (() => {
-      const pHomeRL = homeWinProb * 0.68
-      const pAwayRL = 1 - pHomeRL
-      return {
-        home_rl: parseFloat((1 / (pHomeRL * 1.10)).toFixed(2)),
-        away_rl: parseFloat((1 / (pAwayRL * 1.10)).toFixed(2)),
-      }
-    })() : null
-    return { odds, runLineOdds }
-  }
-
   const openHouseBetModal = (event: Event) => {
     const percent = (event.metadata as any)?.predictions?.percent
-    const { odds, runLineOdds } = percent ? calcOddsFromPercent(percent) : { odds: null, runLineOdds: null }
+    const odds = percent ? calcDirectOdds(percent) : null
+    const homeProb = percent ? parseFloat(String(percent.home).replace("%", "")) / 100 : 0
+    const runLineOdds = percent && homeProb > 0 && homeProb < 1 ? calcRunLineOddsAll(homeProb) : null
 
     setHouseBetModal({ event, odds, runLineOdds })
     setHouseBetSelection(null)
@@ -771,7 +754,7 @@ function HomeContent() {
               direct: "Directa", exact_score: "Score Exacto",
               first_scorer: "1er Anotador", half_time: "Medio Tiempo",
             }
-            const potentialWin = bet.amount * bet.multiplier + bet.amount
+            const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
             const isOwn = user?.id === bet.creator_id
             return (
               <div className="space-y-4">
@@ -1428,7 +1411,7 @@ function HomeContent() {
                     first_scorer: "1er Anotador",
                     half_time: "Medio Tiempo",
                   }
-                  const potentialWin = bet.amount * bet.multiplier + bet.amount
+                  const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
                   const riskBadge = getRiskBadge(bet)
 
                   return (
@@ -1582,7 +1565,7 @@ function HomeContent() {
                   first_scorer: "1er Anotador",
                   half_time: "Medio Tiempo",
                 }
-                const potentialWin = bet.amount * bet.multiplier + bet.amount
+                const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
 
                 return (
                 <Card
@@ -1681,7 +1664,7 @@ function HomeContent() {
               return betsForMode.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                 {betsForMode.slice(0, 5).map((bet) => {
-                  const potentialWin = bet.amount * bet.multiplier + bet.amount
+                  const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
                   const betTypeLabels: Record<string, string> = {
                     direct: "Directa",
                     exact_score: "Resultado Exacto",

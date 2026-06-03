@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { supportsPeerResolution as supportsPeerResolutionForType } from "@/lib/bet-resolution"
+import { supportsPeerResolution as supportsPeerResolutionForType, calculateTotalPrize } from "@/lib/bet-resolution"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatHouseBetTypeLabel, formatHouseSelection } from "@/lib/bet-labels"
 import { useToast } from "@/components/toast"
@@ -410,7 +410,7 @@ export default function BetDetailPage() {
     : bet.winner_id === bet.acceptor_id
       ? (bet.acceptor?.nickname || "Aceptante")
       : ""
-  const potentialWin = bet.amount * bet.multiplier + bet.amount
+  const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
   // Net gain = opponent's stake minus own fee (symmetric with acceptorNetGain)
   const creatorNetGain = bet.amount * bet.multiplier - Number(bet.fee_amount || 0)
   // What the acceptor must put up (symmetric: same amount; asymmetric: amount * multiplier)
