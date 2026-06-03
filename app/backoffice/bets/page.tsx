@@ -157,6 +157,12 @@ export default function BackofficeBets() {
     defaultReason: string
   } | null>(null)
   const [reasonModalText, setReasonModalText] = useState<string>("")
+  const [manualScoreModal, setManualScoreModal] = useState<{
+    eventId: number; homeTeam: string; awayTeam: string
+  } | null>(null)
+  const [manualScoreHome, setManualScoreHome] = useState("")
+  const [manualScoreAway, setManualScoreAway] = useState("")
+  const [manualScoreSaving, setManualScoreSaving] = useState(false)
   const liveRefreshTimeoutRef = useRef<number | null>(null)
 
   async function authFetch(input: RequestInfo | URL, init?: RequestInit) {
@@ -170,6 +176,42 @@ export default function BackofficeBets() {
       ...init,
       headers,
     })
+  }
+
+  async function handleManualScoreSave() {
+    if (!manualScoreModal) return
+    const home = Number(manualScoreHome)
+    const away = Number(manualScoreAway)
+    if (!Number.isFinite(home) || !Number.isFinite(away) || home < 0 || away < 0) {
+      showToast("Marcadores deben ser números válidos ≥ 0", "error"); return
+    }
+    setManualScoreSaving(true)
+    try {
+      const res = await authFetch("/api/admin/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "set_score",
+          id: manualScoreModal.eventId,
+          set_score: { home_score: home, away_score: away, status: "finished" },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al guardar marcador", "error"); return }
+      showToast(`Marcador guardado: ${home}-${away}`, "success")
+      setManualScoreModal(null)
+      setManualScoreHome("")
+      setManualScoreAway("")
+      // Auto-resolve bets for this event
+      await authFetch("/api/admin/bets/auto-resolve-finished", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ event_id: manualScoreModal.eventId }),
+      })
+      fetchBets({ silent: true })
+    } finally {
+      setManualScoreSaving(false)
+    }
   }
 
   async function fetchBets(options?: { silent?: boolean }) {
@@ -1063,6 +1105,21 @@ export default function BackofficeBets() {
                           Marcador final: {bet.event.home_team} {bet.event.home_score} - {bet.event.away_score} {bet.event.away_team}
                         </div>
                       )}
+                      {bet.event.status === 'finished' && !hasFinalScore && (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-amber-400 font-medium">⚠ Sin marcador</span>
+                          <button
+                            className="text-xs text-primary underline underline-offset-2 hover:text-primary/80"
+                            onClick={() => {
+                              setManualScoreModal({ eventId: bet.event_id, homeTeam: bet.event.home_team, awayTeam: bet.event.away_team })
+                              setManualScoreHome("")
+                              setManualScoreAway("")
+                            }}
+                          >
+                            Ingresar marcador
+                          </button>
+                        </div>
+                      )}
                       {hasHalftime && (
                         <div className="text-xs text-muted-foreground mt-1">
                           Medio tiempo: {bet.event.home_team} {halftimeHome} - {halftimeAway} {bet.event.away_team}
@@ -1321,6 +1378,55 @@ export default function BackofficeBets() {
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {/* Manual Score Modal */}
+      {manualScoreModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <Card className="w-full max-w-sm">
+            <CardHeader>
+              <CardTitle className="text-base">Ingresar marcador manual</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {manualScoreModal.homeTeam} vs {manualScoreModal.awayTeam}
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">{manualScoreModal.homeTeam}</div>
+                  <input
+                    type="number" min={0} max={99} placeholder="0"
+                    value={manualScoreHome}
+                    onChange={e => setManualScoreHome(e.target.value)}
+                    className="w-full border border-border rounded-md px-2 py-3 text-center text-2xl font-bold bg-background"
+                    autoFocus
+                  />
+                </div>
+                <span className="text-2xl font-bold text-muted-foreground">-</span>
+                <div className="flex-1 text-center">
+                  <div className="text-xs text-muted-foreground mb-1">{manualScoreModal.awayTeam}</div>
+                  <input
+                    type="number" min={0} max={99} placeholder="0"
+                    value={manualScoreAway}
+                    onChange={e => setManualScoreAway(e.target.value)}
+                    className="w-full border border-border rounded-md px-2 py-3 text-center text-2xl font-bold bg-background"
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Al guardar, el evento se marca como <strong>finished</strong> y se auto-resuelven todas las apuestas de ese evento.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setManualScoreModal(null)} disabled={manualScoreSaving}>
+                  Cancelar
+                </Button>
+                <Button className="flex-1" onClick={handleManualScoreSave} disabled={manualScoreSaving || manualScoreHome === "" || manualScoreAway === ""}>
+                  {manualScoreSaving ? "Guardando..." : "Guardar y resolver"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
