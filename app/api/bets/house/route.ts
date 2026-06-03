@@ -20,31 +20,25 @@ const MAX_STAKE = 100_000
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, eventId, betType, selection, amount: rawAmount, mode: rawMode } = await request.json()
-
-    // Validate and normalize mode
-    const betMode: "fantasy" | "real" = rawMode === "real" ? "real" : "fantasy"
-
-    // Validate auth
+    // Validate JWT before touching body — user.id from token is source of truth
     const authHeader = request.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
     const token = authHeader.slice(7)
     const serverSupabase = createServerSupabaseClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await serverSupabase.auth.getUser(token)
-
+    const { data: { user }, error: authError } = await serverSupabase.auth.getUser(token)
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    if (userId !== user.id) {
+    // Parse body after JWT is validated
+    const { userId, eventId, betType, selection, amount: rawAmount, mode: rawMode } = await request.json()
+    if (userId && userId !== user.id) {
       return NextResponse.json({ error: "Unauthorized user scope" }, { status: 403 })
     }
+
+    const betMode: "fantasy" | "real" = rawMode === "real" ? "real" : "fantasy"
 
     // Validate required fields
     if (!eventId || !betType || !selection || rawAmount === undefined || rawAmount === null) {
@@ -326,64 +320,7 @@ export async function POST(request: NextRequest) {
       currentBalance = wallet.balance_fantasy
     }
 
-    // Deduct user balance with optimistic lock
-    if (betMode === "real") {
-      const { data: ibcUpdated, error: walletUpdateError } = await supabase
-        .from("iby_wallets")
-        .update({ balance: currentBalance - stake })
-        .eq("user_id", user.id)
-        .eq("balance", currentBalance)
-        .eq("balance_blocked", currentBalanceBlocked)
-        .select("user_id")
-      if (walletUpdateError) {
-        return NextResponse.json({ error: "Failed to update iBY wallet" }, { status: 400 })
-      }
-      if (!ibcUpdated || ibcUpdated.length === 0) {
-        return NextResponse.json(
-          { error: "Tu saldo cambió. Recarga e intenta de nuevo." },
-          { status: 409 }
-        )
-      }
-    } else {
-      const { data: fantasyUpdated, error: walletUpdateError } = await supabase
-        .from("wallets")
-        .update({ balance_fantasy: currentBalance - stake })
-        .eq("user_id", user.id)
-        .eq("balance_fantasy", currentBalance)
-        .select("user_id")
-      if (walletUpdateError) {
-        return NextResponse.json({ error: "Failed to update wallet" }, { status: 400 })
-      }
-      if (!fantasyUpdated || fantasyUpdated.length === 0) {
-        return NextResponse.json(
-          { error: "Tu saldo cambió. Recarga e intenta de nuevo." },
-          { status: 409 }
-        )
-      }
-    }
-
-    // Reserve house liability
-    try {
-      await houseWalletDebit(supabase, houseRisk, betMode)
-    } catch (houseDebitErr) {
-      // Rollback user deduction
-      try {
-        await payoutToMode(supabase, user.id, stake, betMode)
-      } catch (rollbackErr) {
-        console.error("ROLLBACK_FAILED after house debit error", {
-          userId: user.id,
-          stake,
-          betMode,
-          error: rollbackErr,
-        })
-      }
-      return NextResponse.json(
-        { error: "La casa no tiene fondos disponibles para esta apuesta" },
-        { status: 400 }
-      )
-    }
-
-    // Insert bet
+    // 1. Insert bet FIRST (payment ordering invariant: status before money)
     const { data: bet, error: betError } = await supabase
       .from("bets")
       .insert({
@@ -407,28 +344,49 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (betError) {
-      // Rollback user deduction and house debit
-      try {
-        await payoutToMode(supabase, user.id, stake, betMode)
-      } catch (rollbackErr) {
-        console.error("ROLLBACK_FAILED after bet insert error (user)", {
-          userId: user.id,
-          stake,
-          betMode,
-          error: rollbackErr,
-        })
+      return NextResponse.json({ error: `Failed to create bet: ${betError.message}` }, { status: 400 })
+    }
+
+    // 2. Deduct user balance with optimistic lock
+    if (betMode === "real") {
+      const { data: ibcUpdated, error: walletUpdateError } = await supabase
+        .from("iby_wallets")
+        .update({ balance: currentBalance - stake })
+        .eq("user_id", user.id)
+        .eq("balance", currentBalance)
+        .eq("balance_blocked", currentBalanceBlocked)
+        .select("user_id")
+      if (walletUpdateError || !ibcUpdated || ibcUpdated.length === 0) {
+        await supabase.from("bets").update({ status: "cancelled" }).eq("id", bet.id)
+        const msg = (!ibcUpdated || ibcUpdated.length === 0)
+          ? "Tu saldo cambió. Recarga e intenta de nuevo."
+          : "Failed to update iBY wallet"
+        return NextResponse.json({ error: msg }, { status: 409 })
       }
-      try {
-        await houseWalletCredit(supabase, houseRisk, betMode)
-      } catch (houseRollbackErr) {
-        console.error("ROLLBACK_FAILED after bet insert error (house)", {
-          houseRisk,
-          betMode,
-          error: houseRollbackErr,
-        })
+    } else {
+      const { data: fantasyUpdated, error: walletUpdateError } = await supabase
+        .from("wallets")
+        .update({ balance_fantasy: currentBalance - stake })
+        .eq("user_id", user.id)
+        .eq("balance_fantasy", currentBalance)
+        .select("user_id")
+      if (walletUpdateError || !fantasyUpdated || fantasyUpdated.length === 0) {
+        await supabase.from("bets").update({ status: "cancelled" }).eq("id", bet.id)
+        const msg = (!fantasyUpdated || fantasyUpdated.length === 0)
+          ? "Tu saldo cambió. Recarga e intenta de nuevo."
+          : "Failed to update wallet"
+        return NextResponse.json({ error: msg }, { status: 409 })
       }
+    }
+
+    // 3. Reserve house liability
+    try {
+      await houseWalletDebit(supabase, houseRisk, betMode)
+    } catch (houseDebitErr) {
+      await payoutToMode(supabase, user.id, stake, betMode)
+      await supabase.from("bets").update({ status: "cancelled" }).eq("id", bet.id)
       return NextResponse.json(
-        { error: `Failed to create bet: ${betError.message}` },
+        { error: "La casa no tiene fondos disponibles para esta apuesta" },
         { status: 400 }
       )
     }

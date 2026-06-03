@@ -96,39 +96,34 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     return NextResponse.json({ error: "Esta solicitud ya fue procesada" }, { status: 409 })
   }
 
-  const { data: wallet } = await supabase
+  const { data: existingWallet } = await supabase
     .from("iby_wallets")
     .select("balance")
     .eq("user_id", req.user_id)
     .single()
 
-  if (!wallet) {
+  if (!existingWallet) {
     await supabase.from("iby_wallets").insert({ user_id: req.user_id, balance: coinsToCredit })
   } else {
-    const { data: updatedWallet } = await supabase
-      .from("iby_wallets")
-      .update({ balance: Number(wallet.balance) + coinsToCredit, updated_at: new Date().toISOString() })
-      .eq("user_id", req.user_id)
-      .eq("balance", Number(wallet.balance))
-      .select("balance")
-
-    if (!updatedWallet || updatedWallet.length === 0) {
-      // Wallet was modified concurrently — fetch fresh balance and retry once
-      const { data: freshWallet } = await supabase
+    let credited = false
+    for (let attempt = 0; attempt < 3 && !credited; attempt++) {
+      const { data: w } = await supabase
         .from("iby_wallets")
         .select("balance")
         .eq("user_id", req.user_id)
         .single()
-
-      if (!freshWallet) {
-        console.error("IBY_WALLET_CREDIT_FAILED concurrent update", { userId: req.user_id, coinsToCredit })
-        return NextResponse.json({ error: "Error actualizando wallet, intenta de nuevo" }, { status: 500 })
-      }
-
-      await supabase
+      if (!w) break
+      const { data: updated } = await supabase
         .from("iby_wallets")
-        .update({ balance: Number(freshWallet.balance) + coinsToCredit, updated_at: new Date().toISOString() })
+        .update({ balance: Number(w.balance) + coinsToCredit, updated_at: new Date().toISOString() })
         .eq("user_id", req.user_id)
+        .eq("balance", Number(w.balance))
+        .select("balance")
+      if (updated && updated.length > 0) credited = true
+    }
+    if (!credited) {
+      console.error("IBY_WALLET_CREDIT_FAILED after 3 attempts", { userId: req.user_id, coinsToCredit })
+      return NextResponse.json({ error: "Error actualizando wallet, intenta de nuevo" }, { status: 500 })
     }
   }
 

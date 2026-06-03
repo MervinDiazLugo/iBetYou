@@ -6,42 +6,30 @@ import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate JWT before touching body — user.id from token is source of truth
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+    const token = authHeader.slice(7)
+    const serverSupabase = createServerSupabaseClient()
+    const { data: { user }, error: authError } = await serverSupabase.auth.getUser(token)
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Parse body after JWT is validated
     const { userId, eventId, betType, selection, amount: rawAmount, multiplier, mode: rawMode, group_id } = await request.json()
+    if (userId && userId !== user.id) {
+      return NextResponse.json({ error: "Unauthorized user scope" }, { status: 403 })
+    }
+
     if (rawMode !== "real" && rawMode !== "fantasy" && rawMode !== undefined && rawMode !== null) {
       return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
     }
     const isGroupBet = typeof group_id === "string" && group_id.length > 0
     const betMode = isGroupBet ? "fantasy" : (rawMode === "real" ? "real" : "fantasy")
     const footballOnlyBetTypes = new Set(["half_time", "first_scorer"])
-
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
-    }
-
-    const token = authHeader.slice(7)
-    const serverSupabase = createServerSupabaseClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await serverSupabase.auth.getUser(token)
-
-    if (authError || !user) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 401 }
-      )
-    }
-
-    if (userId !== user.id) {
-      return NextResponse.json(
-        { error: "Unauthorized user scope" },
-        { status: 403 }
-      )
-    }
 
     if (!eventId || !betType || !selection || rawAmount === undefined || rawAmount === null) {
       return NextResponse.json(
