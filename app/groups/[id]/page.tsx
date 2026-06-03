@@ -27,7 +27,7 @@ interface LeaderboardEntry {
 }
 interface GroupBet {
   id: string; event_id: number; creator_id: string; bet_type: string
-  creator_selection: string; amount: number; created_at: string
+  creator_selection: string; amount: number; multiplier: number; created_at: string
   event: { home_team: string; away_team: string; start_time: string; sport: string; league: string } | null
   creator: { nickname: string } | null
 }
@@ -494,23 +494,26 @@ export default function GroupPage() {
                         <div className="divide-y">
                           {eventBets.map((bet) => {
                             const isOwn = bet.creator_id === user.id
-                            const hasBalance = myWallet.balance >= bet.amount
+                            const acceptorStake = bet.bet_type === 'exact_score'
+                              ? bet.amount * Math.max(1, bet.multiplier || 1)
+                              : bet.amount
+                            const hasBalance = myWallet.balance >= acceptorStake
                             const canTake = !isOwn && hasBalance
                             return (
                               <div key={bet.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/30 transition-colors">
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-medium">{selectionLabel(bet.creator_selection, bet.event)}</div>
                                   <div className="text-xs text-muted-foreground">
-                                    {BET_TYPE_LABELS[bet.bet_type] ?? bet.bet_type} · por {bet.creator?.nickname ?? "—"}
+                                    {BET_TYPE_LABELS[bet.bet_type] ?? bet.bet_type}{bet.multiplier > 1 ? ` · x${bet.multiplier}` : ""} · por {bet.creator?.nickname ?? "—"}
                                   </div>
                                   {!isOwn && !hasBalance && (
-                                    <div className="text-[10px] text-red-400 mt-0.5">Saldo insuficiente ({myWallet.balance.toLocaleString()} / {bet.amount.toLocaleString()})</div>
+                                    <div className="text-[10px] text-red-400 mt-0.5">Saldo insuficiente ({myWallet.balance.toLocaleString()} / {acceptorStake.toLocaleString()})</div>
                                   )}
                                 </div>
                                 <div className="flex items-center gap-2 shrink-0">
                                   <div className="flex items-center gap-1 text-sm font-semibold">
                                     <Coins className="w-3.5 h-3.5 text-yellow-500" />
-                                    {bet.amount.toLocaleString()}
+                                    {acceptorStake.toLocaleString()}
                                   </div>
                                   {isOwn ? (
                                     <Badge variant="outline" className="text-[10px]">Tuya</Badge>
