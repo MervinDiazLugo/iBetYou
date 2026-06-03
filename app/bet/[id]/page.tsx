@@ -12,6 +12,7 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import { formatHouseBetTypeLabel, formatHouseSelection } from "@/lib/bet-labels"
 import { useToast } from "@/components/toast"
 import { ArrowLeft, Trophy, Users, Clock, DollarSign, AlertCircle, CheckCircle } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 
 interface BetDetail {
@@ -96,36 +97,26 @@ export default function BetDetailPage() {
 
   useEffect(() => {
     async function checkAuth() {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
+      const { data: { user: authUser } } = await supabase.auth.getUser()
 
       if (authUser) {
         const { data: { session } } = await supabase.auth.getSession()
         const token = session?.access_token
 
-        if (token) {
-          const infoRes = await fetch('/api/user/info', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            }
-          })
+        // Parallelizar: user info + bet load no se bloquean mutuamente
+        const [infoRes] = await Promise.all([
+          token ? fetch('/api/user/info', { headers: { Authorization: `Bearer ${token}` } }) : Promise.resolve(null),
+          loadBet(),
+        ])
 
-          if (infoRes.ok) {
-            const infoData = await infoRes.json()
-            const nickname = infoData.user?.nickname || authUser.email?.split('@')[0] || 'Usuario'
-            setUser({ id: authUser.id, email: authUser.email!, nickname, role: infoData.user?.role })
-            if (infoData.balance) {
-              setBalance({
-                fantasy: infoData.balance.fantasy,
-                real: infoData.balance.real,
-                iBY: infoData.balance.iBY ?? 0,
-              })
-            }
+        if (infoRes?.ok) {
+          const infoData = await infoRes.json()
+          const nickname = infoData.user?.nickname || authUser.email?.split('@')[0] || 'Usuario'
+          setUser({ id: authUser.id, email: authUser.email!, nickname, role: infoData.user?.role })
+          if (infoData.balance) {
+            setBalance({ fantasy: infoData.balance.fantasy, real: infoData.balance.real, iBY: infoData.balance.iBY ?? 0 })
           }
         }
-
-        await loadBet()
       } else {
         await loadBet()
       }
@@ -134,30 +125,21 @@ export default function BetDetailPage() {
     checkAuth()
   }, [betId])
 
+  // Realtime subscription handles live updates — only refresh on tab focus/visibility
   useEffect(() => {
     if (!betId) return
 
-    const refresh = () => {
-      loadBet()
-    }
-
-    const interval = setInterval(refresh, 7000)
-    const onFocus = () => refresh()
-    const onVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refresh()
-      }
-    }
+    const onFocus = () => loadBet()
+    const onVisibilityChange = () => { if (document.visibilityState === "visible") loadBet() }
 
     window.addEventListener("focus", onFocus)
     document.addEventListener("visibilitychange", onVisibilityChange)
 
     return () => {
-      clearInterval(interval)
       window.removeEventListener("focus", onFocus)
       document.removeEventListener("visibilitychange", onVisibilityChange)
     }
-  }, [betId, user?.id])
+  }, [betId])
 
   useEffect(() => {
     if (!betId) return

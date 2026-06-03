@@ -89,7 +89,8 @@
       "Bash(mkdir -p \"d:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\events\\\\[id]\")",
       "Bash(npm run *)",
       "Bash(Remove-Item \"d:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\events\\\\[id]\\\\predictions\\\\route.ts\" -Force)",
-      "Bash(rm \"d:/Documents/Documentos/p2pBets/app/app/api/events/[id]/predictions/route.ts\" && echo \"deleted\")"
+      "Bash(rm \"d:/Documents/Documentos/p2pBets/app/app/api/events/[id]/predictions/route.ts\" && echo \"deleted\")",
+      "Bash(Get-Content \"D:\\\\Documents\\\\Documentos\\\\p2pBets\\\\app\\\\app\\\\api\\\\groups\\\\[id]\\\\bets\\\\route.ts\")"
     ],
     "additionalDirectories": [
       "d:\\Documents\\Documentos\\p2pBets\\app\\app\\api\\events",

@@ -4,7 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Wallet, User, LogOut, Menu, X, Coins, Plus, PauseCircle } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { NotificationBell } from "@/components/notification-bell"
@@ -31,7 +31,7 @@ export function Navbar() {
   const [menuNickname, setMenuNickname] = useState("")
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
-  const supabase = createBrowserSupabaseClient()
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
   const { mode } = useMode()
   const { canUseRealMoney, canUseGroups } = useCountryAccess()
   const navItems = canUseGroups !== false
@@ -71,9 +71,7 @@ export function Navbar() {
     loadWalletData(user.id)
   }, [user?.id])
 
-  useEffect(() => {
-    if (userMenuOpen && user?.id) loadWalletData(user.id)
-  }, [userMenuOpen, user?.id])
+  // No re-fetch on dropdown open — wallet:updated event handles refreshes
 
   useEffect(() => {
     if (!user?.id) return

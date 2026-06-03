@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect, Suspense, useRef, useMemo } from "react"
+import { useState, useEffect, Suspense, useRef, useMemo, useCallback } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -19,6 +19,7 @@ import { CreateBetForm } from "@/components/create-bet-form"
 import { Countdown } from "@/components/countdown"
 import { calcDirectOdds, calcRunLineOddsAll } from "@/lib/house-odds"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
+import Image from "next/image"
 
 interface BetWithDetails extends Bet {
   event: Event
@@ -207,7 +208,7 @@ function HomeContent() {
   const takeBetsSectionRef = useRef<HTMLDivElement | null>(null)
 
   const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
 
   useEffect(() => {
     const create = searchParams.get("create")
@@ -555,7 +556,7 @@ function HomeContent() {
       .finally(() => setLoadingBets(false))
   }, [selectedSport])
 
-  const matchesMarketplaceFilters = (bet: BetWithDetails) => {
+  const matchesMarketplaceFilters = useCallback((bet: BetWithDetails) => {
     const matchesSearch =
       searchTerm === "" ||
       bet.event.home_team.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -570,14 +571,13 @@ function HomeContent() {
     const matchesLeague = selectedLeague === "all" || bet.event?.league === selectedLeague
 
     return matchesSearch && matchesSport && matchesBetType && matchesAmount && matchesLeague
-  }
+  }, [searchTerm, selectedSport, selectedBetType, selectedAmountRange, selectedLeague])
 
   const filteredBets = useMemo(() => bets.filter((bet) => {
     if (bet.status !== 'open') return false
     if (user && bet.creator_id === user.id) return false
     return matchesMarketplaceFilters(bet)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [bets, user, selectedSport, selectedBetType, selectedAmountRange, searchTerm, selectedLeague])
+  }), [bets, user, matchesMarketplaceFilters])
 
   const sortedBets = useMemo(() => [...filteredBets].sort((a, b) => {
     if (sortBy === "highest_amount") return b.amount - a.amount
@@ -623,7 +623,7 @@ function HomeContent() {
   }, [eventsPagination, selectedSport])
 
   // Events are already fetched per-sport and search-filtered by the API
-  const eventsBySport = {
+  const eventsBySport = useMemo(() => ({
     football: (selectedSport === "all" || selectedSport === "football")
       ? (eventsPagination.football?.data || []).filter(e => selectedLeague === "all" || e.league === selectedLeague)
       : [],
@@ -633,8 +633,8 @@ function HomeContent() {
     baseball: (selectedSport === "all" || selectedSport === "baseball")
       ? (eventsPagination.baseball?.data || []).filter(e => selectedLeague === "all" || e.league === selectedLeague)
       : [],
-  }
-  const filteredEvents = [...eventsBySport.football, ...eventsBySport.basketball, ...eventsBySport.baseball]
+  }), [eventsPagination, selectedSport, selectedLeague])
+  const filteredEvents = useMemo(() => [...eventsBySport.football, ...eventsBySport.basketball, ...eventsBySport.baseball], [eventsBySport])
 
   // Reset league filter when sport changes
   useEffect(() => { setSelectedLeague("all") }, [selectedSport])
@@ -771,7 +771,7 @@ function HomeContent() {
                   <div className="flex items-center justify-between gap-4 my-3">
                     <div className="flex-1 text-center">
                       {bet.event.home_logo
-                        ? <img src={bet.event.home_logo} alt={bet.event.home_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                        ? <Image src={bet.event.home_logo} alt={bet.event.home_team} width={48} height={48} className="mx-auto mb-1 object-contain" />
                         : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold">{bet.event.home_team.slice(0,1)}</div>
                       }
                       <div className="text-sm font-bold leading-tight">{bet.event.home_team}</div>
@@ -779,7 +779,7 @@ function HomeContent() {
                     <div className="text-base font-bold text-muted-foreground">VS</div>
                     <div className="flex-1 text-center">
                       {bet.event.away_logo
-                        ? <img src={bet.event.away_logo} alt={bet.event.away_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                        ? <Image src={bet.event.away_logo} alt={bet.event.away_team} width={48} height={48} className="mx-auto mb-1 object-contain" />
                         : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold">{bet.event.away_team.slice(0,1)}</div>
                       }
                       <div className="text-sm font-bold leading-tight">{bet.event.away_team}</div>
@@ -867,7 +867,7 @@ function HomeContent() {
                   onClick={(e) => {
                     e.stopPropagation()
                     if (!user) {
-                      window.location.href = '/login'
+                      router.push('/login')
                       return
                     }
                     setShowCreateModal(true)
@@ -907,7 +907,7 @@ function HomeContent() {
                     <div className="text-xs text-muted-foreground">{getPostedAgo(bet.created_at)}</div>
                     <div className="text-xs">Apuesta: <span className="font-semibold text-primary">{formatCurrency(bet.amount)}</span></div>
                     <Button size="sm" className="w-full" onClick={() => {
-                      if (!user) { window.location.href = "/login"; return }
+                      if (!user) { router.push("/login"); return }
                       setSelectedBetForModal(bet)
                     }}>
                       Ver y tomar
@@ -1135,7 +1135,7 @@ function HomeContent() {
                     <div className="flex items-center justify-between gap-3 my-3">
                       <div className="flex-1 text-center">
                         {event.home_logo ? (
-                          <img src={event.home_logo} alt={event.home_team} className="w-10 h-10 mx-auto mb-1 object-contain" />
+                          <Image src={event.home_logo} alt={event.home_team} width={40} height={40} className="mx-auto mb-1 object-contain" />
                         ) : (
                           <div className="w-10 h-10 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center text-sm font-bold">
                             {event.home_team.slice(0, 1)}
@@ -1146,7 +1146,7 @@ function HomeContent() {
                       <div className="text-sm font-bold text-amber-400">VS</div>
                       <div className="flex-1 text-center">
                         {event.away_logo ? (
-                          <img src={event.away_logo} alt={event.away_team} className="w-10 h-10 mx-auto mb-1 object-contain" />
+                          <Image src={event.away_logo} alt={event.away_team} width={40} height={40} className="mx-auto mb-1 object-contain" />
                         ) : (
                           <div className="w-10 h-10 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center text-sm font-bold">
                             {event.away_team.slice(0, 1)}
@@ -1198,7 +1198,7 @@ function HomeContent() {
                         variant="outline"
                         className="text-xs h-8"
                         onClick={() => {
-                          if (!user) { window.location.href = '/login'; return }
+                          if (!user) { router.push('/login'); return }
                           setSelectedEventForBet(event)
                           setShowCreateModal(true)
                         }}
@@ -1211,7 +1211,7 @@ function HomeContent() {
                           variant="outline"
                           className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
                           onClick={() => {
-                            if (!user) { window.location.href = '/login'; return }
+                            if (!user) { router.push('/login'); return }
                             openHouseBetModal(event)
                           }}
                         >
@@ -1290,7 +1290,7 @@ function HomeContent() {
                           }`}
                           onClick={() => {
                             if (!user) {
-                              window.location.href = '/login'
+                              router.push('/login')
                               return
                             }
                             setSelectedEventForBet(event)
@@ -1314,7 +1314,7 @@ function HomeContent() {
                             <div className="flex items-center justify-between gap-2 mb-2">
                               <div className="flex-1 text-center">
                                 {event.home_logo ? (
-                                  <img src={event.home_logo} alt={event.home_team} className="w-5 h-5 mx-auto mb-0.5 object-contain" />
+                                  <Image src={event.home_logo} alt={event.home_team} width={20} height={20} className="mx-auto mb-0.5 object-contain" />
                                 ) : (
                                   <div className="w-5 h-5 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[8px] font-bold">
                                     {event.home_team.slice(0, 1)}
@@ -1325,7 +1325,7 @@ function HomeContent() {
                               <div className="text-[10px] font-bold text-muted-foreground">VS</div>
                               <div className="flex-1 text-center">
                                 {event.away_logo ? (
-                                  <img src={event.away_logo} alt={event.away_team} className="w-5 h-5 mx-auto mb-0.5 object-contain" />
+                                  <Image src={event.away_logo} alt={event.away_team} width={20} height={20} className="mx-auto mb-0.5 object-contain" />
                                 ) : (
                                   <div className="w-5 h-5 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[8px] font-bold">
                                     {event.away_team.slice(0, 1)}
@@ -1440,10 +1440,12 @@ function HomeContent() {
                       <div className="flex items-center justify-between gap-1">
                         <div className="flex-1 text-center">
                           {bet.event.home_logo ? (
-                            <img
+                            <Image
                               src={bet.event.home_logo}
                               alt={bet.event.home_team}
-                              className="w-6 h-6 mx-auto mb-0.5 object-contain"
+                              width={24}
+                              height={24}
+                              className="mx-auto mb-0.5 object-contain"
                             />
                           ) : (
                             <div className="w-6 h-6 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
@@ -1455,10 +1457,12 @@ function HomeContent() {
                         <div className="text-[10px] font-bold text-muted-foreground">VS</div>
                         <div className="flex-1 text-center">
                           {bet.event.away_logo ? (
-                            <img
+                            <Image
                               src={bet.event.away_logo}
                               alt={bet.event.away_team}
-                              className="w-6 h-6 mx-auto mb-0.5 object-contain"
+                              width={24}
+                              height={24}
+                              className="mx-auto mb-0.5 object-contain"
                             />
                           ) : (
                             <div className="w-6 h-6 mx-auto mb-0.5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">
@@ -1524,7 +1528,7 @@ function HomeContent() {
                             Clonar
                           </Button>
                           <Button size="sm" className="flex-1 text-xs h-7 bg-primary hover:bg-primary/90" onClick={() => {
-                            if (!user) { window.location.href = "/login"; return }
+                            if (!user) { router.push("/login"); return }
                             setSelectedBetForModal(bet)
                           }}>
                             Tomar
@@ -1786,7 +1790,7 @@ function HomeContent() {
               <div className="flex items-center justify-between gap-4">
                 <div className="flex-1 text-center">
                   {houseBetModal.event.home_logo
-                    ? <img src={houseBetModal.event.home_logo} alt={houseBetModal.event.home_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                    ? <Image src={houseBetModal.event.home_logo} alt={houseBetModal.event.home_team} width={48} height={48} className="mx-auto mb-1 object-contain" />
                     : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold text-lg">{houseBetModal.event.home_team.slice(0,1)}</div>
                   }
                   <div className="text-sm font-bold leading-tight">{houseBetModal.event.home_team}</div>
@@ -1794,7 +1798,7 @@ function HomeContent() {
                 <div className="text-base font-bold text-muted-foreground shrink-0">VS</div>
                 <div className="flex-1 text-center">
                   {houseBetModal.event.away_logo
-                    ? <img src={houseBetModal.event.away_logo} alt={houseBetModal.event.away_team} className="w-12 h-12 mx-auto mb-1 object-contain" />
+                    ? <Image src={houseBetModal.event.away_logo} alt={houseBetModal.event.away_team} width={48} height={48} className="mx-auto mb-1 object-contain" />
                     : <div className="w-12 h-12 mx-auto mb-1 rounded-full bg-secondary flex items-center justify-center font-bold text-lg">{houseBetModal.event.away_team.slice(0,1)}</div>
                   }
                   <div className="text-sm font-bold leading-tight">{houseBetModal.event.away_team}</div>

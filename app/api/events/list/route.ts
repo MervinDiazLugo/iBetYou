@@ -62,7 +62,9 @@ export async function GET(request: NextRequest) {
       const hasMore = rows.length > limit
       const events = hasMore ? rows.slice(0, limit) : rows
 
-      return NextResponse.json({ events, hasMore })
+      const res = NextResponse.json({ events, hasMore })
+      res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120")
+      return res
     }
 
     const { data, error } = await query.limit(limit)
@@ -71,7 +73,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    return NextResponse.json(data || [])
+    const res = NextResponse.json(data || [])
+    // Featured events change at most 2x/day — cache longer
+    const ttl = featuredOnly ? 300 : 60
+    res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`)
+    return res
   } catch (error) {
     console.error('Get events error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

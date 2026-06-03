@@ -148,26 +148,31 @@ export default function GroupPage() {
       setGroup(g)
       setMyRole(data.my_role)
       setMembers(data.members || [])
-
-      // Await daily grant so balance is correct before page renders
-      const todayUTC = new Date().toISOString().split("T")[0]
-      if (wallet.last_daily_grant !== todayUTC) {
-        try {
-          const grantRes = await authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
-          const grantData = await grantRes.json()
-          if (grantData.granted) {
-            wallet.balance = Number(grantData.balance)
-            wallet.last_daily_grant = todayUTC
-            showToast("+1.000 tokens de grupo acreditados", "success")
-          }
-        } catch {}
-      }
       setMyWallet(wallet)
 
-      // Load events for group's sport/leagues
+      // Parallelizar: daily-grant + events fetch no se bloquean mutuamente
       const params = new URLSearchParams({ limit: "50" })
       if (g.sport) params.set("sport", g.sport)
-      const evRes = await fetch(`/api/events/list?${params}`)
+
+      const todayUTC = new Date().toISOString().split("T")[0]
+      const needsGrant = wallet.last_daily_grant !== todayUTC
+
+      const [evRes] = await Promise.all([
+        fetch(`/api/events/list?${params}`),
+        // Daily grant fire-and-forget — no bloquea el render
+        needsGrant
+          ? authFetch(`/api/groups/${groupId}/daily-grant`, { method: "POST" })
+              .then(r => r.json())
+              .then(grantData => {
+                if (grantData.granted) {
+                  setMyWallet(prev => ({ ...prev, balance: Number(grantData.balance), last_daily_grant: todayUTC }))
+                  showToast("+1.000 tokens de grupo acreditados", "success")
+                }
+              })
+              .catch(() => {})
+          : Promise.resolve(),
+      ])
+
       if (evRes.ok) {
         const evData = await evRes.json()
         const evs: EventRow[] = Array.isArray(evData) ? evData : (evData.events || [])

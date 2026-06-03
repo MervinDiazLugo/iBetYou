@@ -94,33 +94,27 @@ export function useMyBets() {
           sessionTokenRef.current = session.access_token
         }
 
-        const walletRes = await fetch(`/api/wallet?user_id=${authUser.id}`, {
-          headers: authHeaders
-        })
+        // Parallelizar wallet + bets — no se bloquean mutuamente
+        const [walletRes, betsRes] = await Promise.all([
+          fetch(`/api/wallet?user_id=${authUser.id}`, { headers: authHeaders }),
+          fetch(`/api/my-bets?user_id=${authUser.id}`, { headers: authHeaders }),
+        ])
 
         if (walletRes.ok && isMounted) {
           const walletData = await walletRes.json()
           const nickname = walletData.user?.nickname || authUser.email?.split('@')[0] || 'Usuario'
           setUser({ id: authUser.id, email: authUser.email!, nickname })
           if (walletData.wallet) {
-            setBalance({
-              fantasy: walletData.wallet.balance_fantasy,
-              real: walletData.wallet.balance_real,
-            })
+            setBalance({ fantasy: walletData.wallet.balance_fantasy, real: walletData.wallet.balance_real })
           }
         }
 
-        // Load user's bets via API
-        const res = await fetch(`/api/my-bets?user_id=${authUser.id}`, {
-          headers: authHeaders
-        })
-
-        if (!res.ok) {
-          const errorData = await res.json()
+        if (!betsRes.ok) {
+          const errorData = await betsRes.json()
           throw new Error(errorData.error || 'Error fetching bets')
         }
 
-        const data = await res.json()
+        const data = await betsRes.json()
         if (isMounted) {
           setBets(data.bets || [])
           setLoading(false)
