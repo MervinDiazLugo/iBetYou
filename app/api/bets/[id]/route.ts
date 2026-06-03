@@ -57,7 +57,39 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json({ bet })
+    // For cancelled bets, enrich with who cancelled and why
+    let cancellationInfo: { decided_by: string; decided_by_nickname: string | null; reason: string | null; action: string } | null = null
+    if (bet.status === 'cancelled') {
+      const { data: cancelDecision } = await supabase
+        .from('arbitration_decisions')
+        .select('decided_by, action, reason')
+        .eq('bet_id', betId)
+        .like('action', '%cancel%')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (cancelDecision) {
+        let nickname: string | null = null
+        const decidedBy = cancelDecision.decided_by
+        if (decidedBy && decidedBy !== 'system') {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('nickname')
+            .eq('id', decidedBy)
+            .maybeSingle()
+          nickname = profile?.nickname ?? null
+        }
+        cancellationInfo = {
+          decided_by: decidedBy === 'system' ? 'system' : 'user',
+          decided_by_nickname: nickname,
+          reason: cancelDecision.reason ?? null,
+          action: cancelDecision.action,
+        }
+      }
+    }
+
+    return NextResponse.json({ bet: { ...bet, cancellation_info: cancellationInfo } })
   } catch (error: any) {
     console.error('Get bet detail error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

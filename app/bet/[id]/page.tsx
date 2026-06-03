@@ -411,6 +411,17 @@ export default function BetDetailPage() {
       ? (bet.acceptor?.nickname || "Aceptante")
       : ""
   const potentialWin = calculateTotalPrize(bet.amount, bet.multiplier)
+  const cancellationInfo = (bet as any).cancellation_info as {
+    decided_by: "system" | "user"
+    decided_by_nickname: string | null
+    reason: string | null
+    action: string
+  } | null
+  const cancellationText = cancellationInfo
+    ? cancellationInfo.decided_by === "system"
+      ? "Esta apuesta fue cancelada por el sistema."
+      : `Esta apuesta fue cancelada por ${cancellationInfo.decided_by_nickname ?? "un usuario"}.`
+    : "Esta apuesta fue cancelada."
   // Net gain = opponent's stake minus own fee (symmetric with acceptorNetGain)
   const creatorNetGain = bet.amount * bet.multiplier - Number(bet.fee_amount || 0)
   // What the acceptor must put up (symmetric: same amount; asymmetric: amount * multiplier)
@@ -1028,7 +1039,7 @@ export default function BetDetailPage() {
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
-                  <p className="text-muted-foreground">Esta apuesta fue cancelada.</p>
+                  <p className="text-muted-foreground">{cancellationText}</p>
                 </>
               ) : (
                 <>
@@ -1169,7 +1180,7 @@ export default function BetDetailPage() {
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
-                  <p className="text-muted-foreground">Esta apuesta fue cancelada.</p>
+                  <p className="text-muted-foreground">{cancellationText}</p>
                 </>
               ) : bet.status === "disputed" ? (
                 <>
