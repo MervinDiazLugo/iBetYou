@@ -171,8 +171,10 @@ export default function GroupPage() {
       if (evRes.ok) {
         const evData = await evRes.json()
         const evs: EventRow[] = Array.isArray(evData) ? evData : (evData.events || [])
+        const now = new Date()
         const relevant = evs.filter(e =>
-          (e.status === "scheduled" || e.status === "live") &&
+          e.status === "scheduled" &&
+          new Date(e.start_time) > now &&
           (g.leagues && g.leagues.length > 0 ? g.leagues.includes(e.league) : true)
         )
         setEvents(relevant)
