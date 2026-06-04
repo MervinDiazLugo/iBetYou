@@ -29,13 +29,16 @@ export async function GET(request: NextRequest) {
     }
 
     if (search) {
-      // Avoid breaking Supabase OR syntax if the search contains commas.
       const safeSearch = search.replace(/,/g, ' ')
       query = query.or(`home_team.ilike.%${safeSearch}%,away_team.ilike.%${safeSearch}%`)
     }
 
-    const thirtyDaysFromNow = new Date()
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30)
+    const now = new Date()
+    const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000)
+    // Live events older than 24h are stuck — don't show them
+    const liveMaxAge = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    // Scheduled acceptance window: up to 10 min after start_time
+    const acceptanceWindowStart = new Date(now.getTime() - 10 * 60 * 1000)
 
     if (status === "all") {
       // no status or time filter — used for league discovery
@@ -43,12 +46,18 @@ export async function GET(request: NextRequest) {
       query = query.eq('status', status)
       query = query.lte('start_time', thirtyDaysFromNow.toISOString())
     } else {
-      // Scheduled: only show events starting within the next 30 days and not yet expired.
-      // Live: always show (match in progress regardless of start_time).
-      const acceptanceWindowStart = new Date(Date.now() - 10 * 60 * 1000)
+      // Never show finished/cancelled/postponed events in the marketplace.
+      // Scheduled: start_time within acceptance window and next 30 days.
+      // Live: capped at 24h to avoid stuck "live" events from days ago.
       query = query.or(
-        `and(status.eq.scheduled,start_time.gte.${acceptanceWindowStart.toISOString()},start_time.lte.${thirtyDaysFromNow.toISOString()}),status.eq.live`
+        `and(status.eq.scheduled,start_time.gte.${acceptanceWindowStart.toISOString()},start_time.lte.${thirtyDaysFromNow.toISOString()}),` +
+        `and(status.eq.live,start_time.gte.${liveMaxAge.toISOString()})`
       )
+    }
+
+    // Always exclude finished/cancelled/postponed unless status=all is explicit
+    if (status !== "all") {
+      query = query.not('status', 'in', '("finished","cancelled","postponed")')
     }
 
     if (paginated) {
