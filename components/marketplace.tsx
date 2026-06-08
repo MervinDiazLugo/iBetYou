@@ -200,6 +200,7 @@ function HomeContent() {
   const [houseBetType, setHouseBetType] = useState<string>("direct")
   const [houseBetAmount, setHouseBetAmount] = useState("")
   const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
+  const [demoMode, setDemoMode] = useState(false)
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
   const sessionTokenRef = useRef<string | null>(null)
@@ -425,6 +426,14 @@ function HomeContent() {
     const timer = setTimeout(() => setDebouncedSearch(searchTerm), 400)
     return () => clearTimeout(timer)
   }, [searchTerm])
+
+  // Check demo mode status
+  useEffect(() => {
+    fetch("/api/demo-status")
+      .then(r => r.json())
+      .then(data => setDemoMode(data.active === true))
+      .catch(() => {})
+  }, [])
 
   // Load featured events independently of sport filter; refresh every 5 min to pick up new predictions
   useEffect(() => {
@@ -830,6 +839,16 @@ function HomeContent() {
       </Dialog>
 
       <main className="container mx-auto px-4 py-6">
+        {/* Demo Mode Banner */}
+        {demoMode && (
+          <div className="mb-6 rounded-xl border border-yellow-500/40 bg-yellow-500/10 px-5 py-4 flex items-center gap-3">
+            <span className="text-2xl">🎮</span>
+            <div>
+              <div className="font-bold text-yellow-400 text-sm">MODO DEMO ACTIVO</div>
+              <div className="text-xs text-yellow-300/80">Estás viendo eventos y apuestas de demostración. Los resultados son generados por el sistema al día siguiente. Solo se usan tokens Fantasy.</div>
+            </div>
+          </div>
+        )}
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace de Apuestas</h1>

@@ -20,6 +20,7 @@ import {
   Globe,
   Building2,
   FlaskConical,
+  Gamepad2,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -37,6 +38,7 @@ const navigation = [
   { name: "Acceso por País", href: "/backoffice/countries", icon: Globe },
   { name: "Wallet Casa", href: "/backoffice/house-wallet", icon: Building2 },
   { name: "Simulación", href: "/backoffice/simulation", icon: FlaskConical },
+  { name: "Modo Demo", href: "/backoffice/demo", icon: Gamepad2 },
 ]
 
 export default function BackofficeLayout({

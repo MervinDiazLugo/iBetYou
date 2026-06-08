@@ -16,13 +16,21 @@ export async function GET(request: NextRequest) {
   const offset = Number.isFinite(rawOffset) ? Math.max(0, rawOffset) : 0
 
   try {
+    // Check demo mode — when active, only return demo events
+    const { data: demoSetting } = await supabase
+      .from("app_settings").select("value").eq("key", "demo_mode").maybeSingle()
+    const demoActive = (demoSetting?.value as any)?.active === true
+
     let query = supabase
       .from('events')
       .select('*')
       .order('featured', { ascending: false, nullsFirst: false })
       .order('start_time', { ascending: true })
 
-    if (featuredOnly) {
+    if (demoActive && status !== "all") {
+      // Demo mode: only demo events
+      query = query.eq('is_demo', true)
+    } else if (featuredOnly) {
       query = query.eq('featured', true)
     } else if (sport && sport !== 'all') {
       query = query.eq('sport', sport)
