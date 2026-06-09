@@ -48,7 +48,10 @@ export async function GET(request: NextRequest) {
     // Scheduled acceptance window: up to 10 min after start_time
     const acceptanceWindowStart = new Date(now.getTime() - 10 * 60 * 1000)
 
-    if (status === "all") {
+    if (demoActive && status !== "all") {
+      // Demo mode: show demo events regardless of start_time or status
+      // (synthetic results are generated daily regardless of actual match time)
+    } else if (status === "all") {
       // no status or time filter — used for league discovery
     } else if (status) {
       query = query.eq('status', status)
@@ -63,8 +66,8 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Always exclude finished/cancelled/postponed unless status=all is explicit
-    if (status !== "all") {
+    // Always exclude finished/cancelled/postponed unless status=all or demo mode
+    if (status !== "all" && !demoActive) {
       query = query.not('status', 'in', '("finished","cancelled","postponed")')
     }
 
@@ -80,7 +83,7 @@ export async function GET(request: NextRequest) {
       const events = hasMore ? rows.slice(0, limit) : rows
 
       const res = NextResponse.json({ events, hasMore })
-      res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120")
+      if (!demoActive) res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120")
       return res
     }
 
@@ -91,9 +94,10 @@ export async function GET(request: NextRequest) {
     }
 
     const res = NextResponse.json(data || [])
-    // Featured events change at most 2x/day — cache longer
-    const ttl = featuredOnly ? 300 : 60
-    res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`)
+    if (!demoActive) {
+      const ttl = featuredOnly ? 300 : 60
+      res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`)
+    }
     return res
   } catch (error) {
     console.error('Get events error:', error)
