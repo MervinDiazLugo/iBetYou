@@ -1,37 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import https from "node:https"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { generateAiPredictions } from "@/lib/ai-predictions"
 
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
-const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
-const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const HOUSE_NICKNAME = "TheOne"
 const DEMO_EVENT_COUNT = 16
 const BET_AMOUNT = 10
 const FEE_RATE = 0.03
-
-function fetchApiSports(url: string): Promise<any> {
-  if (!API_FOOTBALL_KEY) return Promise.reject(new Error("API_FOOTBALL_KEY not set"))
-  return new Promise((resolve, reject) => {
-    const { hostname, pathname, search } = new URL(url)
-    const req = https.request(
-      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": API_FOOTBALL_KEY } },
-      (res) => {
-        const chunks: Buffer[] = []
-        res.on("data", (c) => chunks.push(c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
-          catch (e) { reject(e) }
-        })
-      }
-    )
-    req.setTimeout(8000, () => req.destroy(new Error("timeout")))
-    req.on("error", reject)
-    req.end()
-  })
-}
 
 // Returns { active, activated_at } from app_settings
 async function getDemoStatus(supabase: ReturnType<typeof createAdminSupabaseClient>) {
@@ -71,32 +47,31 @@ export async function POST(request: NextRequest) {
 
   const supabase = createAdminSupabaseClient()
 
-  // Clear any existing demo events
-  await supabase.from("events").update({ is_demo: false }).eq("is_demo", true)
+  // Reset existing demo events (restore original status)
+  await supabase.from("events")
+    .update({ is_demo: false, status: "finished" })
+    .eq("is_demo", true)
 
-  // Get upcoming scheduled events
-  const now = new Date()
-  const cutoff = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000)
+  // Pull from ALL existing events in the DB — no date filter.
+  // We'll assign new future dates to the selected ones.
   const { data: events, error } = await supabase
     .from("events")
-    .select("id, external_id, sport, league, home_team, away_team, start_time, metadata")
-    .eq("status", "scheduled")
-    .gte("start_time", now.toISOString())
-    .lte("start_time", cutoff.toISOString())
-    .order("start_time", { ascending: true })
+    .select("id, sport, league, home_team, away_team, home_logo, away_logo, start_time, metadata")
+    .order("id", { ascending: false })
+    .limit(300)
 
   if (error || !events?.length) {
-    return NextResponse.json({ error: "No hay eventos scheduled disponibles" }, { status: 422 })
+    return NextResponse.json({ error: "No hay eventos en la base de datos" }, { status: 422 })
   }
 
-  // Ask Claude to pick DEMO_EVENT_COUNT events
+  // Ask Claude to pick DEMO_EVENT_COUNT events — no dates needed since we'll assign them
   const eventLines = events.map(e =>
-    `${e.id}|${e.sport}|${e.league}|${e.home_team} vs ${e.away_team}|${e.start_time.slice(0, 16).replace("T", " ")}`
+    `${e.id}|${e.sport}|${e.league}|${e.home_team} vs ${e.away_team}`
   ).join("\n")
 
-  const prompt = `Pick ${DEMO_EVENT_COUNT} events for a sports betting demo platform. Mix of football, basketball, baseball. Prioritize well-known teams and interesting matchups. Caps: football 6-10, basketball 1-5, baseball 0-5.
+  const prompt = `Pick ${DEMO_EVENT_COUNT} events for a sports betting demo platform. Mix of football, basketball, baseball. Prioritize well-known teams and leagues. Caps: football 6-10, basketball 1-5, baseball 0-5. No duplicates (same two teams).
 
-Events (id|sport|league|match|UTC):
+Events (id|sport|league|match):
 ${eventLines}
 
 Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
@@ -120,41 +95,24 @@ Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
   }
 
   const selectedEvents = events.filter(e => selectedIds.includes(e.id))
+
+  // Assign new future start_times spread over next 2 days, reset status to scheduled
+  const baseTime = new Date(Date.now() + 2 * 60 * 60 * 1000) // starts 2h from now
+  await Promise.all(selectedEvents.map(async (ev, i) => {
+    const startTime = new Date(baseTime.getTime() + i * 90 * 60 * 1000) // 90min apart
+    await supabase.from("events").update({
+      status: "scheduled",
+      start_time: startTime.toISOString(),
+      home_score: null,
+      away_score: null,
+    }).eq("id", ev.id)
+  }))
+
   const eventsWithPredictions = new Set<number>()
   const predictionErrors: string[] = []
 
-  // Football: api-sports predictions
-  const footballEvents = selectedEvents.filter(e => e.sport === "football" && e.external_id?.startsWith("football_"))
-  const footballWithApi = new Set<number>()
-  await Promise.all(footballEvents.map(async (ev) => {
-    try {
-      const fixtureId = ev.external_id.replace("football_", "")
-      const data = await fetchApiSports(`${FOOTBALL_URL}/predictions?fixture=${fixtureId}`)
-      const raw = data.response?.[0]
-      if (!raw) return
-      const pred = raw.predictions
-      const home = raw.teams?.home
-      const away = raw.teams?.away
-      const predictions = {
-        percent: pred?.percent ?? null,
-        advice: pred?.advice ?? null,
-        winner: pred?.winner?.name ?? null,
-        home_form: home?.last_5?.form ?? null,
-        away_form: away?.last_5?.form ?? null,
-        home_goals_avg: home?.last_5?.goals?.for?.average ?? null,
-        away_goals_avg: away?.last_5?.goals?.for?.average ?? null,
-        home_league_form: home?.league?.form ?? null,
-        away_league_form: away?.league?.form ?? null,
-      }
-      if (!predictions.percent) return
-      await supabase.from("events").update({ metadata: { ...((ev.metadata as any) || {}), predictions } }).eq("id", ev.id)
-      footballWithApi.add(ev.id)
-      eventsWithPredictions.add(ev.id)
-    } catch (e: any) { predictionErrors.push(`${ev.id}: ${e.message}`) }
-  }))
-
-  // AI predictions for non-football + football that failed
-  const needsAi = selectedEvents.filter(e => !footballWithApi.has(e.id) && !eventsWithPredictions.has(e.id))
+  // All demo events use AI predictions (historical events have stale api-sports fixture IDs)
+  const needsAi = selectedEvents.filter(e => !(e.metadata as any)?.predictions?.percent)
   const aiPreds = await generateAiPredictions(needsAi as any)
   await Promise.all(Array.from(aiPreds.entries()).map(async ([eventId, prediction]) => {
     const ev = selectedEvents.find(e => e.id === eventId)
