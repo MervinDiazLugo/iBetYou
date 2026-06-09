@@ -18,6 +18,7 @@ import { useMode } from "@/components/mode-provider"
 import { CreateBetForm } from "@/components/create-bet-form"
 import { Countdown } from "@/components/countdown"
 import { calcDirectOdds, calcRunLineOddsAll } from "@/lib/house-odds"
+import { formatHouseSelection } from "@/lib/bet-labels"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import Image from "next/image"
 
@@ -1725,7 +1726,7 @@ function HomeContent() {
                         <div className="rounded-lg border border-border bg-secondary/40 p-2">
                           <div className="text-[10px] text-muted-foreground mb-1">Tu selección</div>
                           <div className="text-xs font-semibold text-primary leading-snug truncate">
-                            {bet.creator_selection}
+                            {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[10px]">
