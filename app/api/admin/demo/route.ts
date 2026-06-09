@@ -96,17 +96,16 @@ Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
 
   const selectedEvents = events.filter(e => selectedIds.includes(e.id))
 
-  // Assign new future start_times spread over next 2 days, reset status to scheduled
-  const baseTime = new Date(Date.now() + 2 * 60 * 60 * 1000) // starts 2h from now
-  await Promise.all(selectedEvents.map(async (ev, i) => {
-    const startTime = new Date(baseTime.getTime() + i * 90 * 60 * 1000) // 90min apart
-    await supabase.from("events").update({
+  // All demo events start at the same time: 2h from now
+  const demoStartTime = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+  await Promise.all(selectedEvents.map(ev =>
+    supabase.from("events").update({
       status: "scheduled",
-      start_time: startTime.toISOString(),
+      start_time: demoStartTime,
       home_score: null,
       away_score: null,
     }).eq("id", ev.id)
-  }))
+  ))
 
   const eventsWithPredictions = new Set<number>()
   const predictionErrors: string[] = []
