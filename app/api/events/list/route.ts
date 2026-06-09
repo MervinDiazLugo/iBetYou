@@ -28,8 +28,9 @@ export async function GET(request: NextRequest) {
       .order('start_time', { ascending: true })
 
     if (demoActive && status !== "all") {
-      // Demo mode: only demo events
+      // Demo mode: only demo events, still respect sport filter if provided
       query = query.eq('is_demo', true)
+      if (sport && sport !== 'all') query = query.eq('sport', sport)
     } else if (featuredOnly) {
       query = query.eq('featured', true)
     } else if (sport && sport !== 'all') {
