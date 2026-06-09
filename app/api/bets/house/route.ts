@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     const numericEventId = Number(eventId)
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
-      .select("id, sport, status, featured, metadata, league")
+      .select("id, sport, status, featured, is_demo, metadata, league")
       .eq("id", numericEventId)
       .maybeSingle()
 
@@ -59,8 +59,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Event not found" }, { status: 404 })
     }
 
-    // Validate event is featured
-    if (!eventRow.featured) {
+    // Validate event is featured or demo
+    if (!eventRow.featured && !(eventRow as any).is_demo) {
       return NextResponse.json(
         { error: "Las apuestas contra la casa solo están disponibles para eventos destacados" },
         { status: 400 }
