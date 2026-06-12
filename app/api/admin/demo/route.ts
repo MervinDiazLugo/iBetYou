@@ -224,7 +224,6 @@ Reply ONLY: [{"id":123,"selection":"Team Name"},...]`
     demo_events: confirmedIds.length,
     demo_bets: createdBets.length,
     skipped: selectedIds.length - confirmedIds.length,
-    prediction_errors: predictionErrors,
   })
 }
 
