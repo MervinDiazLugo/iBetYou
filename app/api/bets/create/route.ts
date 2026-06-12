@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
 import { canCountryUseRealMoney } from "@/lib/country-access"
 import { payoutToMode } from "@/lib/wallet-utils"
+import { PRE_MATCH_ONLY_BET_TYPES } from "@/lib/bet-constants"
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       { data: eventRow, error: eventError },
       { data: profile, error: profileError },
     ] = await Promise.all([
-      supabase.from("events").select("id, sport, status").eq("id", eventId).single(),
+      supabase.from("events").select("id, sport, status, start_time").eq("id", eventId).single(),
       supabase.from("profiles").select("id, is_banned, role, betting_blocked_until, country, real_betting_enabled").eq("id", user.id).single(),
     ])
 
@@ -73,6 +74,15 @@ export async function POST(request: NextRequest) {
         { error: "Este tipo de apuesta solo esta disponible para futbol" },
         { status: 400 }
       )
+    }
+
+    if (PRE_MATCH_ONLY_BET_TYPES.has(betType) && eventRow.start_time) {
+      if (new Date(eventRow.start_time) <= new Date()) {
+        return NextResponse.json(
+          { error: `Las apuestas de tipo "${betType === "first_scorer" ? "Primer Anotador" : "Medio Tiempo"}" solo se pueden crear antes de que empiece el partido` },
+          { status: 400 }
+        )
+      }
     }
 
     if (profileError) {

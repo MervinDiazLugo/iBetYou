@@ -84,7 +84,7 @@ export async function GET(request: NextRequest) {
       const events = hasMore ? rows.slice(0, limit) : rows
 
       const res = NextResponse.json({ events, hasMore })
-      if (!demoActive) res.headers.set("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120")
+      res.headers.set("Cache-Control", `public, s-maxage=${demoActive ? 30 : 60}, stale-while-revalidate=${demoActive ? 60 : 120}`)
       return res
     }
 
@@ -95,10 +95,9 @@ export async function GET(request: NextRequest) {
     }
 
     const res = NextResponse.json(data || [])
-    if (!demoActive) {
-      const ttl = featuredOnly ? 300 : 60
-      res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`)
-    }
+    // Demo events only change on the daily cron — 30s cache is safe and avoids repeated DB hits
+    const ttl = demoActive ? 30 : (featuredOnly ? 300 : 60)
+    res.headers.set("Cache-Control", `public, s-maxage=${ttl}, stale-while-revalidate=${ttl * 2}`)
     return res
   } catch (error) {
     console.error('Get events error:', error)

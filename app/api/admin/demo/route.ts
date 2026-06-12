@@ -108,11 +108,16 @@ Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
   ))
 
   const eventsWithPredictions = new Set<number>()
-  const predictionErrors: string[] = []
 
-  // All demo events use AI predictions (historical events have stale api-sports fixture IDs)
-  const needsAi = selectedEvents.filter(e => !(e.metadata as any)?.predictions?.percent)
-  const aiPreds = await generateAiPredictions(needsAi as any)
+  // Seed with events that already have predictions — fallback if AI fails to regenerate
+  selectedEvents.forEach(e => {
+    if ((e.metadata as any)?.predictions?.percent) eventsWithPredictions.add(e.id)
+  })
+
+  // Force-regenerate AI predictions for ALL selected events — historical events have stale api-sports fixture IDs.
+  // Strip existing predictions from metadata so generateAiPredictions treats every event as needing a fresh one.
+  const eventsStripped = selectedEvents.map(e => ({ ...e, metadata: {} }))
+  const aiPreds = await generateAiPredictions(eventsStripped as any)
   await Promise.all(Array.from(aiPreds.entries()).map(async ([eventId, prediction]) => {
     const ev = selectedEvents.find(e => e.id === eventId)
     await supabase.from("events").update({ metadata: { ...((ev?.metadata as any) || {}), predictions: prediction } }).eq("id", eventId)

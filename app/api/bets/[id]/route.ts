@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { createNotification } from "@/lib/notifications"
-import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
+import { ACCEPT_WINDOW_MINUTES, PRE_MATCH_ONLY_BET_TYPES } from "@/lib/bet-constants"
 import { payoutToMode } from "@/lib/wallet-utils"
 
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string; }> }) {
@@ -50,8 +50,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
       isAdmin = profile?.role === 'backoffice_admin'
     }
 
+    // Demo bets are always publicly readable — they're fictional and meant to be explored
+    const isDemoOpenBet = (bet as any).is_demo && bet.status === 'open'
+
     // Admins can see all bets, participants can see their own, open bets are public during acceptance window
-    const canRead = isAdmin || canReadOpenByWindow || isParticipant
+    const canRead = isAdmin || canReadOpenByWindow || isParticipant || isDemoOpenBet
 
     if (!canRead) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -141,17 +144,29 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     const eventRow = Array.isArray(bet.event) ? bet.event[0] : bet.event
-    const eventStart = eventRow?.start_time ? new Date(eventRow.start_time) : null
-    if (!eventStart || Number.isNaN(eventStart.getTime())) {
-      return NextResponse.json({ error: 'Invalid event start time' }, { status: 400 })
-    }
 
-    const acceptanceDeadline = new Date(eventStart.getTime() + ACCEPT_WINDOW_MINUTES * 60 * 1000)
-    if (new Date() > acceptanceDeadline) {
-      return NextResponse.json(
-        { error: `No se puede tomar la apuesta: pasaron más de ${ACCEPT_WINDOW_MINUTES} minutos desde el inicio del evento` },
-        { status: 400 }
-      )
+    // Demo bets skip time validation — their events are fictional
+    if (!bet.is_demo && !eventRow?.is_demo) {
+      const eventStart = eventRow?.start_time ? new Date(eventRow.start_time) : null
+      if (!eventStart || Number.isNaN(eventStart.getTime())) {
+        return NextResponse.json({ error: 'Invalid event start time' }, { status: 400 })
+      }
+
+      // first_scorer and half_time must be taken strictly before the event starts — no tolerance window
+      if (PRE_MATCH_ONLY_BET_TYPES.has(bet.bet_type) && new Date() >= eventStart) {
+        return NextResponse.json(
+          { error: 'Esta apuesta solo se puede tomar antes de que empiece el partido' },
+          { status: 400 }
+        )
+      }
+
+      const acceptanceDeadline = new Date(eventStart.getTime() + ACCEPT_WINDOW_MINUTES * 60 * 1000)
+      if (new Date() > acceptanceDeadline) {
+        return NextResponse.json(
+          { error: `No se puede tomar la apuesta: pasaron más de ${ACCEPT_WINDOW_MINUTES} minutos desde el inicio del evento` },
+          { status: 400 }
+        )
+      }
     }
 
     // Validate user is not the creator

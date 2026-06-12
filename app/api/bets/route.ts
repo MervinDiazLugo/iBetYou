@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
-import { ACCEPT_WINDOW_MINUTES } from "@/lib/bet-constants"
+import { ACCEPT_WINDOW_MINUTES, PRE_MATCH_ONLY_BET_TYPES } from "@/lib/bet-constants"
 import { createNotification } from "@/lib/notifications"
 import { payoutToMode } from "@/lib/wallet-utils"
 
@@ -80,15 +80,23 @@ export async function GET(request: NextRequest) {
     
     let bets = data || []
 
-    // Marketplace only: show open bets only if event started <= 10 minutes ago (or has not started yet).
+    // Marketplace only: show open bets only if within acceptance window.
+    // Demo bets are exempt — their events are fictional and should always be visible.
+    // first_scorer and half_time: strictly pre-match (no tolerance window).
     if (!type) {
-      const acceptanceDeadlineNow = Date.now() - (ACCEPT_WINDOW_MINUTES * 60 * 1000)
+      const now = Date.now()
+      const acceptanceDeadlineNow = now - (ACCEPT_WINDOW_MINUTES * 60 * 1000)
       bets = bets.filter((bet: any) => {
+        if (bet.is_demo || bet?.event?.is_demo) return true
+
         const startRaw = bet?.event?.start_time
         if (!startRaw) return false
 
         const startMs = new Date(startRaw).getTime()
         if (Number.isNaN(startMs)) return false
+
+        // first_scorer and half_time must still be in the future
+        if (PRE_MATCH_ONLY_BET_TYPES.has(bet.bet_type)) return startMs > now
 
         return startMs >= acceptanceDeadlineNow
       })

@@ -12,6 +12,7 @@ import {
   oddsForOutcome,
   MAX_DIRECT_EXPOSURE,
   MAX_EXACT_EXPOSURE,
+  MAX_DIRECT_BET_PROBABILITY,
   DirectOutcome,
 } from "@/lib/house-odds"
 import { houseWalletDebit, houseWalletCredit } from "@/lib/house-wallet"
@@ -195,6 +196,15 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         )
       }
+      const homeProb = parseFloat(String(percent.home).replace("%", "")) / 100
+      const awayProb = parseFloat(String(percent.away).replace("%", "")) / 100
+      if (Math.max(homeProb, awayProb) > MAX_DIRECT_BET_PROBABILITY) {
+        return NextResponse.json(
+          { error: "Las apuestas directas no están disponibles para este evento: la diferencia de probabilidades es demasiado alta" },
+          { status: 400 }
+        )
+      }
+
       const oddsResult = calcDirectOdds(percent)
       if (!oddsResult) {
         return NextResponse.json(

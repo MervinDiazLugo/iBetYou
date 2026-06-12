@@ -5,6 +5,10 @@ const BASEBALL_EXACT_SCORE_ODDS = 15.0
 export const MAX_DIRECT_EXPOSURE = 500_000
 export const MAX_EXACT_EXPOSURE = 200_000
 
+// Direct bets are blocked when any team's win probability exceeds this threshold.
+// Above 80%, underdog odds reach 5.68x+ — too much variance for the house at low sample sizes.
+export const MAX_DIRECT_BET_PROBABILITY = 0.80
+
 type PredictionPercent = {
   home: string
   away: string

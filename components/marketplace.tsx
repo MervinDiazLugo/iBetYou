@@ -1494,6 +1494,15 @@ function HomeContent() {
                       </div>
 
 
+                      {(bet.event as any)?.metadata?.predictions?.percent && (
+                        <PredictionPills
+                          predictions={(bet.event as any).metadata.predictions}
+                          homeTeam={bet.event.home_team}
+                          awayTeam={bet.event.away_team}
+                          size="xs"
+                        />
+                      )}
+
                       <div className="bg-primary/10 rounded p-2 border border-primary/20">
                         <div className="text-[9px] text-muted-foreground text-center mb-0.5">Apuesta</div>
                         <div className="text-sm font-bold text-center text-primary truncate">
