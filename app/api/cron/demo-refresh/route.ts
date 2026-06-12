@@ -103,16 +103,31 @@ export async function GET(request: NextRequest) {
   await supabase.from("events").update({ is_demo: false }).eq("is_demo", true)
   await supabase.from("bets").update({ status: "cancelled" }).eq("is_demo", true).eq("status", "open")
 
-  // Re-activate demo with fresh events
-  try {
-    const activateRes = await fetch(`${baseUrl}/api/admin/demo`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-auto-resolve-secret": CRON_SECRET },
-    })
-    const activateData = await activateRes.json()
-    console.log("[cron/demo-refresh] new demo activated:", activateData)
-  } catch (e: any) {
-    failed.push(`demo re-activate: ${e.message}`)
+  // Re-activate demo with fresh events — retry once on failure, mark inactive if both fail
+  let reactivated = false
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const activateRes = await fetch(`${baseUrl}/api/admin/demo`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-auto-resolve-secret": CRON_SECRET },
+      })
+      if (!activateRes.ok) throw new Error(`HTTP ${activateRes.status}`)
+      const activateData = await activateRes.json()
+      console.log(`[cron/demo-refresh] new demo activated (attempt ${attempt}):`, activateData)
+      reactivated = true
+      break
+    } catch (e: any) {
+      console.error(`[cron/demo-refresh] re-activate attempt ${attempt} failed:`, e.message)
+      if (attempt === 2) {
+        failed.push(`demo re-activate: ${e.message}`)
+        // Both attempts failed — mark demo inactive so state is honest (no limbo)
+        await supabase.from("app_settings").upsert({
+          key: "demo_mode",
+          value: { active: false, activated_at: null },
+          updated_at: new Date().toISOString(),
+        })
+      }
+    }
   }
 
   console.log("[cron/demo-refresh]", { resolved: resolved.length, failed })
