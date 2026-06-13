@@ -56,7 +56,9 @@ export async function POST(request: NextRequest) {
   // Ordering by id DESC gives the most recently synced events (most likely upcoming).
   const SELECT_FIELDS = "id, sport, league, home_team, away_team, home_logo, away_logo, start_time, metadata"
   const [footballRes, basketballRes, baseballRes] = await Promise.all([
-    supabase.from("events").select(SELECT_FIELDS).eq("sport", "football").eq("is_demo", false).order("id", { ascending: false }).limit(100),
+    // Football: oldest first — early inserts were top European/South American leagues (UCL, La Liga, etc.)
+    // Recent inserts are mostly obscure USL lower-division events
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "football").eq("is_demo", false).order("id", { ascending: true }).limit(200),
     supabase.from("events").select(SELECT_FIELDS).eq("sport", "basketball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
     supabase.from("events").select(SELECT_FIELDS).eq("sport", "baseball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
   ])
