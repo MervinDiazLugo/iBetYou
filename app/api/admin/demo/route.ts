@@ -52,38 +52,52 @@ export async function POST(request: NextRequest) {
     .update({ is_demo: false, status: "finished" })
     .eq("is_demo", true)
 
-  // Fetch top 100 events per sport to guarantee sport diversity.
-  // Ordering by id DESC gives the most recently synced events (most likely upcoming).
   const SELECT_FIELDS = "id, sport, league, home_team, away_team, home_logo, away_logo, start_time, metadata"
+
+  // Quality football leagues only — exclude reserve/youth/lower-division which dominate recent syncs
+  const QUALITY_FOOTBALL_LEAGUES = [
+    "UEFA Champions League", "UEFA Europa League", "UEFA Conference League",
+    "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1", "Eredivisie",
+    "Primeira Liga", "Premier League International Cup",
+    "Copa Libertadores", "Copa Sudamericana", "CONMEBOL Sudamericana",
+    "Liga Profesional Argentina", "Major League Soccer", "Liga MX",
+    "J1 League", "K League 1", "Friendlies", "Copa America", "FIFA World Cup",
+    "AFC Champions League", "CAF Champions League", "Copa do Nordeste",
+    "Copa Colombia", "Copa Ecuador",
+  ]
+
   const [footballRes, basketballRes, baseballRes] = await Promise.all([
-    // Football: oldest first — early inserts were top European/South American leagues (UCL, La Liga, etc.)
-    // Recent inserts are mostly obscure USL lower-division events
-    supabase.from("events").select(SELECT_FIELDS).eq("sport", "football").eq("is_demo", false).order("id", { ascending: true }).limit(200),
-    supabase.from("events").select(SELECT_FIELDS).eq("sport", "basketball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
-    supabase.from("events").select(SELECT_FIELDS).eq("sport", "baseball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "football").eq("is_demo", false)
+      .in("league", QUALITY_FOOTBALL_LEAGUES).order("id", { ascending: false }).limit(100),
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "basketball").eq("is_demo", false).order("id", { ascending: false }).limit(80),
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "baseball").eq("is_demo", false).order("id", { ascending: false }).limit(50),
   ])
 
-  const events = [
-    ...(footballRes.data || []),
-    ...(basketballRes.data || []),
-    ...(baseballRes.data || []),
-  ]
+  const footballEvents = footballRes.data || []
+  const basketballEvents = basketballRes.data || []
+  const baseballEvents = baseballRes.data || []
+  const events = [...footballEvents, ...basketballEvents, ...baseballEvents]
 
   if (!events.length) {
     return NextResponse.json({ error: "No hay eventos en la base de datos" }, { status: 422 })
   }
 
-  // Ask Claude to pick DEMO_EVENT_COUNT events — no dates needed since we'll assign them
-  const eventLines = events.map(e =>
-    `${e.id}|${e.sport}|${e.league}|${e.home_team} vs ${e.away_team}`
-  ).join("\n")
+  const footballSection = footballEvents.map(e => `${e.id}|football|${e.league}|${e.home_team} vs ${e.away_team}`).join("\n")
+  const basketballSection = basketballEvents.map(e => `${e.id}|basketball|${e.league}|${e.home_team} vs ${e.away_team}`).join("\n")
+  const baseballSection = baseballEvents.map(e => `${e.id}|baseball|${e.league}|${e.home_team} vs ${e.away_team}`).join("\n")
 
-  const prompt = `Pick ${DEMO_EVENT_COUNT} events for a sports betting demo platform. Mix of sports. Prioritize well-known teams and leagues (e.g. Premier League, Champions League, NBA, Euroleague, MLB). Caps: football 6-10, basketball 1-5, baseball 0-5. No duplicates (same two teams).
+  const prompt = `Select exactly ${DEMO_EVENT_COUNT} events for a sports betting demo: EXACTLY 8 football, EXACTLY 5 basketball, EXACTLY 3 baseball.
 
-Events (id|sport|league|match):
-${eventLines}
+FOOTBALL (pick exactly 8 — only well-known teams/leagues like Champions League, La Liga, Premier League, Copa Libertadores):
+${footballSection || "(none available)"}
 
-Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
+BASKETBALL (pick exactly 5 — prefer NBA, EuroLeague, ACB, known leagues):
+${basketballSection || "(none available)"}
+
+BASEBALL (pick exactly 3 — prefer MLB, NPB, KBO):
+${baseballSection || "(none available)"}
+
+Rules: no duplicates (same two teams). Reply ONLY with JSON array of ${DEMO_EVENT_COUNT} IDs: [123,456,...]`
 
   let selectedIds: number[] = []
   try {
