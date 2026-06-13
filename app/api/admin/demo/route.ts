@@ -52,15 +52,22 @@ export async function POST(request: NextRequest) {
     .update({ is_demo: false, status: "finished" })
     .eq("is_demo", true)
 
-  // Pull from ALL existing events in the DB — no date filter.
-  // We'll assign new future dates to the selected ones.
-  const { data: events, error } = await supabase
-    .from("events")
-    .select("id, sport, league, home_team, away_team, home_logo, away_logo, start_time, metadata")
-    .order("id", { ascending: false })
-    .limit(300)
+  // Fetch top 100 events per sport to guarantee sport diversity.
+  // Ordering by id DESC gives the most recently synced events (most likely upcoming).
+  const SELECT_FIELDS = "id, sport, league, home_team, away_team, home_logo, away_logo, start_time, metadata"
+  const [footballRes, basketballRes, baseballRes] = await Promise.all([
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "football").eq("is_demo", false).order("id", { ascending: false }).limit(100),
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "basketball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
+    supabase.from("events").select(SELECT_FIELDS).eq("sport", "baseball").eq("is_demo", false).order("id", { ascending: false }).limit(100),
+  ])
 
-  if (error || !events?.length) {
+  const events = [
+    ...(footballRes.data || []),
+    ...(basketballRes.data || []),
+    ...(baseballRes.data || []),
+  ]
+
+  if (!events.length) {
     return NextResponse.json({ error: "No hay eventos en la base de datos" }, { status: 422 })
   }
 
@@ -69,7 +76,7 @@ export async function POST(request: NextRequest) {
     `${e.id}|${e.sport}|${e.league}|${e.home_team} vs ${e.away_team}`
   ).join("\n")
 
-  const prompt = `Pick ${DEMO_EVENT_COUNT} events for a sports betting demo platform. Mix of football, basketball, baseball. Prioritize well-known teams and leagues. Caps: football 6-10, basketball 1-5, baseball 0-5. No duplicates (same two teams).
+  const prompt = `Pick ${DEMO_EVENT_COUNT} events for a sports betting demo platform. Mix of sports. Prioritize well-known teams and leagues (e.g. Premier League, Champions League, NBA, Euroleague, MLB). Caps: football 6-10, basketball 1-5, baseball 0-5. No duplicates (same two teams).
 
 Events (id|sport|league|match):
 ${eventLines}

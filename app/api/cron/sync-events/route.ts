@@ -6,13 +6,22 @@ const CRON_SECRET = process.env.CRON_SECRET
 const API_KEY = process.env.API_FOOTBALL_KEY!
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
-const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 
+// The basketball API (v1.basketball.api-sports.io) returns both basketball and baseball games.
+// The baseball API (v1.baseball.api-sports.io) is the same server — it also returns basketball data.
+// We use the basketball URL for both and detect sport from league name.
 const SPORTS = [
   { id: "football", baseUrl: FOOTBALL_URL, endpoint: "fixtures" },
   { id: "basketball", baseUrl: BASKETBALL_URL, endpoint: "games" },
-  { id: "baseball", baseUrl: BASEBALL_URL, endpoint: "games" },
 ]
+
+// Baseball leagues returned by the basketball API endpoint
+const BASEBALL_LEAGUE_NAMES = new Set([
+  "MLB", "NPB", "KBO", "LMB", "LIDOM", "PCL", "IL", "AAA East", "AAA West",
+  "EL", "SAL", "CAL", "FSL", "AZL", "DSL", "VSL", "PBL",
+  "Pacific Coast League", "International League", "Eastern League",
+  "Venezuelan Summer League", "Dominican Summer League",
+])
 
 function fetchApiSports(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
@@ -60,10 +69,13 @@ function normalizeEvent(sport: string, event: any): Record<string, unknown> | nu
   }
   if (sport === "basketball") {
     if (!event.id || !event.teams?.home?.name || !event.teams?.away?.name) return null
+    const leagueName = event.league?.name || "Unknown"
+    // Basketball API also returns baseball games — detect by league name
+    const actualSport = BASEBALL_LEAGUE_NAMES.has(leagueName) ? "baseball" : "basketball"
     return {
-      external_id: `basketball_${event.id}`,
-      sport: "basketball",
-      league: event.league?.name || "Unknown",
+      external_id: `${actualSport}_${event.id}`,
+      sport: actualSport,
+      league: leagueName,
       country: event.country?.name || "Unknown",
       home_team: event.teams.home.name,
       away_team: event.teams.away.name,
@@ -72,22 +84,6 @@ function normalizeEvent(sport: string, event: any): Record<string, unknown> | nu
       start_time: event.date,
       status: mapStatus(event.status?.short),
       metadata: { venue: { name: event.venue || null, city: null } },
-    }
-  }
-  if (sport === "baseball") {
-    if (!event.id || !event.teams?.home?.name || !event.teams?.away?.name) return null
-    return {
-      external_id: `baseball_${event.id}`,
-      sport: "baseball",
-      league: event.league?.name || "Unknown",
-      country: event.country?.name || "Unknown",
-      home_team: event.teams.home.name,
-      away_team: event.teams.away.name,
-      home_logo: event.teams.home.logo || null,
-      away_logo: event.teams.away.logo || null,
-      start_time: event.date,
-      status: mapStatus(event.status?.short),
-      metadata: { venue: { name: event.venue?.name || null, city: event.venue?.city || null } },
     }
   }
   return null
