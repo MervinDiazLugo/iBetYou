@@ -23,6 +23,17 @@ const BASEBALL_LEAGUE_NAMES = new Set([
   "Venezuelan Summer League", "Dominican Summer League",
 ])
 
+// Football leagues that appear in the basketball API response — skip them since the football API covers them
+const FOOTBALL_LEAGUE_NAMES = new Set([
+  "Friendlies", "Copa Colombia", "Copa Ecuador", "Copa do Nordeste",
+  "UEFA Champions League", "UEFA Europa League", "UEFA Conference League",
+  "Premier League", "La Liga", "Bundesliga", "Serie A", "Ligue 1",
+  "Copa Libertadores", "Copa Sudamericana", "CONMEBOL Sudamericana",
+  "Liga Profesional Argentina", "Major League Soccer", "Liga MX",
+  "Eredivisie", "Primeira Liga", "J1 League", "K League 1",
+  "Copa America", "FIFA World Cup", "AFC Champions League", "CAF Champions League",
+])
+
 function fetchApiSports(url: string): Promise<any> {
   return new Promise((resolve, reject) => {
     const { hostname, pathname, search } = new URL(url)
@@ -70,7 +81,8 @@ function normalizeEvent(sport: string, event: any): Record<string, unknown> | nu
   if (sport === "basketball") {
     if (!event.id || !event.teams?.home?.name || !event.teams?.away?.name) return null
     const leagueName = event.league?.name || "Unknown"
-    // Basketball API also returns baseball games — detect by league name
+    // Basketball API also returns football and baseball games — skip or reclassify by league name
+    if (FOOTBALL_LEAGUE_NAMES.has(leagueName)) return null // football API covers these
     const actualSport = BASEBALL_LEAGUE_NAMES.has(leagueName) ? "baseball" : "basketball"
     return {
       external_id: `${actualSport}_${event.id}`,
