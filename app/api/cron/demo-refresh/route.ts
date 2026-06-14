@@ -81,11 +81,9 @@ export async function GET(request: NextRequest) {
     resolved.push(ev.id)
   }
 
-  // Trigger auto-resolve for all demo events that now have scores
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000"
-  const autoResolveResults: any[] = []
-
-  for (const eventId of resolved) {
+  // Trigger auto-resolve for all demo events that now have scores — parallel to stay within cron timeout
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || `https://${process.env.VERCEL_URL}` || "http://localhost:3000"
+  const autoResolveResults = await Promise.all(resolved.map(async (eventId) => {
     try {
       const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
         method: "POST",
@@ -93,41 +91,33 @@ export async function GET(request: NextRequest) {
         body: JSON.stringify({ event_id: eventId }),
       })
       const data = await res.json()
-      autoResolveResults.push({ event_id: eventId, ...data })
+      return { event_id: eventId, ...data }
     } catch (e: any) {
       failed.push(`auto-resolve event ${eventId}: ${e.message}`)
+      return { event_id: eventId, error: (e as Error).message }
     }
-  }
+  }))
 
   // Clear old demo events + bets, then trigger new demo activation
   await supabase.from("events").update({ is_demo: false }).eq("is_demo", true)
   await supabase.from("bets").update({ status: "cancelled" }).eq("is_demo", true).eq("status", "open")
 
-  // Re-activate demo with fresh events — retry once on failure, mark inactive if both fail
+  // Re-activate demo with fresh events
   let reactivated = false
-  for (let attempt = 1; attempt <= 2; attempt++) {
-    try {
-      const activateRes = await fetch(`${baseUrl}/api/admin/demo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-auto-resolve-secret": CRON_SECRET },
-      })
-      if (!activateRes.ok) throw new Error(`HTTP ${activateRes.status}`)
-      const activateData = await activateRes.json()
-      console.log(`[cron/demo-refresh] new demo activated (attempt ${attempt}):`, activateData)
-      reactivated = true
-      break
-    } catch (e: any) {
-      console.error(`[cron/demo-refresh] re-activate attempt ${attempt} failed:`, e.message)
-      if (attempt === 2) {
-        failed.push(`demo re-activate: ${e.message}`)
-        // Both attempts failed — mark demo inactive so state is honest (no limbo)
-        await supabase.from("app_settings").upsert({
-          key: "demo_mode",
-          value: { active: false, activated_at: null },
-          updated_at: new Date().toISOString(),
-        })
-      }
-    }
+  try {
+    const activateRes = await fetch(`${baseUrl}/api/admin/demo`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-auto-resolve-secret": CRON_SECRET },
+    })
+    if (!activateRes.ok) throw new Error(`HTTP ${activateRes.status}`)
+    const activateData = await activateRes.json()
+    console.log("[cron/demo-refresh] new demo activated:", activateData)
+    reactivated = true
+  } catch (e: any) {
+    console.error("[cron/demo-refresh] re-activate failed:", e.message)
+    failed.push(`demo re-activate: ${e.message}`)
+    // Do NOT set active=false — leave demo_mode as-is. The backoffice can manually re-activate.
+    // Setting active=false here caused daily "no events" issues when this call timed out.
   }
 
   console.log("[cron/demo-refresh]", { resolved: resolved.length, failed })
