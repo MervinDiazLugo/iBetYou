@@ -35,19 +35,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: profilesRes.error.message }, { status: 500 })
     }
 
-    const authById = new Map<string, string | null>()
+    const authById = new Map<string, { last_sign_in_at: string | null; email: string | null }>()
     for (const u of authRes.data?.users ?? []) {
-      authById.set(u.id, u.last_sign_in_at ?? null)
+      authById.set(u.id, { last_sign_in_at: u.last_sign_in_at ?? null, email: u.email ?? null })
     }
 
     const users = (profilesRes.data || []).map((p) => {
       const walletRow = Array.isArray((p as any).wallets) ? (p as any).wallets[0] : (p as any).wallets
+      const auth = authById.get(p.id)
       return {
         ...p,
         wallets: undefined,
         balance_fantasy: walletRow?.balance_fantasy ?? null,
         balance_real: walletRow?.balance_real ?? null,
-        last_sign_in_at: authById.get(p.id) ?? null,
+        last_sign_in_at: auth?.last_sign_in_at ?? null,
+        email: auth?.email ?? null,
       }
     })
 

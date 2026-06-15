@@ -30,6 +30,7 @@ interface AdminUser {
   last_sign_in_at?: string | null
   balance_fantasy?: number | null
   balance_real?: number | null
+  email?: string | null
 }
 
 export default function BackofficeUsersPage() {
@@ -304,13 +305,18 @@ export default function BackofficeUsersPage() {
                       i % 2 === 0 ? "" : "bg-muted/10"
                     }`}
                   >
-                    {/* Nickname */}
+                    {/* Nickname + email */}
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
                           {user.nickname?.[0]?.toUpperCase() ?? "?"}
                         </div>
-                        <span className="font-medium">{user.nickname}</span>
+                        <div className="min-w-0">
+                          <div className="font-medium">{user.nickname}</div>
+                          {user.email && (
+                            <div className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</div>
+                          )}
+                        </div>
                       </div>
                     </td>
 
