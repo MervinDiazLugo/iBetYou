@@ -55,7 +55,7 @@ const STATUS_CONFIG = {
 export default function BackofficeRecargas() {
   const supabase = createBrowserSupabaseClient()
   const { showToast } = useToast()
-  const [tab, setTab] = useState<"requests" | "accounts" | "settings">("requests")
+  const [tab, setTab] = useState<"requests" | "accounts">("requests")
 
   async function authFetch(input: RequestInfo, init?: RequestInit) {
     const { data: { session } } = await supabase.auth.getSession()
@@ -192,43 +192,6 @@ export default function BackofficeRecargas() {
     }
   }
 
-  // ── Tab: Configuración ──────────────────────────────────────────────────────
-
-  const [ibcPrice, setIbcPrice] = useState("")
-  const [loadingSettings, setLoadingSettings] = useState(false)
-  const [savingPrice, setSavingPrice] = useState(false)
-
-  async function fetchSettings() {
-    setLoadingSettings(true)
-    try {
-      const res = await authFetch("/api/admin/iby/settings")
-      const data = await res.json()
-      const priceSetting = (data.settings || []).find((s: { key: string; value: string }) => s.key === "iby_coin_price")
-      if (priceSetting) setIbcPrice(priceSetting.value)
-    } finally {
-      setLoadingSettings(false)
-    }
-  }
-
-  useEffect(() => { if (tab === "settings") fetchSettings() }, [tab])
-
-  async function savePrice() {
-    const price = Number(ibcPrice)
-    if (!price || price <= 0) { showToast("Precio inválido", "error"); return }
-    setSavingPrice(true)
-    try {
-      const res = await authFetch("/api/admin/iby/settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ iby_coin_price: price }),
-      })
-      const data = await res.json()
-      if (!res.ok) { showToast(data.error || "Error", "error"); return }
-      showToast(`Precio actualizado: 1 iBY = $${price}`, "success")
-    } finally {
-      setSavingPrice(false)
-    }
-  }
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -246,7 +209,7 @@ export default function BackofficeRecargas() {
 
       {/* Tabs */}
       <div className="flex gap-2 border-b border-border pb-0">
-        {(["requests", "accounts", "settings"] as const).map((t) => (
+        {(["requests", "accounts"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -256,7 +219,7 @@ export default function BackofficeRecargas() {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            {{ requests: "Solicitudes", accounts: "Cuentas", settings: "Configuración" }[t]}
+            {{ requests: "Solicitudes", accounts: "Cuentas" }[t]}
           </button>
         ))}
       </div>
@@ -437,44 +400,6 @@ export default function BackofficeRecargas() {
         </div>
       )}
 
-      {/* ── Tab: Configuración ── */}
-      {tab === "settings" && (
-        <Card className="max-w-md">
-          <CardHeader>
-            <CardTitle>Precio del iBY Coin</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Define cuántos pesos cuesta 1 iBY Coin. Afecta las recargas aprobadas a partir de este momento.
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {loadingSettings ? (
-              <p className="text-sm text-muted-foreground">Cargando...</p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Precio (pesos por 1 iBY)</label>
-                  <Input
-                    type="number"
-                    min="0.01"
-                    step="0.01"
-                    value={ibcPrice}
-                    onChange={(e) => setIbcPrice(e.target.value)}
-                    placeholder="1.00"
-                  />
-                  {ibcPrice && Number(ibcPrice) > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Con este precio: $100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} iBY
-                    </p>
-                  )}
-                </div>
-                <Button onClick={savePrice} disabled={savingPrice}>
-                  {savingPrice ? "Guardando..." : "Guardar precio"}
-                </Button>
-              </>
-            )}
-          </CardContent>
-        </Card>
-      )}
 
       {/* ── Modal: Rechazar ── */}
       {rejectModal && (

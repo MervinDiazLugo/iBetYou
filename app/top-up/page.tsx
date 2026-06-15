@@ -222,7 +222,7 @@ export default function RecargasPage() {
       ])
       if (walletRes.ok) {
         const d = await walletRes.json()
-        setIbcBalance(Number(d.wallet?.balance || 0))
+        setIbcBalance(Number(d.wallet?.balance || 0) - Number(d.wallet?.balance_blocked || 0))
       }
       if (accountsRes.ok) {
         const d = await accountsRes.json()
