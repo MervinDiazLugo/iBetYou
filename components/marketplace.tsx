@@ -2146,7 +2146,16 @@ function HomeContent() {
                         }),
                       })
                       const json = await res.json()
-                      if (!res.ok) { showToast(json.error || "Error al crear apuesta", "error"); return }
+                      if (!res.ok) {
+                        if (json.banned) {
+                          showToast("Tu cuenta fue suspendida por seguridad. Comunícate con soporte.", "error")
+                          await supabase.auth.signOut()
+                          router.push("/")
+                          return
+                        }
+                        showToast(json.error || "Error al crear apuesta", "error")
+                        return
+                      }
                       showToast("¡Apuesta creada contra la casa!", "success")
                       setHouseBetModal(null)
                       setHouseBetSelection(null)

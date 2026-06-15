@@ -324,7 +324,8 @@ export async function POST(request: NextRequest) {
       }
       const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
       if (available < stake) {
-        return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
+        await supabase.from("profiles").update({ is_banned: true }).eq("id", user.id)
+        return NextResponse.json({ error: "Saldo insuficiente. Tu cuenta fue suspendida.", banned: true }, { status: 403 })
       }
       currentBalance = Number(ibcWallet.balance)
       currentBalanceBlocked = Number(ibcWallet.balance_blocked)
@@ -338,7 +339,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
       }
       if (wallet.balance_fantasy < stake) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        await supabase.from("profiles").update({ is_banned: true }).eq("id", user.id)
+        return NextResponse.json({ error: "Saldo insuficiente. Tu cuenta fue suspendida.", banned: true }, { status: 403 })
       }
       currentBalance = wallet.balance_fantasy
     }

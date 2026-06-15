@@ -403,6 +403,12 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
       if (!res.ok) {
         const data = await res.json()
+        if (data.banned) {
+          showToast("Tu cuenta fue suspendida por seguridad. Comunícate con soporte.", "error")
+          await supabase.auth.signOut()
+          router.push("/")
+          return
+        }
         const message = data.error || "Error al crear la apuesta"
         showToast(message, "error")
         throw new Error(message)

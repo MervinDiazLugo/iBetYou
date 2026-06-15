@@ -208,7 +208,8 @@ export async function POST(request: NextRequest) {
       }
       const available = Number(ibcWallet.balance) - Number(ibcWallet.balance_blocked)
       if (available < totalNeeded) {
-        return NextResponse.json({ error: "Insufficient iBY balance" }, { status: 400 })
+        await supabase.from("profiles").update({ is_banned: true }).eq("id", user.id)
+        return NextResponse.json({ error: "Saldo insuficiente. Tu cuenta fue suspendida.", banned: true }, { status: 403 })
       }
       ibcSnapshot = { balance: Number(ibcWallet.balance), blocked: Number(ibcWallet.balance_blocked) }
     } else {
@@ -221,7 +222,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Wallet not found" }, { status: 404 })
       }
       if (wallet.balance_fantasy < totalNeeded) {
-        return NextResponse.json({ error: "Insufficient balance" }, { status: 400 })
+        await supabase.from("profiles").update({ is_banned: true }).eq("id", user.id)
+        return NextResponse.json({ error: "Saldo insuficiente. Tu cuenta fue suspendida.", banned: true }, { status: 403 })
       }
       fantasySnapshot = wallet.balance_fantasy
     }
@@ -264,6 +266,10 @@ export async function POST(request: NextRequest) {
         await deductFromGroupWallet(supabase, group_id, user.id, totalNeeded)
       } catch (err: any) {
         await cancelBetOnFailure()
+        if (err.message === "Saldo de grupo insuficiente") {
+          await supabase.from("profiles").update({ is_banned: true }).eq("id", user.id)
+          return NextResponse.json({ error: "Saldo insuficiente. Tu cuenta fue suspendida.", banned: true }, { status: 403 })
+        }
         return NextResponse.json({ error: err.message }, { status: 400 })
       }
     } else if (betMode === "real" && ibcSnapshot) {
