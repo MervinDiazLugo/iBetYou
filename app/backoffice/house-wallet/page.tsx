@@ -57,10 +57,12 @@ export default function HouseWalletPage() {
 
   // Settings
   const [ibcPrice, setIbcPrice] = useState("")
-  const [maxBet, setMaxBet] = useState("")
+  const [maxBetP2P, setMaxBetP2P] = useState("")
+  const [maxBetHouse, setMaxBetHouse] = useState("")
   const [loadingSettings, setLoadingSettings] = useState(true)
   const [savingPrice, setSavingPrice] = useState(false)
-  const [savingMax, setSavingMax] = useState(false)
+  const [savingMaxP2P, setSavingMaxP2P] = useState(false)
+  const [savingMaxHouse, setSavingMaxHouse] = useState(false)
 
   const { showToast } = useToast()
 
@@ -93,9 +95,11 @@ export default function HouseWalletPage() {
       if (res.ok) {
         const json = await res.json()
         const priceSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "iby_coin_price")
-        const maxSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "max_bet_amount")
+        const maxP2PSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "max_bet_amount")
+        const maxHouseSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "max_bet_amount_house")
         if (priceSetting) setIbcPrice(priceSetting.value)
-        if (maxSetting) setMaxBet(maxSetting.value)
+        if (maxP2PSetting) setMaxBetP2P(maxP2PSetting.value)
+        if (maxHouseSetting) setMaxBetHouse(maxHouseSetting.value)
       }
     } finally {
       setLoadingSettings(false)
@@ -142,10 +146,10 @@ export default function HouseWalletPage() {
     }
   }
 
-  const saveMaxBet = async () => {
-    const max = Number(maxBet)
+  const saveMaxBetP2P = async () => {
+    const max = Number(maxBetP2P)
     if (!max || max <= 0) { showToast("Monto máximo inválido", "error"); return }
-    setSavingMax(true)
+    setSavingMaxP2P(true)
     try {
       const res = await authFetch("/api/admin/iby/settings", {
         method: "PATCH",
@@ -154,9 +158,27 @@ export default function HouseWalletPage() {
       })
       const json = await res.json()
       if (!res.ok) { showToast(json.error || "Error", "error"); return }
-      showToast(`Apuesta máxima actualizada: ${formatCurrency(max)}`, "success")
+      showToast(`Máx. P2P actualizado: ${formatCurrency(max)}`, "success")
     } finally {
-      setSavingMax(false)
+      setSavingMaxP2P(false)
+    }
+  }
+
+  const saveMaxBetHouse = async () => {
+    const max = Number(maxBetHouse)
+    if (!max || max <= 0) { showToast("Monto máximo inválido", "error"); return }
+    setSavingMaxHouse(true)
+    try {
+      const res = await authFetch("/api/admin/iby/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_bet_amount_house: max }),
+      })
+      const json = await res.json()
+      if (!res.ok) { showToast(json.error || "Error", "error"); return }
+      showToast(`Máx. Casa actualizado: ${formatCurrency(max)}`, "success")
+    } finally {
+      setSavingMaxHouse(false)
     }
   }
 
@@ -356,8 +378,8 @@ export default function HouseWalletPage() {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Apuesta máxima</CardTitle>
-                  <p className="text-xs text-muted-foreground">Monto máximo por apuesta (en tokens). Aplica a P2P y vs casa.</p>
+                  <CardTitle className="text-base">Apuesta máxima P2P</CardTitle>
+                  <p className="text-xs text-muted-foreground">Límite por apuesta en el marketplace entre usuarios.</p>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex gap-2 items-center">
@@ -365,17 +387,43 @@ export default function HouseWalletPage() {
                       type="number"
                       min="1"
                       step="1"
-                      value={maxBet}
-                      onChange={e => setMaxBet(e.target.value)}
+                      value={maxBetP2P}
+                      onChange={e => setMaxBetP2P(e.target.value)}
                       placeholder="50000"
                       className="max-w-[160px]"
                     />
-                    <Button onClick={saveMaxBet} disabled={savingMax} size="sm">
-                      {savingMax ? "Guardando..." : "Guardar"}
+                    <Button onClick={saveMaxBetP2P} disabled={savingMaxP2P} size="sm">
+                      {savingMaxP2P ? "Guardando..." : "Guardar"}
                     </Button>
                   </div>
-                  {maxBet && Number(maxBet) > 0 && (
-                    <p className="text-xs text-muted-foreground">Máximo: {formatCurrency(Number(maxBet))} por apuesta</p>
+                  {maxBetP2P && Number(maxBetP2P) > 0 && (
+                    <p className="text-xs text-muted-foreground">Máximo P2P: {formatCurrency(Number(maxBetP2P))} por apuesta</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Apuesta máxima vs Casa</CardTitle>
+                  <p className="text-xs text-muted-foreground">Límite por apuesta en modalidad contra la casa.</p>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={maxBetHouse}
+                      onChange={e => setMaxBetHouse(e.target.value)}
+                      placeholder="100000"
+                      className="max-w-[160px]"
+                    />
+                    <Button onClick={saveMaxBetHouse} disabled={savingMaxHouse} size="sm">
+                      {savingMaxHouse ? "Guardando..." : "Guardar"}
+                    </Button>
+                  </div>
+                  {maxBetHouse && Number(maxBetHouse) > 0 && (
+                    <p className="text-xs text-muted-foreground">Máximo Casa: {formatCurrency(Number(maxBetHouse))} por apuesta</p>
                   )}
                 </CardContent>
               </Card>

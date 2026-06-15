@@ -91,6 +91,14 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const [feeIncluded, setFeeIncluded] = useState(true)
   const [balanceLoaded, setBalanceLoaded] = useState(false)
   const [eventFilter, setEventFilter] = useState("")
+  const [maxBetSetting, setMaxBetSetting] = useState<number | null>(null)
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then(r => r.json())
+      .then(d => { if (d.max_bet_amount) setMaxBetSetting(d.max_bet_amount) })
+      .catch(() => {})
+  }, [])
 
   const fee = amount * 0.03
   const betAmount = feeIncluded ? amount - fee : amount
@@ -101,7 +109,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     0,
     Math.floor((activeBalance / 1.03) * 100) / 100
   )
-  const maxAllowedAmount = maxAmountByBalance
+  const maxAllowedAmount = maxBetSetting !== null
+    ? Math.min(maxAmountByBalance, maxBetSetting)
+    : maxAmountByBalance
   const maxAmountInteger = Math.max(1, Math.floor(maxAllowedAmount))
   const openedFromEventCard = Boolean(initialEvent && !cloneBetId)
   const formatPesos = (value: number) => `$${value.toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
@@ -716,9 +726,12 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 className="mt-2 w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Máximo disponible: {formatPesos(maxAllowedAmount)} {mode === "real" ? "iBY" : "Fantasy"}
-            </p>
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Máx. disponible: {formatPesos(maxAmountByBalance)} {mode === "real" ? "iBY" : "Fantasy"}</span>
+              {maxBetSetting !== null && (
+                <span className="text-yellow-600 dark:text-yellow-400 font-medium">Límite plataforma: {formatPesos(maxBetSetting)}</span>
+              )}
+            </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input
                 type="checkbox"

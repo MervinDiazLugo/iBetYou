@@ -201,6 +201,7 @@ function HomeContent() {
   const [houseBetType, setHouseBetType] = useState<string>("direct")
   const [houseBetAmount, setHouseBetAmount] = useState("")
   const [houseBetSubmitting, setHouseBetSubmitting] = useState(false)
+  const [maxBetHouseSetting, setMaxBetHouseSetting] = useState<number | null>(null)
   const [demoMode, setDemoMode] = useState(false)
   const leagueScrollRef = useRef<HTMLDivElement>(null)
   const [leagueScrollState, setLeagueScrollState] = useState({ canLeft: false, canRight: true })
@@ -211,6 +212,13 @@ function HomeContent() {
 
   const router = useRouter()
   const supabase = useMemo(() => createBrowserSupabaseClient(), [])
+
+  useEffect(() => {
+    fetch("/api/settings")
+      .then(r => r.json())
+      .then(d => { if (d.max_bet_amount_house) setMaxBetHouseSetting(d.max_bet_amount_house) })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     const create = searchParams.get("create")
@@ -2037,7 +2045,8 @@ function HomeContent() {
               {/* Amount slider */}
               {(() => {
                 const walletBal = mode === "real" ? balance.iBY : balance.fantasy
-                const maxAmt = Math.min(100000, Math.max(1, Math.floor(walletBal)))
+                const settingCap = maxBetHouseSetting ?? 100_000
+                const maxAmt = Math.min(settingCap, Math.max(1, Math.floor(walletBal)))
                 const stakeNum = Number(houseBetAmount) || 0
                 return (
                   <div className="rounded-lg border p-3 bg-muted/20 space-y-2">
@@ -2065,9 +2074,13 @@ function HomeContent() {
                       onChange={e => setHouseBetAmount(e.target.value)}
                       placeholder="0"
                       min={1}
-                      max={100000}
+                      max={maxAmt}
                       className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
                     />
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Tu balance: {walletBal.toLocaleString("es-ES", { maximumFractionDigits: 0 })}</span>
+                      <span className="text-yellow-600 dark:text-yellow-400 font-medium">Límite: {settingCap.toLocaleString("es-ES")}</span>
+                    </div>
                   </div>
                 )
               })()}

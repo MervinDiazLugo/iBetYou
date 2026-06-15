@@ -136,9 +136,11 @@ export async function POST(request: NextRequest) {
     if (!Number.isFinite(stake) || stake <= 0) {
       return NextResponse.json({ error: "El monto debe ser un número positivo" }, { status: 400 })
     }
-    if (stake > MAX_STAKE) {
+    const { data: maxHouseSetting } = await supabase.from("iby_settings").select("value").eq("key", "max_bet_amount_house").maybeSingle()
+    const maxHouseStake = maxHouseSetting?.value ? Number(maxHouseSetting.value) : MAX_STAKE
+    if (Number.isFinite(maxHouseStake) && maxHouseStake > 0 && stake > maxHouseStake) {
       return NextResponse.json(
-        { error: `El monto máximo por apuesta es ${MAX_STAKE.toLocaleString("es-ES")}` },
+        { error: `El monto máximo por apuesta contra la casa es ${maxHouseStake.toLocaleString("es-ES")}` },
         { status: 400 }
       )
     }

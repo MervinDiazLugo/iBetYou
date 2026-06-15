@@ -43,6 +43,14 @@ export async function PATCH(request: NextRequest) {
     upserts.push({ key: "max_bet_amount", value: String(max), updated_by: auth.userId ?? "", updated_at: now })
   }
 
+  if (body?.max_bet_amount_house !== undefined) {
+    const max = Number(body.max_bet_amount_house)
+    if (!max || max <= 0) {
+      return NextResponse.json({ error: "Monto máximo casa inválido — debe ser mayor a 0" }, { status: 400 })
+    }
+    upserts.push({ key: "max_bet_amount_house", value: String(max), updated_by: auth.userId ?? "", updated_at: now })
+  }
+
   if (upserts.length === 0) {
     return NextResponse.json({ error: "No hay parámetros válidos para actualizar" }, { status: 400 })
   }
