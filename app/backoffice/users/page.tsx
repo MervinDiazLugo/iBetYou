@@ -4,7 +4,8 @@ import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Users, ShieldCheck, Ban, Clock, Search, UserPlus, AlertTriangle } from "lucide-react"
+import { Users, ShieldCheck, Ban, Clock, Search, UserPlus, AlertTriangle, Wallet } from "lucide-react"
+import { formatCurrency } from "@/lib/utils"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useToast } from "@/components/toast"
 
@@ -27,6 +28,8 @@ interface AdminUser {
   country?: string | null
   real_betting_enabled?: boolean | null
   last_sign_in_at?: string | null
+  balance_fantasy?: number | null
+  balance_real?: number | null
 }
 
 export default function BackofficeUsersPage() {
@@ -269,6 +272,7 @@ export default function BackofficeUsersPage() {
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">ID</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground">Rol</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Estado</th>
+              <th className="text-right px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Wallet</th>
               <th className="text-center px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Real</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Registro</th>
               <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden xl:table-cell">Últ. conexión</th>
@@ -278,13 +282,13 @@ export default function BackofficeUsersPage() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                <td colSpan={9} className="text-center py-12 text-muted-foreground">
                   Cargando usuarios...
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                <td colSpan={9} className="text-center py-12 text-muted-foreground">
                   No hay usuarios que coincidan.
                 </td>
               </tr>
@@ -356,6 +360,22 @@ export default function BackofficeUsersPage() {
                           <span className="text-xs text-muted-foreground">Activo</span>
                         )}
                       </div>
+                    </td>
+
+                    {/* Wallet balance */}
+                    <td className="px-4 py-3 hidden md:table-cell text-right">
+                      {user.role === "app_user" ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span className="text-sm font-medium tabular-nums">
+                            {user.balance_fantasy != null ? formatCurrency(user.balance_fantasy) : <span className="text-muted-foreground text-xs">—</span>}
+                          </span>
+                          {(user.balance_real != null && user.balance_real > 0) && (
+                            <span className="text-xs text-emerald-600 tabular-nums">+{formatCurrency(user.balance_real)} real</span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </td>
 
                     {/* Real betting toggle */}

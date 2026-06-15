@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     let query = supabase
       .from("profiles")
-      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at, country, real_betting_enabled")
+      .select("id, nickname, avatar_url, role, is_banned, betting_blocked_until, false_claim_count, created_at, country, real_betting_enabled, wallets(balance_fantasy, balance_real)")
       .order("created_at", { ascending: false })
       .limit(limit)
 
@@ -40,10 +40,16 @@ export async function GET(request: NextRequest) {
       authById.set(u.id, u.last_sign_in_at ?? null)
     }
 
-    const users = (profilesRes.data || []).map((p) => ({
-      ...p,
-      last_sign_in_at: authById.get(p.id) ?? null,
-    }))
+    const users = (profilesRes.data || []).map((p) => {
+      const walletRow = Array.isArray((p as any).wallets) ? (p as any).wallets[0] : (p as any).wallets
+      return {
+        ...p,
+        wallets: undefined,
+        balance_fantasy: walletRow?.balance_fantasy ?? null,
+        balance_real: walletRow?.balance_real ?? null,
+        last_sign_in_at: authById.get(p.id) ?? null,
+      }
+    })
 
     // Auto-clear false_claim_count when betting block has expired
     const now = new Date()
