@@ -372,12 +372,8 @@ export default function BackofficeUsersPage() {
                     <td className="px-4 py-3 hidden md:table-cell text-right">
                       {user.role === "app_user" ? (
                         <div className="flex flex-col items-end gap-0.5">
-                          <span className="text-sm font-medium tabular-nums">
-                            {user.balance_fantasy != null ? formatCurrency(user.balance_fantasy) : <span className="text-muted-foreground text-xs">—</span>}
-                          </span>
-                          {(user.balance_real != null && user.balance_real > 0) && (
-                            <span className="text-xs text-emerald-600 tabular-nums">+{formatCurrency(user.balance_real)} real</span>
-                          )}
+                          <span className="text-xs text-muted-foreground">Fantasy: <span className="font-medium text-foreground tabular-nums">{user.balance_fantasy != null ? formatCurrency(user.balance_fantasy) : "—"}</span></span>
+                          <span className="text-xs text-muted-foreground">Real: <span className="font-medium text-emerald-600 tabular-nums">{user.balance_real != null ? formatCurrency(user.balance_real) : "—"}</span></span>
                         </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
