@@ -42,6 +42,8 @@ interface BetDetail {
     sport: string
     home_team: string
     away_team: string
+    home_logo?: string | null
+    away_logo?: string | null
     status?: string
     home_score?: number | null
     away_score?: number | null
@@ -52,6 +54,20 @@ interface BetDetail {
       venue?: {
         name?: string | null
         city?: string | null
+      }
+      match_details?: {
+        halftime_home_score?: number | null
+        halftime_away_score?: number | null
+        first_scorer?: {
+          player?: string | null
+          team?: string | null
+          minute?: number | null
+        } | null
+      }
+      predictions?: {
+        percent?: { home?: string; away?: string; draw?: string }
+        advice?: string
+        winner?: string
       }
     }
   }
@@ -416,6 +432,46 @@ export default function BetDetailPage() {
   const acceptorNetGain = bet.amount - acceptorFee
   const isBackofficeAdmin = user?.role === "backoffice_admin"
   const hasEventScore = bet.event?.home_score !== undefined && bet.event?.home_score !== null && bet.event?.away_score !== undefined && bet.event?.away_score !== null
+  const matchDetails = bet.event.metadata?.match_details
+  const userWon = !!user && bet.winner_id === user.id
+  const userLost = !!user && !!bet.winner_id && bet.winner_id !== user.id
+  const isAcceptor = user?.id === bet.acceptor_id
+  const userSelectionForResult = isParticipant
+    ? (!isAcceptor || bet.house_bet)
+      ? formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event.home_team, bet.event.away_team)
+      : bet.acceptor_selection
+        ? formatHouseSelection(bet.bet_type, bet.acceptor_selection, bet.event.home_team, bet.event.away_team)
+        : bet.bet_type === "direct"
+          ? bet.creator_selection === "home"
+            ? `${bet.event.away_team} gana o empate`
+            : bet.creator_selection === "away"
+              ? `${bet.event.home_team} gana o empate`
+              : "Sin empate"
+          : bet.bet_type === "exact_score"
+            ? `Resultado distinto de ${bet.creator_selection}`
+            : "Lado contrario"
+    : ""
+  const homeScore = bet.event.home_score ?? 0
+  const awayScore = bet.event.away_score ?? 0
+  const finalResultText = hasEventScore
+    ? homeScore > awayScore
+      ? `Ganó ${bet.event.home_team}`
+      : awayScore > homeScore
+        ? `Ganó ${bet.event.away_team}`
+        : "Empate"
+    : ""
+  const resultDeterminantText = (() => {
+    if (bet.bet_type === "first_scorer" && matchDetails?.first_scorer?.team) {
+      return `${matchDetails.first_scorer.player ?? "Jugador desconocido"} (${matchDetails.first_scorer.team})${matchDetails.first_scorer.minute ? `, min. ${matchDetails.first_scorer.minute}` : ""}`
+    }
+    if (bet.bet_type === "half_time" && matchDetails?.halftime_home_score != null) {
+      return `MT: ${bet.event.home_team} ${matchDetails.halftime_home_score} – ${matchDetails.halftime_away_score} ${bet.event.away_team}`
+    }
+    if (bet.bet_type === "exact_score" && hasEventScore) {
+      return `Resultado final: ${homeScore}-${awayScore}`
+    }
+    return finalResultText
+  })()
 
   async function handleAdminAction(action: string, winnerId?: string, reason?: string) {
     if (!bet) return
@@ -615,7 +671,96 @@ export default function BetDetailPage() {
             </CardDescription>
           </CardHeader>
         </Card>
-        
+
+        {/* Result card — shows when bet is resolved or event finished with score */}
+        {(bet.status === "resolved" || (hasEventScore && bet.event.status === "finished")) && (
+          <Card className={`mb-6 ${
+            userWon ? "border-green-500/40 bg-green-500/5" :
+            userLost ? "border-red-500/40 bg-red-500/5" :
+            "border-border"
+          }`}>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                {userWon ? "🏆" : userLost ? "❌" : "🏁"} Resultado del Partido
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Final score */}
+              {hasEventScore && (
+                <div className="flex items-center justify-center gap-6 py-4 rounded-lg bg-secondary/50">
+                  <div className="text-center min-w-[90px]">
+                    {bet.event.home_logo && (
+                      <img src={bet.event.home_logo} alt={bet.event.home_team} className="h-10 w-10 mx-auto mb-1 object-contain" />
+                    )}
+                    <div className="text-xs text-muted-foreground font-medium leading-tight">{bet.event.home_team}</div>
+                    <div className="text-5xl font-bold mt-1 tabular-nums">{homeScore}</div>
+                  </div>
+                  <div className="text-2xl font-light text-muted-foreground">–</div>
+                  <div className="text-center min-w-[90px]">
+                    {bet.event.away_logo && (
+                      <img src={bet.event.away_logo} alt={bet.event.away_team} className="h-10 w-10 mx-auto mb-1 object-contain" />
+                    )}
+                    <div className="text-xs text-muted-foreground font-medium leading-tight">{bet.event.away_team}</div>
+                    <div className="text-5xl font-bold mt-1 tabular-nums">{awayScore}</div>
+                  </div>
+                </div>
+              )}
+
+              {/* Halftime score — football, shown only when not a half_time bet (half_time bets show it via resultDeterminantText) */}
+              {bet.event.sport === "football" && matchDetails?.halftime_home_score != null && bet.bet_type !== "half_time" && (
+                <p className="text-center text-sm text-muted-foreground">
+                  Medio tiempo: {bet.event.home_team} {matchDetails.halftime_home_score} – {matchDetails.halftime_away_score} {bet.event.away_team}
+                </p>
+              )}
+
+              {/* First scorer — shown for all bet types when available */}
+              {matchDetails?.first_scorer?.team && bet.bet_type !== "first_scorer" && (
+                <div className="flex items-center justify-center gap-2 text-sm rounded-md bg-secondary/30 px-3 py-2">
+                  <span>⚽</span>
+                  <span>
+                    <span className="font-medium">{matchDetails.first_scorer.player ?? "Jugador desconocido"}</span>
+                    {" · "}{matchDetails.first_scorer.team}
+                    {matchDetails.first_scorer.minute ? ` · min. ${matchDetails.first_scorer.minute}` : ""}
+                  </span>
+                </div>
+              )}
+
+              {/* Selection vs result explanation — only for participants on resolved bets */}
+              {isParticipant && bet.status === "resolved" && (
+                <div className={`rounded-lg border px-4 py-3 space-y-2 ${
+                  userWon ? "border-green-500/30 bg-green-500/10" :
+                  userLost ? "border-red-500/30 bg-red-500/10" :
+                  "border-border bg-secondary/30"
+                }`}>
+                  {userSelectionForResult && (
+                    <div className="flex justify-between text-sm gap-4">
+                      <span className="text-muted-foreground shrink-0">Tu selección</span>
+                      <span className="font-medium text-right">{userSelectionForResult}</span>
+                    </div>
+                  )}
+                  {resultDeterminantText && (
+                    <div className="flex justify-between text-sm gap-4">
+                      <span className="text-muted-foreground shrink-0">
+                        {bet.bet_type === "first_scorer" ? "Primer anotador" :
+                         bet.bet_type === "half_time" ? "Medio tiempo" :
+                         "Resultado"}
+                      </span>
+                      <span className="font-medium text-right">{resultDeterminantText}</span>
+                    </div>
+                  )}
+                  <div className={`flex justify-between text-sm font-semibold border-t pt-2 ${
+                    userWon ? "text-green-600 dark:text-green-400" :
+                    userLost ? "text-red-600 dark:text-red-400" : ""
+                  }`}>
+                    <span>Veredicto</span>
+                    <span>{userWon ? "Ganaste esta apuesta" : userLost ? "Perdiste esta apuesta" : "Resuelta"}</span>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         <Card className="mb-6 border-primary/20">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">

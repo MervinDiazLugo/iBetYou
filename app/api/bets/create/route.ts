@@ -50,6 +50,19 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminSupabaseClient()
 
+    // Check max_bet_amount setting
+    const { data: maxBetSetting } = await supabase
+      .from("iby_settings")
+      .select("value")
+      .eq("key", "max_bet_amount")
+      .maybeSingle()
+    if (maxBetSetting?.value) {
+      const maxBet = Number(maxBetSetting.value)
+      if (Number.isFinite(maxBet) && maxBet > 0 && amount > maxBet) {
+        return NextResponse.json({ error: `El monto máximo por apuesta es ${maxBet.toLocaleString("es-ES")}` }, { status: 400 })
+      }
+    }
+
     const [
       { data: eventRow, error: eventError },
       { data: profile, error: profileError },

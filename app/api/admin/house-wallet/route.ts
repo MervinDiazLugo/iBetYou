@@ -15,17 +15,33 @@ export async function GET(request: NextRequest) {
 
   const { data: openBets } = await supabase
     .from("bets")
-    .select("event_id, creator_selection, bet_type, potential_payout, amount, mode")
+    .select("event_id, creator_selection, bet_type, potential_payout, amount, mode, events(home_team, away_team)")
     .eq("house_bet", true)
     .eq("status", "taken")
 
-  const fantasyExposure = (openBets || [])
-    .filter(b => b.mode === "fantasy")
-    .reduce((sum, b) => sum + (Number(b.potential_payout) - Number(b.amount)), 0)
+  const bets = openBets || []
+  const fantasyBets = bets.filter(b => b.mode === "fantasy")
+  const realBets = bets.filter(b => b.mode === "real")
 
-  const realExposure = (openBets || [])
-    .filter(b => b.mode === "real")
-    .reduce((sum, b) => sum + (Number(b.potential_payout) - Number(b.amount)), 0)
+  const fantasyExposure = fantasyBets.reduce((sum, b) => sum + (Number(b.potential_payout) - Number(b.amount)), 0)
+  const realExposure = realBets.reduce((sum, b) => sum + (Number(b.potential_payout) - Number(b.amount)), 0)
+
+  // Group by event+selection+bet_type+mode for top exposure table
+  const exposureMap = new Map<string, { event_id: number; match: string; outcome: string; bet_type: string; mode: string; count: number; liability: number }>()
+  for (const b of bets) {
+    const ev = b.events as any
+    const match = ev ? `${ev.home_team} vs ${ev.away_team}` : `Evento ${b.event_id}`
+    const key = `${b.event_id}|${b.creator_selection}|${b.bet_type}|${b.mode}`
+    const existing = exposureMap.get(key)
+    const liability = Number(b.potential_payout) - Number(b.amount)
+    if (existing) {
+      existing.count++
+      existing.liability += liability
+    } else {
+      exposureMap.set(key, { event_id: b.event_id, match, outcome: b.creator_selection, bet_type: b.bet_type, mode: b.mode, count: 1, liability })
+    }
+  }
+  const top_exposure = Array.from(exposureMap.values()).sort((a, b) => b.liability - a.liability).slice(0, 20)
 
   const alerts: string[] = []
   if (balances.balance_fantasy < LOW_BALANCE_THRESHOLD) {
@@ -38,7 +54,10 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     balances,
     exposure: { fantasy: fantasyExposure, real: realExposure },
-    openBetsCount: (openBets || []).length,
+    openBetsCount: bets.length,
+    openBetsCountFantasy: fantasyBets.length,
+    openBetsCountReal: realBets.length,
+    top_exposure,
     alerts,
   })
 }

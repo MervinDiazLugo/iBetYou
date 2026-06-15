@@ -12,9 +12,10 @@ export async function cleanupExpiredOpenBets(
 
   const { data: openBets, error: openBetsError } = await supabase
     .from("bets")
-    .select("id, creator_id, amount, fee_amount, status, acceptor_id, mode, group_id, event:events(start_time, status)")
+    .select("id, creator_id, amount, fee_amount, status, acceptor_id, mode, group_id, is_demo, event:events(start_time, status)")
     .eq("status", "open")
     .is("acceptor_id", null)
+    .eq("is_demo", false)
     .limit(1000)
 
   if (openBetsError || !openBets) {

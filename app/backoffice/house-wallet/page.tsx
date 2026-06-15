@@ -43,6 +43,13 @@ export default function HouseWalletPage() {
   const [submitting, setSubmitting] = useState(false)
   const { showToast } = useToast()
 
+  // Settings state
+  const [ibcPrice, setIbcPrice] = useState("")
+  const [maxBet, setMaxBet] = useState("")
+  const [loadingSettings, setLoadingSettings] = useState(true)
+  const [savingPrice, setSavingPrice] = useState(false)
+  const [savingMax, setSavingMax] = useState(false)
+
   const loadData = async () => {
     setLoading(true)
     try {
@@ -52,8 +59,8 @@ export default function HouseWalletPage() {
         setData({
           balance_fantasy: json.balances?.balance_fantasy ?? 0,
           balance_real: json.balances?.balance_real ?? 0,
-          active_fantasy: json.openBetsCount ?? 0,
-          active_real: 0,
+          active_fantasy: json.openBetsCountFantasy ?? 0,
+          active_real: json.openBetsCountReal ?? 0,
           reserved_liability_fantasy: json.exposure?.fantasy ?? 0,
           reserved_liability_real: json.exposure?.real ?? 0,
           alerts: json.alerts || [],
@@ -65,7 +72,23 @@ export default function HouseWalletPage() {
     }
   }
 
-  useEffect(() => { loadData() }, [])
+  const loadSettings = async () => {
+    setLoadingSettings(true)
+    try {
+      const res = await authFetch("/api/admin/iby/settings")
+      if (res.ok) {
+        const json = await res.json()
+        const priceSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "iby_coin_price")
+        const maxSetting = (json.settings || []).find((s: { key: string; value: string }) => s.key === "max_bet_amount")
+        if (priceSetting) setIbcPrice(priceSetting.value)
+        if (maxSetting) setMaxBet(maxSetting.value)
+      }
+    } finally {
+      setLoadingSettings(false)
+    }
+  }
+
+  useEffect(() => { loadData(); loadSettings() }, [])
 
   const handleSubmit = async () => {
     const parsed = Number(amount)
@@ -84,6 +107,42 @@ export default function HouseWalletPage() {
       loadData()
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  const savePrice = async () => {
+    const price = Number(ibcPrice)
+    if (!price || price <= 0) { showToast("Precio inválido", "error"); return }
+    setSavingPrice(true)
+    try {
+      const res = await authFetch("/api/admin/iby/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ iby_coin_price: price }),
+      })
+      const json = await res.json()
+      if (!res.ok) { showToast(json.error || "Error", "error"); return }
+      showToast(`Precio actualizado: 1 iBY = $${price}`, "success")
+    } finally {
+      setSavingPrice(false)
+    }
+  }
+
+  const saveMaxBet = async () => {
+    const max = Number(maxBet)
+    if (!max || max <= 0) { showToast("Monto máximo inválido", "error"); return }
+    setSavingMax(true)
+    try {
+      const res = await authFetch("/api/admin/iby/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ max_bet_amount: max }),
+      })
+      const json = await res.json()
+      if (!res.ok) { showToast(json.error || "Error", "error"); return }
+      showToast(`Apuesta máxima actualizada: ${formatCurrency(max)}`, "success")
+    } finally {
+      setSavingMax(false)
     }
   }
 
@@ -181,6 +240,62 @@ export default function HouseWalletPage() {
           <Button onClick={handleSubmit} disabled={submitting || !amount}>
             {submitting ? "Procesando..." : operation === "fund" ? "Añadir fondos" : "Retirar fondos"}
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Configuración de plataforma</CardTitle>
+          <p className="text-sm text-muted-foreground">Precio del token iBY y límites de apuesta.</p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {loadingSettings ? (
+            <p className="text-sm text-muted-foreground">Cargando...</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Precio del iBY Coin (pesos por 1 iBY)</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={ibcPrice}
+                    onChange={e => setIbcPrice(e.target.value)}
+                    placeholder="1.00"
+                    className="max-w-[200px]"
+                  />
+                  <Button onClick={savePrice} disabled={savingPrice} size="sm">
+                    {savingPrice ? "Guardando..." : "Guardar"}
+                  </Button>
+                </div>
+                {ibcPrice && Number(ibcPrice) > 0 && (
+                  <p className="text-xs text-muted-foreground">$100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} iBY</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Apuesta máxima por usuario (tokens)</label>
+                <div className="flex gap-2">
+                  <Input
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={maxBet}
+                    onChange={e => setMaxBet(e.target.value)}
+                    placeholder="50000"
+                    className="max-w-[200px]"
+                  />
+                  <Button onClick={saveMaxBet} disabled={savingMax} size="sm">
+                    {savingMax ? "Guardando..." : "Guardar"}
+                  </Button>
+                </div>
+                {maxBet && Number(maxBet) > 0 && (
+                  <p className="text-xs text-muted-foreground">Máximo permitido: {formatCurrency(Number(maxBet))} por apuesta</p>
+                )}
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

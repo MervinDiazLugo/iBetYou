@@ -68,6 +68,19 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Demo events self-heal: if finished/cancelled, reset to scheduled so bets can continue.
+    // demo-refresh cron generates synthetic results and re-activates regardless of current status.
+    if ((eventRow as any).is_demo && ["finished", "cancelled", "postponed"].includes(eventRow.status)) {
+      const newStart = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
+      await supabase.from("events").update({
+        status: "scheduled",
+        start_time: newStart,
+        home_score: null,
+        away_score: null,
+      }).eq("id", numericEventId)
+      eventRow.status = "scheduled"
+    }
+
     // Validate event is not finished/cancelled/postponed
     const blockedStatuses = ["finished", "cancelled", "postponed"]
     if (blockedStatuses.includes(eventRow.status)) {
