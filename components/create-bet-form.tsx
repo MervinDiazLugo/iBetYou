@@ -295,15 +295,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
   const getBetOptions = () => {
     if (!selectedEvent) return []
-    const options: { id: string; label: string; value: string }[] = []
-    
+    type Option = { id: string; label: string; value: string; logo?: string | null; sublabel?: string }
+    const options: Option[] = []
+
     switch (betType) {
       case "direct":
-        options.push({ id: "home_win", label: `Gana ${selectedEvent.home_team}`, value: selectedEvent.home_team })
+        options.push({ id: "home_win", label: selectedEvent.home_team, value: selectedEvent.home_team, logo: selectedEvent.home_logo ?? null })
         if (selectedSport === "football") {
-          options.push({ id: "draw", label: "Empate", value: "Empate" })
+          options.push({ id: "draw", label: "Empate", value: "Empate", logo: null })
         }
-        options.push({ id: "away_win", label: `Gana ${selectedEvent.away_team}`, value: selectedEvent.away_team })
+        options.push({ id: "away_win", label: selectedEvent.away_team, value: selectedEvent.away_team, logo: selectedEvent.away_logo ?? null })
         return options
       case "exact_score":
         return [
@@ -320,24 +321,24 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         ]
       case "first_scorer":
         return [
-          { id: "home_team", label: selectedEvent.home_team, value: selectedEvent.home_team },
-          { id: "away_team", label: selectedEvent.away_team, value: selectedEvent.away_team },
+          { id: "home_team", label: selectedEvent.home_team, value: selectedEvent.home_team, logo: selectedEvent.home_logo ?? null },
+          { id: "away_team", label: selectedEvent.away_team, value: selectedEvent.away_team, logo: selectedEvent.away_logo ?? null },
         ]
       case "run_line":
         return [
-          { id: "home_rl", label: selectedEvent.home_team, sublabel: "Gana por 2 o más carreras", value: "home_rl" },
-          { id: "away_rl", label: selectedEvent.away_team, sublabel: "Gana el partido o pierde por 1", value: "away_rl" },
+          { id: "home_rl", label: selectedEvent.home_team, sublabel: "Gana por 2 o más carreras", value: "home_rl", logo: selectedEvent.home_logo ?? null },
+          { id: "away_rl", label: selectedEvent.away_team, sublabel: "Gana el partido o pierde por 1", value: "away_rl", logo: selectedEvent.away_logo ?? null },
         ]
       case "total_runs":
         return [
-          { id: "over_7",  label: "Más de 7",  value: "over_7" },
-          { id: "under_7", label: "Menos de 7", value: "under_7" },
-          { id: "over_8",  label: "Más de 8",  value: "over_8" },
-          { id: "under_8", label: "Menos de 8", value: "under_8" },
-          { id: "over_9",  label: "Más de 9",  value: "over_9" },
-          { id: "under_9", label: "Menos de 9", value: "under_9" },
-          { id: "over_10", label: "Más de 10", value: "over_10" },
-          { id: "under_10",label: "Menos de 10",value: "under_10" },
+          { id: "over_7",   label: "Más de 7",   value: "over_7" },
+          { id: "under_7",  label: "Menos de 7",  value: "under_7" },
+          { id: "over_8",   label: "Más de 8",   value: "over_8" },
+          { id: "under_8",  label: "Menos de 8",  value: "under_8" },
+          { id: "over_9",   label: "Más de 9",   value: "over_9" },
+          { id: "under_9",  label: "Menos de 9",  value: "under_9" },
+          { id: "over_10",  label: "Más de 10",  value: "over_10" },
+          { id: "under_10", label: "Menos de 10", value: "under_10" },
         ]
       case "score_margin":
         return [
@@ -352,9 +353,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         ]
       case "half_time":
         return [
-          { id: "home_win", label: `Gana ${selectedEvent.home_team}`, value: `${selectedEvent.home_team} HT` },
-          { id: "draw", label: "Empate", value: "Empate HT" },
-          { id: "away_win", label: `Gana ${selectedEvent.away_team}`, value: `${selectedEvent.away_team} HT` },
+          { id: "home_win", label: selectedEvent.home_team, value: `${selectedEvent.home_team} HT`, logo: selectedEvent.home_logo ?? null },
+          { id: "draw",     label: "Empate",                value: "Empate HT",                      logo: null },
+          { id: "away_win", label: selectedEvent.away_team, value: `${selectedEvent.away_team} HT`, logo: selectedEvent.away_logo ?? null },
         ]
       default:
         return []
@@ -625,7 +626,10 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
           {selectedEvent && (
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tu Selección</label>
+              <label className="text-sm font-semibold flex items-center gap-2">
+                <span className="w-1 h-4 rounded-full bg-primary inline-block" />
+                Tu Selección
+              </label>
               {betType === "total_runs" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
                   📊 Apuesta al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
@@ -638,13 +642,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               )}
               {betType === "run_line" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                  📐 <strong>Run Line</strong> es una apuesta de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras para que tu apuesta sea ganadora. El equipo con <strong>+1.5</strong> te da como ganador si ese equipo gana el juego <em>o</em> pierde por solo 1 carrera.
+                  📐 <strong>Run Line</strong> es una apuesta de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras. El equipo con <strong>+1.5</strong> gana si ese equipo gana <em>o</em> pierde por solo 1 carrera.
                 </p>
               )}
               {betType === "exact_score" ? (
                 <div className="flex items-center justify-center gap-4">
                   <div className="text-center">
-                    <p className="font-semibold mb-2">{selectedEvent.home_team}</p>
+                    {selectedEvent.home_logo && (
+                      <img src={selectedEvent.home_logo} alt="" className="w-10 h-10 mx-auto mb-1 object-contain" />
+                    )}
+                    <p className="font-semibold mb-2 text-sm">{selectedEvent.home_team}</p>
                     <Input
                       type="number"
                       min={0}
@@ -656,7 +663,10 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   </div>
                   <span className="text-2xl font-bold">-</span>
                   <div className="text-center">
-                    <p className="font-semibold mb-2">{selectedEvent.away_team}</p>
+                    {selectedEvent.away_logo && (
+                      <img src={selectedEvent.away_logo} alt="" className="w-10 h-10 mx-auto mb-1 object-contain" />
+                    )}
+                    <p className="font-semibold mb-2 text-sm">{selectedEvent.away_team}</p>
                     <Input
                       type="number"
                       min={0}
@@ -668,14 +678,49 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   </div>
                 </div>
               ) : (
-                <div className={`grid gap-2 ${["score_margin", "total_runs", "run_line"].includes(betType) ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"}`}>
+                <div className={`grid gap-2 ${["score_margin", "total_runs"].includes(betType) ? "grid-cols-2" : "grid-cols-3"}`}>
                   {getBetOptions().map((option) => {
                     const sub = (option as any).sublabel as string | undefined
+                    const logo = (option as any).logo as string | null | undefined
+                    const hasLogoSlot = "logo" in option
+                    const isSelected = betSelection === option.value
+
+                    if (hasLogoSlot) {
+                      return (
+                        <div
+                          key={option.id}
+                          onClick={() => setBetSelection(option.value)}
+                          className={`relative cursor-pointer rounded-xl border-2 py-4 px-2 text-center transition-all select-none ${
+                            isSelected
+                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                              : "border-border bg-muted/10 hover:border-primary/40 hover:bg-muted/20"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                            </div>
+                          )}
+                          {logo ? (
+                            <img src={logo} alt="" className="w-10 h-10 mx-auto mb-2 object-contain drop-shadow-sm" />
+                          ) : (
+                            <div className="text-3xl mb-2">🤝</div>
+                          )}
+                          <div className={`text-xs font-bold leading-tight truncate px-1 ${isSelected ? "text-primary" : ""}`}>
+                            {option.label}
+                          </div>
+                          {sub && (
+                            <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight px-1">{sub}</div>
+                          )}
+                        </div>
+                      )
+                    }
+
                     return (
                       <Button
                         key={option.id}
                         type="button"
-                        variant={betSelection === option.value ? "default" : "outline"}
+                        variant={isSelected ? "default" : "outline"}
                         size="sm"
                         className={sub ? "h-auto py-2.5 flex flex-col items-center gap-0.5" : ""}
                         onClick={() => setBetSelection(option.value)}
