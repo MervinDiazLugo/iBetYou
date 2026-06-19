@@ -1,93 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
-import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
 import { cancelBetsForEvent } from "@/lib/cancel-bets-for-event"
+import {
+  mapTsdbStatus,
+  normalizeTsdbEvent,
+  tsdbLivescoreSoccer,
+  tsdbLivescoreBasketball,
+  tsdbLivescoreBaseball,
+  tsdbLookupEvent,
+  tsdbEventTimeline,
+  extractFirstScorer,
+} from "@/lib/tsdb"
 
 const CRON_SECRET = process.env.CRON_SECRET
-const API_KEY = process.env.API_FOOTBALL_KEY!
-const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
-const BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
-const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 
-const SPORT_CONFIG: Record<string, { baseUrl: string; endpoint: string }> = {
-  football: { baseUrl: FOOTBALL_URL, endpoint: "fixtures" },
-  basketball: { baseUrl: BASKETBALL_URL, endpoint: "games" },
-  baseball: { baseUrl: BASEBALL_URL, endpoint: "games" },
-}
-
-// Window: only process events that started between 2h and 8h ago
-const WINDOW_MIN_MS = 2 * 60 * 60 * 1000
+// Events older than this are force-finished even if the API disagrees
+const FORCE_FINISH_AFTER_MS = 4 * 60 * 60 * 1000
+// Window: sync events that started between 30 min and 8h ago
+const WINDOW_MIN_MS = 30 * 60 * 1000
 const WINDOW_MAX_MS = 8 * 60 * 60 * 1000
 
-function fetchApiSports(url: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const { hostname, pathname, search } = new URL(url)
-    const req = https.request(
-      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": API_KEY } },
-      (res) => {
-        const chunks: Buffer[] = []
-        res.on("data", (c) => chunks.push(c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
-          catch (e) { reject(e) }
-        })
-      }
-    )
-    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
-    req.on("error", reject)
-    req.end()
-  })
-}
-
-function mapStatus(short?: string): string {
-  if (!short) return "scheduled"
-  if (["FT", "AOT", "FIN"].includes(short)) return "finished"
-  if (["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "Q1", "Q2", "Q3", "Q4", "OT"].includes(short)) return "live"
-  if (["PST", "POST", "CANC", "ABD", "SUSP", "INT", "WO", "AWD"].includes(short)) return "postponed"
-  return "scheduled"
-}
-
-interface ScoreData {
-  externalId: string
-  status: string
-  homeScore: number | null
-  awayScore: number | null
-  halftimeHome?: number | null
-  halftimeAway?: number | null
-}
-
-function parseScore(sport: string, item: any): ScoreData | null {
-  if (sport === "football") {
-    if (!item.fixture?.id) return null
-    return {
-      externalId: `football_${item.fixture.id}`,
-      status: mapStatus(item.fixture?.status?.short),
-      homeScore: item.goals?.home ?? null,
-      awayScore: item.goals?.away ?? null,
-      halftimeHome: item.score?.halftime?.home ?? null,
-      halftimeAway: item.score?.halftime?.away ?? null,
-    }
-  }
-  if (sport === "basketball") {
-    if (!item.id) return null
-    return {
-      externalId: `basketball_${item.id}`,
-      status: mapStatus(item.status?.short),
-      homeScore: item.scores?.home?.total ?? null,
-      awayScore: item.scores?.away?.total ?? null,
-    }
-  }
-  if (sport === "baseball") {
-    if (!item.id) return null
-    return {
-      externalId: `baseball_${item.id}`,
-      status: mapStatus(item.status?.short),
-      homeScore: item.scores?.home?.total ?? null,
-      awayScore: item.scores?.away?.total ?? null,
-    }
-  }
-  return null
+function toScore(val: unknown): number | null {
+  if (val === null || val === undefined || val === "") return null
+  const n = Number(val)
+  return Number.isFinite(n) ? n : null
 }
 
 export async function GET(request: NextRequest) {
@@ -96,27 +33,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  if (!API_KEY) {
-    return NextResponse.json({ error: "API key not configured" }, { status: 500 })
+  if (!process.env.THESPORTSDB_API_KEY) {
+    return NextResponse.json({ error: "THESPORTSDB_API_KEY not configured" }, { status: 500 })
   }
 
   const supabase = createAdminSupabaseClient()
   const now = Date.now()
-  const windowStart = new Date(now - WINDOW_MAX_MS).toISOString()
-  const windowEnd = new Date(now - WINDOW_MIN_MS).toISOString()
+  const apiErrors: string[] = []
+  let apiCalls = 0
 
-  // 1. Find events with active bets in the 2h–8h window, not yet finished in DB
+  // ── 1. Find events with active bets in sync window ───────────────────────
   const { data: activeBets, error: betsError } = await supabase
     .from("bets")
-    .select(`
-      bet_type,
-      event:events!event_id(id, external_id, sport, start_time, status, metadata)
-    `)
+    .select("bet_type, event:events!event_id(id, external_id, sport, start_time, status, metadata)")
     .in("status", ["taken", "disputed"])
 
   if (betsError) return NextResponse.json({ error: betsError.message }, { status: 500 })
 
-  // Deduplicate events, track if any bet is first_scorer type
+  // Deduplicate events, track if any bet needs first_scorer
   const eventMap = new Map<number, {
     id: number
     external_id: string
@@ -130,10 +64,11 @@ export async function GET(request: NextRequest) {
   for (const bet of activeBets || []) {
     const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
     if (!event || event.status === "finished" || event.status === "postponed") continue
+    if (!event.external_id?.startsWith("tsdb_")) continue // only sync TheSportsDB events
 
     const startMs = new Date(event.start_time).getTime()
-    if (startMs + WINDOW_MIN_MS > now) continue  // less than 2h since start
-    if (startMs + WINDOW_MAX_MS < now) continue  // more than 8h since start
+    if (startMs + WINDOW_MIN_MS > now) continue  // hasn't started yet (< 30 min ago)
+    if (startMs + WINDOW_MAX_MS < now) continue  // too old (> 8h ago)
 
     const existing = eventMap.get(event.id)
     eventMap.set(event.id, {
@@ -142,8 +77,7 @@ export async function GET(request: NextRequest) {
     })
   }
 
-  // Also include featured events that started today and aren't finished yet.
-  // Featured events may have no bets but still need their status kept up to date.
+  // Also include featured events that started today and aren't finished yet
   const todayUtcStart = new Date(now)
   todayUtcStart.setUTCHours(0, 0, 0, 0)
   const { data: featuredEvents } = await supabase
@@ -155,131 +89,129 @@ export async function GET(request: NextRequest) {
     .lte("start_time", new Date(now).toISOString())
 
   for (const event of featuredEvents || []) {
+    if (!event.external_id?.startsWith("tsdb_")) continue
     if (!eventMap.has(event.id)) {
       eventMap.set(event.id, { ...event, hasFirstScorer: false })
     }
   }
 
-  if (eventMap.size === 0) {
-    return NextResponse.json({ success: true, message: "No events in sync window", apiCalls: 0 })
-  }
+  // ── 2. Fetch live scores from TheSportsDB V2 livescore endpoints ─────────
+  const liveScoreMap = new Map<string, { homeScore: number | null; awayScore: number | null; status: string; rawStatus: string }>()
 
-  // 2. Group by sport + date (one API call per combination)
-  const sportDateMap = new Map<string, Set<string>>()
-  for (const event of eventMap.values()) {
-    const date = new Date(event.start_time).toISOString().split("T")[0]
-    if (!sportDateMap.has(event.sport)) sportDateMap.set(event.sport, new Set())
-    sportDateMap.get(event.sport)!.add(date)
-  }
+  try {
+    const [soccerLive, basketballLive, baseballLive] = await Promise.all([
+      tsdbLivescoreSoccer().catch((e) => { apiErrors.push(`livescore/soccer: ${e.message}`); return [] }),
+      tsdbLivescoreBasketball().catch((e) => { apiErrors.push(`livescore/basketball: ${e.message}`); return [] }),
+      tsdbLivescoreBaseball().catch((e) => { apiErrors.push(`livescore/baseball: ${e.message}`); return [] }),
+    ])
+    apiCalls += 3
 
-  // 3. Fetch scores from api-sports.io
-  const scoresByExternalId = new Map<string, ScoreData>()
-  let apiCalls = 0
-  const apiErrors: string[] = []
-
-  for (const [sport, dates] of sportDateMap) {
-    const config = SPORT_CONFIG[sport]
-    if (!config) continue
-
-    for (const date of dates) {
-      try {
-        const data = await fetchApiSports(`${config.baseUrl}/${config.endpoint}?date=${date}`)
-        apiCalls++
-        if (!data.response || !Array.isArray(data.response)) continue
-
-        for (const item of data.response) {
-          const score = parseScore(sport, item)
-          if (score) scoresByExternalId.set(score.externalId, score)
-        }
-      } catch (e: any) {
-        apiErrors.push(`${sport}/${date}: ${e.message}`)
-      }
+    for (const item of [...soccerLive, ...basketballLive, ...baseballLive]) {
+      const key = `tsdb_${item.idEvent}`
+      liveScoreMap.set(key, {
+        homeScore: toScore(item.intHomeScore),
+        awayScore: toScore(item.intAwayScore),
+        status: mapTsdbStatus(item.strStatus),
+        rawStatus: (item.strStatus || "").toUpperCase(), // original for HT detection
+      })
     }
+  } catch (e: any) {
+    apiErrors.push(`livescore batch: ${e.message}`)
   }
 
-  // 4. Update events in DB (parallel)
-  const justFinished: Array<{ id: number; hasFirstScorer: boolean; externalId: string }> = []
-  const justPostponed: number[] = []
+  if (eventMap.size === 0 && liveScoreMap.size === 0) {
+    const cleanupResult = await cleanupExpiredOpenBets(supabase, "system")
+    return NextResponse.json({ success: true, message: "No events in sync window", apiCalls, cleanup: cleanupResult })
+  }
 
-  const updateResults = await Promise.all(
+  // ── 3. For events in window NOT found in livescore, fetch individually ───
+  const justFinished: Array<{ id: number; external_id: string; hasFirstScorer: boolean; sport: string }> = []
+  const justPostponed: number[] = []
+  let updated = 0
+
+  await Promise.all(
     Array.from(eventMap.values()).map(async (event) => {
-      const score = scoresByExternalId.get(event.external_id)
-      if (!score) return null
+      let scoreData = liveScoreMap.get(event.external_id)
+
+      if (!scoreData) {
+        // Not in livescore — fetch individually (probably just finished)
+        const idEvent = event.external_id.replace("tsdb_", "")
+        try {
+          const raw = await tsdbLookupEvent(idEvent)
+          apiCalls++
+          if (raw) {
+            scoreData = {
+              homeScore: toScore(raw.intHomeScore),
+              awayScore: toScore(raw.intAwayScore),
+              status: mapTsdbStatus(raw.strStatus),
+              rawStatus: (raw.strStatus || "").toUpperCase(),
+            }
+          }
+        } catch (e: any) {
+          apiErrors.push(`lookup/${event.external_id}: ${e.message}`)
+          return
+        }
+      }
+
+      if (!scoreData) return
+
+      // Force-finish if event is old enough
+      const startMs = new Date(event.start_time).getTime()
+      if (now - startMs >= FORCE_FINISH_AFTER_MS && scoreData.status !== "finished") {
+        scoreData.status = "finished"
+      }
 
       const metadata = event.metadata || {}
       const matchDetails = { ...(metadata.match_details || {}) }
 
-      if (score.halftimeHome !== null && score.halftimeHome !== undefined) {
-        matchDetails.halftime_home_score = score.halftimeHome
-        matchDetails.halftime_away_score = score.halftimeAway
+      // Capture halftime score when game is at HT status
+      if (scoreData.rawStatus === "HT" && scoreData.homeScore !== null) {
+        if (!matchDetails.halftime_home_score) {
+          matchDetails.halftime_home_score = scoreData.homeScore
+          matchDetails.halftime_away_score = scoreData.awayScore
+        }
       }
 
-      await supabase
-        .from("events")
-        .update({
-          status: score.status,
-          home_score: score.homeScore,
-          away_score: score.awayScore,
-          metadata: { ...metadata, match_details: matchDetails },
-        })
-        .eq("id", event.id)
+      await supabase.from("events").update({
+        status: scoreData.status,
+        home_score: scoreData.homeScore,
+        away_score: scoreData.awayScore,
+        metadata: { ...metadata, match_details: matchDetails },
+      }).eq("id", event.id)
 
-      return { event, score }
+      updated++
+
+      if (scoreData.status === "finished") {
+        justFinished.push({ id: event.id, external_id: event.external_id, hasFirstScorer: event.hasFirstScorer, sport: event.sport })
+      }
+      if (scoreData.status === "postponed") {
+        justPostponed.push(event.id)
+      }
     })
   )
 
-  let updated = 0
-  for (const result of updateResults) {
-    if (!result) continue
-    updated++
-    if (result.score.status === "finished") {
-      justFinished.push({ id: result.event.id, hasFirstScorer: result.event.hasFirstScorer, externalId: result.event.external_id })
-    }
-    if (result.score.status === "postponed") {
-      justPostponed.push(result.event.id)
-    }
-  }
-
-  // 5. Fetch first_scorer data for finished football events that need it
+  // ── 4. Fetch first_scorer timeline for finished football events ──────────
   for (const ev of justFinished) {
-    if (!ev.hasFirstScorer || !ev.externalId.startsWith("football_")) continue
+    if (!ev.hasFirstScorer || ev.sport !== "football") continue
 
-    const fixtureId = ev.externalId.replace("football_", "")
+    const idEvent = ev.external_id.replace("tsdb_", "")
     try {
-      const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`)
+      const timeline = await tsdbEventTimeline(idEvent)
       apiCalls++
-
-      const fixtureEvents: any[] = data.response || []
-      const firstGoal = fixtureEvents.find(
-        (e: any) => e.type === "Goal" && e.detail !== "Missed Penalty"
-      )
+      const firstGoal = extractFirstScorer(timeline)
 
       if (firstGoal) {
-        const { data: eventRow } = await supabase
-          .from("events")
-          .select("metadata")
-          .eq("id", ev.id)
-          .single()
-
+        const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
         const md = eventRow?.metadata || {}
-        const matchDetails = { ...(md.match_details || {}) }
-        matchDetails.first_scorer = {
-          player: firstGoal.player?.name || null,
-          team: firstGoal.team?.name || null,
-          minute: firstGoal.time?.elapsed ?? null,
-        }
-
-        await supabase
-          .from("events")
-          .update({ metadata: { ...md, match_details: matchDetails } })
-          .eq("id", ev.id)
+        const matchDetails = { ...(md.match_details || {}), first_scorer: firstGoal }
+        await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
       }
     } catch (e: any) {
-      apiErrors.push(`first_scorer/${ev.externalId}: ${e.message}`)
+      apiErrors.push(`first_scorer/${ev.external_id}: ${e.message}`)
     }
   }
 
-  // 6. Trigger auto-resolve for each event that just became finished
+  // ── 5. Trigger auto-resolve for each just-finished event ─────────────────
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
 
@@ -302,31 +234,28 @@ export async function GET(request: NextRequest) {
     if (!r.ok) apiErrors.push(`auto-resolve/event_${r.id}: ${"error" in r ? r.error : `HTTP ${r.status}`}`)
   }
 
-  // 7. Find already-finished events with pending first_scorer/half_time bets missing metadata
+  // ── 6. Retry: finished events with missing metadata (half_time/first_scorer) ──
   const { data: pendingMetaBets } = await supabase
     .from("bets")
-    .select(`
-      bet_type,
-      event:events!event_id(id, external_id, sport, status, metadata, home_score, away_score)
-    `)
+    .select("bet_type, event:events!event_id(id, external_id, sport, status, metadata, home_score, away_score)")
     .in("status", ["taken", "disputed"])
     .in("bet_type", ["first_scorer", "half_time"])
 
-  type NeedsMetaEntry = {
+  const needsMetaMap = new Map<number, {
     id: number; external_id: string; sport: string; metadata: any
     home_score: number; away_score: number
     needsFirstScorer: boolean; needsHalfTime: boolean
-  }
-  const needsMetaMap = new Map<number, NeedsMetaEntry>()
+  }>()
 
   for (const bet of pendingMetaBets || []) {
     const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
     if (!event || event.status !== "finished") continue
+    if (!event.external_id?.startsWith("tsdb_")) continue
 
     const betType = (bet as any).bet_type
     const md = event.metadata?.match_details
     const missingFirstScorer = betType === "first_scorer" && !md?.first_scorer?.team
-    const missingHalfTime = betType === "half_time" && (md?.halftime_home_score === null || md?.halftime_home_score === undefined)
+    const missingHalfTime = betType === "half_time" && md?.halftime_home_score == null
 
     if (!missingFirstScorer && !missingHalfTime) continue
 
@@ -341,44 +270,26 @@ export async function GET(request: NextRequest) {
   const metaFixedEvents: number[] = []
 
   for (const ev of needsMetaMap.values()) {
-    if (!ev.external_id?.startsWith("football_")) continue
+    if (ev.sport !== "football") continue
 
-    const fixtureId = ev.external_id.replace("football_", "")
+    const idEvent = ev.external_id.replace("tsdb_", "")
     try {
       const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
       const md = eventRow?.metadata || {}
       const matchDetails = { ...(md.match_details || {}) }
-      let metadataUpdated = false
-
-      if (ev.needsHalfTime) {
-        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
-        apiCalls++
-        const fixture = data.response?.[0]
-        const htHome = fixture?.score?.halftime?.home
-        const htAway = fixture?.score?.halftime?.away
-        if (htHome !== null && htHome !== undefined) {
-          matchDetails.halftime_home_score = htHome
-          matchDetails.halftime_away_score = htAway
-          metadataUpdated = true
-        }
-      }
+      let updated = false
 
       if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
-        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`)
+        const timeline = await tsdbEventTimeline(idEvent)
         apiCalls++
-        const fixtureEvents: any[] = data.response || []
-        const firstGoal = fixtureEvents.find((e: any) => e.type === "Goal" && e.detail !== "Missed Penalty")
+        const firstGoal = extractFirstScorer(timeline)
         if (firstGoal) {
-          matchDetails.first_scorer = {
-            player: firstGoal.player?.name || null,
-            team: firstGoal.team?.name || null,
-            minute: firstGoal.time?.elapsed ?? null,
-          }
-          metadataUpdated = true
+          matchDetails.first_scorer = firstGoal
+          updated = true
         }
       }
 
-      if (metadataUpdated) {
+      if (updated) {
         await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
         metaFixedEvents.push(ev.id)
       }
@@ -387,7 +298,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Trigger auto-resolve for events that got their metadata fixed
+  // Trigger auto-resolve for meta-fixed events
   for (const eventId of metaFixedEvents) {
     try {
       const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
@@ -402,77 +313,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // 8. Find finished events with null scores that have pending direct/exact_score bets
-  const { data: nullScoreBets } = await supabase
-    .from("bets")
-    .select(`
-      bet_type,
-      event:events!event_id(id, external_id, sport, status, home_score, away_score)
-    `)
-    .in("status", ["taken", "disputed"])
-    .in("bet_type", ["direct", "exact_score"])
-
-  const nullScoreMap = new Map<number, { id: number; external_id: string; sport: string }>()
-
-  for (const bet of nullScoreBets || []) {
-    const event = Array.isArray((bet as any).event) ? (bet as any).event[0] : (bet as any).event
-    if (!event || event.status !== "finished") continue
-    if (event.home_score !== null && event.away_score !== null) continue
-    nullScoreMap.set(event.id, event)
-  }
-
-  const scoreFixedEvents: number[] = []
-
-  for (const ev of nullScoreMap.values()) {
-    const externalId: string = ev.external_id || ""
-    try {
-      let homeScore: number | null = null
-      let awayScore: number | null = null
-
-      if (externalId.startsWith("football_")) {
-        const fixtureId = externalId.replace("football_", "")
-        const data = await fetchApiSports(`${FOOTBALL_URL}/fixtures?id=${fixtureId}`)
-        apiCalls++
-        homeScore = data.response?.[0]?.goals?.home ?? null
-        awayScore = data.response?.[0]?.goals?.away ?? null
-      } else if (externalId.startsWith("baseball_")) {
-        const gameId = externalId.replace("baseball_", "")
-        const data = await fetchApiSports(`${BASEBALL_URL}/games?id=${gameId}`)
-        apiCalls++
-        homeScore = data.response?.[0]?.scores?.home?.total ?? null
-        awayScore = data.response?.[0]?.scores?.away?.total ?? null
-      } else if (externalId.startsWith("basketball_")) {
-        const gameId = externalId.replace("basketball_", "")
-        const data = await fetchApiSports(`${BASKETBALL_URL}/games?id=${gameId}`)
-        apiCalls++
-        homeScore = data.response?.[0]?.scores?.home?.total ?? null
-        awayScore = data.response?.[0]?.scores?.away?.total ?? null
-      }
-
-      if (homeScore !== null && awayScore !== null) {
-        await supabase.from("events").update({ home_score: homeScore, away_score: awayScore }).eq("id", ev.id)
-        scoreFixedEvents.push(ev.id)
-      }
-    } catch (e: any) {
-      apiErrors.push(`score-fix/${externalId}: ${e.message}`)
-    }
-  }
-
-  for (const eventId of scoreFixedEvents) {
-    try {
-      const res = await fetch(`${baseUrl}/api/admin/bets/auto-resolve-finished`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${CRON_SECRET}` },
-        body: JSON.stringify({ event_id: eventId }),
-      })
-      if (res.ok) resolvedEvents.push(eventId)
-      else apiErrors.push(`auto-resolve/score-fix/event_${eventId}: HTTP ${res.status}`)
-    } catch (e: any) {
-      apiErrors.push(`auto-resolve/score-fix/event_${eventId}: ${e.message}`)
-    }
-  }
-
-  // Cancel all active bets on events that just became postponed/cancelled, and unfeature them
+  // ── 7. Cancel bets on postponed events ───────────────────────────────────
   for (const eventId of justPostponed) {
     try {
       await cancelBetsForEvent(supabase, eventId)
@@ -484,10 +325,19 @@ export async function GET(request: NextRequest) {
     await supabase.from("events").update({ featured: false }).in("id", justPostponed)
   }
 
-  // Cancel open bets on expired/finished events and refund creators
+  // ── 8. Cleanup expired open bets ─────────────────────────────────────────
   const cleanupResult = await cleanupExpiredOpenBets(supabase, "system")
 
-  console.log("[cron/sync-scores]", { updated, justFinished: justFinished.length, postponed: justPostponed.length, metaFixed: metaFixedEvents.length, scoreFixed: scoreFixedEvents.length, resolvedEvents, apiCalls, apiErrors, cleanup: cleanupResult })
+  console.log("[cron/sync-scores]", {
+    updated,
+    justFinished: justFinished.length,
+    postponed: justPostponed.length,
+    metaFixed: metaFixedEvents.length,
+    resolvedEvents,
+    apiCalls,
+    apiErrors,
+    cleanup: cleanupResult,
+  })
 
   return NextResponse.json({
     success: true,
@@ -496,7 +346,6 @@ export async function GET(request: NextRequest) {
     justFinished: justFinished.length,
     postponed: justPostponed.length,
     metaFixed: metaFixedEvents.length,
-    scoreFixed: scoreFixedEvents.length,
     resolvedEvents,
     apiCalls,
     errors: apiErrors,

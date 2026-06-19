@@ -1,34 +1,26 @@
 import { NextRequest, NextResponse } from "next/server"
-import https from "node:https"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { cleanupExpiredOpenBets } from "@/lib/open-bets-cleanup"
+import {
+  mapTsdbStatus,
+  tsdbLookupEvent,
+  tsdbEventTimeline,
+  extractFirstScorer,
+} from "@/lib/tsdb"
 
-const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
-const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY || process.env.API_FOOTBALL_KEY
-const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
-const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
-const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
 const FORCE_FINISH_AFTER_MS = 4 * 60 * 60 * 1000
 
-function fetchApiSports(url: string, apiKey: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const { hostname, pathname, search } = new URL(url)
-    const req = https.request(
-      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": apiKey } },
-      (res) => {
-        const chunks: Buffer[] = []
-        res.on("data", (c) => chunks.push(c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
-          catch (e) { reject(e) }
-        })
-      }
-    )
-    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
-    req.on("error", reject)
-    req.end()
-  })
+function toScore(val: unknown): number | null {
+  if (val === null || val === undefined || val === "") return null
+  const n = Number(val)
+  return Number.isFinite(n) ? n : null
+}
+
+function shouldForceFinished(startTime: string | null | undefined): boolean {
+  if (!startTime) return false
+  const ms = new Date(startTime).getTime()
+  return Number.isFinite(ms) && Date.now() - ms >= FORCE_FINISH_AFTER_MS
 }
 
 type EventWithBets = {
@@ -48,137 +40,10 @@ type EventWithBets = {
   total_bets: number
 }
 
-function toNullableInt(value: unknown): number | null {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.trunc(value)
-  }
-
-  if (typeof value === "string") {
-    const trimmed = value.trim()
-    if (!trimmed) return null
-    const parsed = Number(trimmed)
-    if (Number.isFinite(parsed)) return Math.trunc(parsed)
-    return null
-  }
-
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>
-
-    // Baseball and some providers return nested score objects.
-    if (record.total !== undefined) return toNullableInt(record.total)
-    if (record.points !== undefined) return toNullableInt(record.points)
-    if (record.runs !== undefined) return toNullableInt(record.runs)
-    if (record.value !== undefined) return toNullableInt(record.value)
-  }
-
-  return null
-}
-
-function getApiUrl(externalId: string) {
-  const [sportPrefix, externalNumericId] = externalId.split("_")
-
-  if (!externalNumericId) return null
-
-  if (sportPrefix === "football") {
-    return `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
-  }
-
-  if (sportPrefix === "basketball") {
-    return `${API_BASKETBALL_URL}/games?id=${externalNumericId}`
-  }
-
-  if (sportPrefix === "baseball") {
-    return `${API_BASEBALL_URL}/games?id=${externalNumericId}`
-  }
-
-  return null
-}
-
-function normalizeEventStatus(fixture: any, sport: string): "scheduled" | "live" | "finished" {
-  const statusCandidates = [
-    fixture?.fixture?.status?.short,
-    fixture?.fixture?.status?.long,
-    fixture?.status?.short,
-    fixture?.status?.long,
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .map((value) => value.trim().toUpperCase())
-
-  if (statusCandidates.length === 0) {
-    return "scheduled"
-  }
-
-  const joined = statusCandidates.join(" ")
-
-  if (
-    joined.includes("FT") ||
-    joined.includes("FIN") ||
-    joined.includes("FINISHED") ||
-    joined.includes("ENDED") ||
-    joined.includes("FINAL")
-  ) {
-    return "finished"
-  }
-
-  if (
-    joined.includes("NS") ||
-    joined.includes("SCHEDULED") ||
-    joined.includes("NOT STARTED")
-  ) {
-    return "scheduled"
-  }
-
-  // For baseball providers, unknown non-final states should remain live to avoid blocking updates.
-  if (sport === "baseball") {
-    return "live"
-  }
-
-  return "live"
-}
-
-function shouldForceFinished(startTime: string | null | undefined, nowMs = Date.now()) {
-  if (!startTime) return false
-  const startMs = new Date(startTime).getTime()
-  if (!Number.isFinite(startMs)) return false
-  return nowMs - startMs >= FORCE_FINISH_AFTER_MS
-}
-
-function getFootballFixtureId(externalId: string | null | undefined) {
-  if (!externalId) return null
-  const [sportPrefix, fixtureId] = externalId.split("_")
-  if (sportPrefix !== "football" || !fixtureId) return null
-  return fixtureId
-}
-
-function extractFirstScorer(eventsPayload: any): { team: string | null; player: string | null; minute: number | null } | null {
-  const rows = eventsPayload?.response
-  if (!Array.isArray(rows) || rows.length === 0) return null
-
-  const normalized = rows
-    .filter((item) => (item?.type || "").toString().toLowerCase() === "goal")
-    .map((item) => {
-      const elapsed = toNullableInt(item?.time?.elapsed)
-      const extra = toNullableInt(item?.time?.extra) || 0
-      const minute = elapsed !== null ? elapsed + extra : null
-
-      return {
-        minute,
-        team: item?.team?.name || null,
-        player: item?.player?.name || null,
-      }
-    })
-    .filter((item) => item.minute !== null)
-    .sort((a, b) => (a.minute as number) - (b.minute as number))
-
-  if (normalized.length === 0) return null
-  return normalized[0]
-}
-
+// ── GET: list events with active bets ────────────────────────────────────────
 export async function GET(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
-  if (!auth.authorized) {
-    return auth.response
-  }
+  if (!auth.authorized) return auth.response
 
   const supabase = createAdminSupabaseClient()
 
@@ -190,9 +55,7 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1000)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
     const byEvent = new Map<number, EventWithBets>()
     const staleEventIds = new Set<number>()
@@ -200,18 +63,15 @@ export async function GET(request: NextRequest) {
 
     for (const row of bets || []) {
       const eventRow = Array.isArray(row.event) ? row.event[0] : row.event
-      if (!eventRow || !eventRow.id) continue
+      if (!eventRow?.id) continue
 
       const current = byEvent.get(eventRow.id)
       if (current) {
         current.total_bets += 1
       } else {
         const eventStatus = (eventRow.status || "").toLowerCase()
-        const isStaleUnfinished = (eventStatus === "scheduled" || eventStatus === "live") && shouldForceFinished(eventRow.start_time, nowMs)
-
-        if (isStaleUnfinished) {
-          staleEventIds.add(eventRow.id)
-        }
+        const isStale = (eventStatus === "scheduled" || eventStatus === "live") && shouldForceFinished(eventRow.start_time)
+        if (isStale) staleEventIds.add(eventRow.id)
 
         byEvent.set(eventRow.id, {
           id: eventRow.id,
@@ -222,7 +82,7 @@ export async function GET(request: NextRequest) {
           home_logo: eventRow.home_logo ?? null,
           away_logo: eventRow.away_logo ?? null,
           start_time: eventRow.start_time,
-          status: isStaleUnfinished ? "finished" : eventRow.status,
+          status: isStale ? "finished" : eventRow.status,
           home_score: eventRow.home_score,
           away_score: eventRow.away_score,
           league: eventRow.league,
@@ -233,34 +93,26 @@ export async function GET(request: NextRequest) {
     }
 
     if (staleEventIds.size > 0) {
-      const ids = Array.from(staleEventIds)
-      const { error: staleUpdateError } = await supabase
-        .from("events")
-        .update({ status: "finished" })
-        .in("id", ids)
+      await supabase.from("events").update({ status: "finished" })
+        .in("id", Array.from(staleEventIds))
         .in("status", ["scheduled", "live"])
-
-      if (staleUpdateError) {
-        console.error("Failed to force-finish stale events:", staleUpdateError)
-      }
     }
 
-    const events = Array.from(byEvent.values()).sort((a, b) => {
-      return new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-    })
+    const events = Array.from(byEvent.values()).sort(
+      (a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
+    )
 
     return NextResponse.json({ events })
-  } catch (error: unknown) {
-    console.error("Admin events results GET error:", error)
+  } catch (e: unknown) {
+    console.error("Admin events results GET error:", e)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
+// ── POST: manually refresh score for one event ───────────────────────────────
 export async function POST(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
-  if (!auth.authorized) {
-    return auth.response
-  }
+  if (!auth.authorized) return auth.response
 
   const supabase = createAdminSupabaseClient()
 
@@ -268,9 +120,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { event_id } = body as { event_id?: number }
 
-    if (!event_id) {
-      return NextResponse.json({ error: "event_id is required" }, { status: 400 })
-    }
+    if (!event_id) return NextResponse.json({ error: "event_id is required" }, { status: 400 })
 
     const { data: event, error: eventError } = await supabase
       .from("events")
@@ -278,108 +128,66 @@ export async function POST(request: NextRequest) {
       .eq("id", event_id)
       .single()
 
-    if (eventError || !event) {
-      return NextResponse.json({ error: "Event not found" }, { status: 404 })
+    if (eventError || !event) return NextResponse.json({ error: "Event not found" }, { status: 404 })
+
+    const { external_id } = event
+
+    if (!external_id?.startsWith("tsdb_")) {
+      return NextResponse.json({ error: "Este evento usa el API antiguo — no se puede actualizar automáticamente" }, { status: 400 })
     }
 
-    if (!event.external_id) {
-      return NextResponse.json({ error: "Event has no external_id" }, { status: 400 })
-    }
+    const idEvent = external_id.replace("tsdb_", "")
+    const raw = await tsdbLookupEvent(idEvent)
 
-    const apiUrl = getApiUrl(event.external_id)
-    if (!apiUrl) {
-      return NextResponse.json({ error: "Invalid external_id format" }, { status: 400 })
-    }
+    if (!raw) return NextResponse.json({ error: "No se encontró el evento en TheSportsDB" }, { status: 404 })
 
-    const apiKey = API_FOOTBALL_KEY
-    if (!apiKey) {
-      return NextResponse.json({ error: `API key no configurada para ${event.sport}` }, { status: 500 })
-    }
-
-    const apiData = await fetchApiSports(apiUrl, apiKey)
-    const fixture = apiData.response?.[0]
-
-    if (!fixture) {
-      return NextResponse.json({ error: "No fixture data found" }, { status: 404 })
-    }
-
-    const homeScoreRaw = fixture.goals?.home ?? fixture.scores?.home ?? fixture.score?.home ?? null
-    const awayScoreRaw = fixture.goals?.away ?? fixture.scores?.away ?? fixture.score?.away ?? null
-    const homeScore = toNullableInt(homeScoreRaw)
-    const awayScore = toNullableInt(awayScoreRaw)
-
-    const halftimeHomeRaw = fixture.score?.halftime?.home ?? fixture.scores?.halftime?.home ?? null
-    const halftimeAwayRaw = fixture.score?.halftime?.away ?? fixture.scores?.halftime?.away ?? null
-    const halftimeHome = toNullableInt(halftimeHomeRaw)
-    const halftimeAway = toNullableInt(halftimeAwayRaw)
-
-    const normalizedStatus = normalizeEventStatus(fixture, event.sport)
-    const newStatus = shouldForceFinished(event.start_time) ? "finished" : normalizedStatus
+    const homeScore = toScore(raw.intHomeScore)
+    const awayScore = toScore(raw.intAwayScore)
+    let newStatus = mapTsdbStatus(raw.strStatus)
+    if (shouldForceFinished(event.start_time)) newStatus = "finished"
 
     const currentMetadata = (event.metadata && typeof event.metadata === "object")
       ? (event.metadata as Record<string, unknown>)
       : {}
-
-    const currentMatchDetails = (currentMetadata.match_details && typeof currentMetadata.match_details === "object")
-      ? (currentMetadata.match_details as Record<string, unknown>)
-      : {}
-
-    let firstScorer: { team: string | null; player: string | null; minute: number | null } | null = null
-    if (event.sport === "football") {
-      const fixtureId = getFootballFixtureId(event.external_id)
-      if (fixtureId) {
-        try {
-          const eventsPayload = await fetchApiSports(`${API_FOOTBALL_URL}/fixtures/events?fixture=${fixtureId}`, apiKey)
-          firstScorer = extractFirstScorer(eventsPayload)
-        } catch (eventsError) {
-          console.error("Failed to fetch football fixture events:", eventsError)
-        }
-      }
-    }
-
-    const nextMatchDetails: Record<string, unknown> = {
-      ...currentMatchDetails,
-      halftime_home_score: halftimeHome,
-      halftime_away_score: halftimeAway,
+    const matchDetails: Record<string, unknown> = {
+      ...(currentMetadata.match_details && typeof currentMetadata.match_details === "object"
+        ? currentMetadata.match_details as Record<string, unknown>
+        : {}),
       updated_at: new Date().toISOString(),
     }
 
-    if (firstScorer) {
-      nextMatchDetails.first_scorer = firstScorer
+    // Fetch first scorer for finished football events
+    if (newStatus === "finished" && event.sport === "football") {
+      try {
+        const timeline = await tsdbEventTimeline(idEvent)
+        const firstGoal = extractFirstScorer(timeline)
+        if (firstGoal) matchDetails.first_scorer = firstGoal
+      } catch (e: any) {
+        console.error("Failed to fetch event timeline:", e.message)
+      }
     }
 
-    const nextMetadata = {
-      ...currentMetadata,
-      match_details: nextMatchDetails,
-    }
+    const nextMetadata = { ...currentMetadata, match_details: matchDetails }
 
     const { data: updatedEvent, error: updateError } = await supabase
       .from("events")
-      .update({
-        home_score: homeScore,
-        away_score: awayScore,
-        status: newStatus,
-        metadata: nextMetadata,
-      })
+      .update({ home_score: homeScore, away_score: awayScore, status: newStatus, metadata: nextMetadata })
       .eq("id", event_id)
       .select("id, sport, home_team, away_team, status, home_score, away_score, metadata")
       .single()
 
-    if (updateError) {
-      return NextResponse.json({ error: updateError.message }, { status: 500 })
-    }
+    if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
     const cleanupResult = await cleanupExpiredOpenBets(supabase, auth.userId || "system")
 
     return NextResponse.json({
       success: true,
       event: updatedEvent,
-      score_source: "external_api",
-      message: "Marcador consultado y guardado localmente",
+      message: "Marcador consultado y guardado",
       cleanup: cleanupResult,
     })
-  } catch (error: unknown) {
-    console.error("Admin events results POST error:", error)
+  } catch (e: unknown) {
+    console.error("Admin events results POST error:", e)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

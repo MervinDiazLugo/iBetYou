@@ -350,7 +350,7 @@ export default function BackofficeEvents() {
 
   function selectAllVisible() {
     const visible = filteredExternalEvents
-      .filter(e => !savedExternalIds.has(`${sport}_${e.fixture.id}`))
+      .filter(e => !savedExternalIds.has((e as any).external_id || `tsdb_${e.fixture.id}`))
       .map(e => e.fixture.id)
     
     if (selectedEvents.size === visible.length) {
@@ -371,7 +371,7 @@ export default function BackofficeEvents() {
       const eventsToSave = filteredExternalEvents
         .filter(e => selectedEvents.has(e.fixture.id))
         .map(e => ({
-          external_id: `${sport}_${e.fixture.id}`,
+          external_id: (e as any).external_id || `tsdb_${e.fixture.id}`,
           sport: sport,
           home_team: e.teams.home.name,
           away_team: e.teams.away.name,
@@ -1004,12 +1004,12 @@ export default function BackofficeEvents() {
                 <div className="flex items-center gap-2">
                   <input 
                     type="checkbox"
-                    checked={selectedEvents.size === filteredExternalEvents.filter(e => !savedExternalIds.has(`${sport}_${e.fixture.id}`)).length && selectedEvents.size > 0}
+                    checked={selectedEvents.size === filteredExternalEvents.filter(e => !savedExternalIds.has((e as any).external_id || `tsdb_${e.fixture.id}`)).length && selectedEvents.size > 0}
                     onChange={selectAllVisible}
                     className="w-4 h-4"
                   />
                   <span className="text-sm">
-                    {selectedEvents.size} de {filteredExternalEvents.filter(e => !savedExternalIds.has(`${sport}_${e.fixture.id}`)).length} seleccionados
+                    {selectedEvents.size} de {filteredExternalEvents.filter(e => !savedExternalIds.has((e as any).external_id || `tsdb_${e.fixture.id}`)).length} seleccionados
                   </span>
                 </div>
                 <Button 
@@ -1022,7 +1022,7 @@ export default function BackofficeEvents() {
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {filteredExternalEvents.map((event) => {
-                const isSaved = savedExternalIds.has(`${sport}_${event.fixture.id}`)
+                const isSaved = savedExternalIds.has((event as any).external_id || `tsdb_${event.fixture.id}`)
                 
                 return (
                   <Card 
@@ -1034,7 +1034,7 @@ export default function BackofficeEvents() {
                           ? 'border-primary bg-primary/5' 
                           : 'hover:shadow-md cursor-pointer'
                     }`}
-                    onClick={() => !isSaved && toggleEvent(event.fixture.id, `${sport}_${event.fixture.id}`)}
+                    onClick={() => !isSaved && toggleEvent(event.fixture.id, (event as any).external_id || `tsdb_${event.fixture.id}`)}
                   >
                     <CardHeader className="pb-2">
                       <div className="flex items-center justify-between">

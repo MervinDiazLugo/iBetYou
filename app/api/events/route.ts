@@ -1,42 +1,71 @@
 import { NextRequest, NextResponse } from "next/server"
-import https from "node:https"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
+import { TSDB_LEAGUES, tsdbScheduleNext, tsdbSchedulePrevious, mapTsdbStatus } from "@/lib/tsdb"
 
-/** Fetch with ONLY the x-apisports-key header — some api-sports endpoints
- *  reject requests that contain extra framework-injected headers (Accept,
- *  Accept-Encoding, User-Agent, etc.).  Using node:https directly gives us
- *  full control over what gets sent. */
-function fetchApiSports(url: string, apiKey: string): Promise<any> {
-  return new Promise((resolve, reject) => {
-    const { hostname, pathname, search } = new URL(url)
-    const req = https.request(
-      { method: "GET", hostname, path: pathname + search, headers: { "x-apisports-key": apiKey } },
-      (res) => {
-        const chunks: Buffer[] = []
-        res.on("data", (c) => chunks.push(c))
-        res.on("end", () => {
-          try { resolve(JSON.parse(Buffer.concat(chunks).toString())) }
-          catch (e) { reject(e) }
-        })
-      }
-    )
-    req.setTimeout(10000, () => { req.destroy(new Error("timeout")) })
-    req.on("error", reject)
-    req.end()
-  })
+// Returns events in a format compatible with the backoffice browser.
+// Each event has an `external_id` field (tsdb_{id}) plus a fixture-like shape
+// that the page's handleSaveSelected already uses.
+
+function mapSport(sport: string): "football" | "basketball" | "baseball" {
+  if (sport === "basketball") return "basketball"
+  if (sport === "baseball") return "baseball"
+  return "football"
 }
 
-const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
-const API_BASKETBALL_KEY = process.env.API_BASKETBALL_KEY
-const API_BASEBALL_KEY = process.env.API_BASEBALL_KEY
-const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
-const API_BASKETBALL_URL = process.env.API_BASKETBALL_URL || "https://v1.basketball.api-sports.io"
-const API_BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
+function toScore(val: unknown): number | null {
+  if (val === null || val === undefined || val === "") return null
+  const n = Number(val)
+  return Number.isFinite(n) ? n : null
+}
+
+function mapStatusShort(strStatus: string | null | undefined): string {
+  if (!strStatus) return "NS"
+  const s = strStatus.trim().toUpperCase()
+  if (["FT", "AET", "PEN", "FT_PEN", "AP"].includes(s)) return "FT"
+  if (["1H", "2H", "HT", "ET", "BT", "P", "LIVE", "Q1", "Q2", "Q3", "Q4", "OT"].includes(s)) return "IN"
+  if (["POSTP", "CANC", "SUSP", "PST", "ABD"].includes(s)) return "POSTP"
+  return "NS"
+}
+
+// Convert TheSportsDB event to ExternalEvent-compatible shape
+function toExternalEvent(raw: any, sport: "football" | "basketball" | "baseball") {
+  return {
+    // The real external_id to be used when saving
+    external_id: `tsdb_${raw.idEvent}`,
+    sport,
+    fixture: {
+      id: Number(raw.idEvent),
+      date: raw.strTimestamp ? `${raw.strTimestamp}Z` : raw.dateEvent,
+      status: {
+        short: mapStatusShort(raw.strStatus),
+        long: raw.strStatus || "Not Started",
+      },
+      venue: { name: raw.strVenue || null, city: raw.strCity || null },
+    },
+    league: {
+      name: raw.strLeague || "Unknown",
+      country: raw.strCountry || "Unknown",
+      logo: raw.strLeagueBadge || null,
+    },
+    teams: {
+      home: { name: raw.strHomeTeam, logo: raw.strHomeTeamBadge || null },
+      away: { name: raw.strAwayTeam, logo: raw.strAwayTeamBadge || null },
+    },
+    score: {
+      fulltime: {
+        home: toScore(raw.intHomeScore),
+        away: toScore(raw.intAwayScore),
+      },
+    },
+  }
+}
 
 export async function GET(request: NextRequest) {
   const auth = await requireBackofficeAdmin(request)
-  if (!auth.authorized) {
-    return auth.response
+  if (!auth.authorized) return auth.response
+
+  if (!process.env.THESPORTSDB_API_KEY) {
+    return NextResponse.json({ error: "THESPORTSDB_API_KEY not configured" }, { status: 500 })
   }
 
   const searchParams = request.nextUrl.searchParams
@@ -44,81 +73,57 @@ export async function GET(request: NextRequest) {
   const from = searchParams.get("from")
   const to = searchParams.get("to")
 
-  if (!from || !to) {
-    return NextResponse.json({ error: 'Se requieren parámetros from y to (YYYY-MM-DD)' }, { status: 400 })
-  }
+  const fromMs = from ? new Date(from).getTime() : Date.now()
+  const toMs = to ? new Date(to).getTime() + 24 * 60 * 60 * 1000 : Date.now() + 7 * 24 * 60 * 60 * 1000
 
-  const sportApiKey = sport === "baseball" ? API_BASEBALL_KEY : sport === "basketball" ? API_BASKETBALL_KEY : API_FOOTBALL_KEY
-  if (!sportApiKey) {
-    return NextResponse.json({ error: `API key no configurada para ${sport}` }, { status: 500 })
-  }
+  // Select leagues matching the requested sport
+  const targetSport = mapSport(sport)
+  const leaguesToFetch = TSDB_LEAGUES.filter((l) => l.sport === targetSport)
 
-  try {
-    // Generate date list in UTC to avoid local timezone shifting one day back.
-    const parseDateUTC = (value: string) => {
-      const [y, m, d] = value.split("-").map(Number)
-      return new Date(Date.UTC(y, m - 1, d))
-    }
+  const allEvents: any[] = []
+  const errors: Array<{ league: string; error: string }> = []
 
-    const formatDateUTC = (value: Date) => {
-      const y = value.getUTCFullYear()
-      const m = String(value.getUTCMonth() + 1).padStart(2, "0")
-      const d = String(value.getUTCDate()).padStart(2, "0")
-      return `${y}-${m}-${d}`
-    }
-
-    const dates: string[] = []
-    const startDate = parseDateUTC(from)
-    const endDate = parseDateUTC(to)
-
-    for (let d = new Date(startDate); d <= endDate; d.setUTCDate(d.getUTCDate() + 1)) {
-      dates.push(formatDateUTC(d))
-    }
-
-    let allEvents: any[] = []
-    const failedDates: Array<{ date: string; status?: number; reason: string }> = []
-
-    // Fetch events for each date
-    for (const date of dates) {
-      let url = ""
-      
-      if (sport === "football") {
-        url = `${API_FOOTBALL_URL}/fixtures?date=${date}`
-      } else if (sport === "basketball") {
-        url = `${API_BASKETBALL_URL}/games?date=${date}`
-      } else if (sport === "baseball") {
-        url = `${API_BASEBALL_URL}/games?date=${date}`
-      }
-
-      if (!url) continue
-
+  // Fetch upcoming + recent past events for each league
+  await Promise.all(
+    leaguesToFetch.map(async (league) => {
       try {
-        const data = await fetchApiSports(url, sportApiKey)
-        if (data.errors && Object.keys(data.errors).length > 0) {
-          failedDates.push({ date, reason: JSON.stringify(data.errors) })
-        } else if (data.response && Array.isArray(data.response)) {
-          allEvents = [...allEvents, ...data.response]
+        const [next, prev] = await Promise.all([
+          tsdbScheduleNext(league.id).catch(() => []),
+          tsdbSchedulePrevious(league.id).catch(() => []),
+        ])
+
+        for (const raw of [...next, ...prev]) {
+          if (!raw.strTimestamp || !raw.strHomeTeam || !raw.strAwayTeam) continue
+          const dateMs = new Date(`${raw.strTimestamp}Z`).getTime()
+          if (dateMs < fromMs || dateMs > toMs) continue
+          allEvents.push(toExternalEvent(raw, targetSport))
         }
-      } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : "Unknown error"
-        console.error(`Error fetching ${sport} ${date}:`, e)
-        failedDates.push({ date, reason: msg })
+      } catch (e: any) {
+        errors.push({ league: league.id, error: e.message })
       }
-    }
+    })
+  )
 
-    if (allEvents.length === 0 && failedDates.length > 0) {
-      return NextResponse.json(
-        {
-          error: `No se pudieron obtener eventos de ${sport}`,
-          details: failedDates,
-        },
-        { status: 502 }
-      )
-    }
+  // Deduplicate by idEvent
+  const seen = new Set<string>()
+  const deduplicated = allEvents.filter((e) => {
+    const key = e.external_id
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 
-    return NextResponse.json(allEvents)
-  } catch (error) {
-    console.error("Events API error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+  // Sort by date
+  deduplicated.sort((a, b) =>
+    new Date(a.fixture.date).getTime() - new Date(b.fixture.date).getTime()
+  )
+
+  if (deduplicated.length === 0 && errors.length > 0) {
+    return NextResponse.json(
+      { error: `No se obtuvieron eventos`, details: errors },
+      { status: 502 }
+    )
   }
+
+  return NextResponse.json(deduplicated)
 }
