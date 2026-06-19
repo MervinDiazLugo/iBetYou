@@ -15,7 +15,7 @@ import { formatCurrency } from "@/lib/utils"
 
 const BASE_NAV_ITEMS = [
   { href: "/", label: "Marketplace" },
-  { href: "/my-bets", label: "Mis Apuestas" },
+  { href: "/my-bets", label: "Mis Predicciones" },
   { href: "/leaderboard", label: "Leaderboard" },
 ]
 
@@ -147,7 +147,7 @@ export function Navbar() {
                   className="flex items-center px-4 text-sm font-semibold border-b-2 border-transparent text-green-500 hover:text-green-400 hover:border-green-500/40 transition-colors whitespace-nowrap gap-1"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Crear Apuesta
+                  Crear Predicción
                 </Link>
               )}
             </div>
@@ -372,7 +372,7 @@ export function Navbar() {
               {user && (
                 <>
                   <Link href="/?create=true" className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-semibold text-green-500 hover:bg-green-500/10 transition-colors">
-                    <Plus className="h-4 w-4" /> Crear Apuesta
+                    <Plus className="h-4 w-4" /> Crear Predicción
                   </Link>
                   <div className="pt-2 border-t border-border mt-2 space-y-0.5">
                     {[
@@ -445,7 +445,7 @@ export function Navbar() {
               </div>
             </div>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Tu cuenta quedará <span className="text-foreground font-medium">bloqueada por 72 horas</span>. No podrás iniciar sesión ni realizar apuestas durante ese tiempo.
+              Tu cuenta quedará <span className="text-foreground font-medium">bloqueada por 72 horas</span>. No podrás iniciar sesión ni realizar predicciones durante ese tiempo.
             </p>
             <p className="text-xs text-muted-foreground">Esta acción no se puede deshacer. El acceso se restaura automáticamente después de 72 horas.</p>
             <div className="flex gap-2 pt-1">

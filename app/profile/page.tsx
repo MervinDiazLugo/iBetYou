@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -263,7 +263,7 @@ export default function ProfilePage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-4 bg-secondary rounded-lg">
                 <p className="text-3xl font-bold">{stats.total_bets}</p>
-                <p className="text-sm text-muted-foreground">Apuestas jugadas</p>
+                <p className="text-sm text-muted-foreground">Predicciones jugadas</p>
               </div>
               <div className="text-center p-4 bg-secondary rounded-lg">
                 <p className="text-3xl font-bold text-green-500">{stats.win_rate}%</p>

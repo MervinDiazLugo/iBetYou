@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -268,7 +268,7 @@ function RegisterForm() {
             </p>
 
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 space-y-1">
-              <p className="font-semibold">⚠️ Sitio de apuestas de fantasía</p>
+              <p className="font-semibold">⚠️ Sitio de predicciones de fantasía</p>
               <p>iBetYou es una plataforma de entretenimiento con dinero <strong>ficticio (Fantasy Tokens)</strong>. No existe ninguna transacción con dinero real, ni premios en efectivo. Todos los resultados son virtuales y no tienen validez económica.</p>
             </div>
 

@@ -1,4 +1,4 @@
-// app/groups/[id]/page.tsx
+﻿// app/groups/[id]/page.tsx
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
@@ -234,8 +234,8 @@ export default function GroupPage() {
         body: JSON.stringify({ user_id: user.id, action: "take" }),
       })
       const data = await res.json()
-      if (!res.ok) { showToast(data.error || "Error al tomar apuesta", "error"); return }
-      showToast("Apuesta tomada exitosamente", "success")
+      if (!res.ok) { showToast(data.error || "Error al tomar predicción", "error"); return }
+      showToast("Predicción tomada exitosamente", "success")
       loadBets()
       loadAll()
     } finally {
@@ -292,7 +292,7 @@ export default function GroupPage() {
   }
 
   const tabs = [
-    { id: "bets" as const, label: "Apuestas" },
+    { id: "bets" as const, label: "Predicciones" },
     { id: "leaderboard" as const, label: "Leaderboard" },
     { id: "members" as const, label: "Miembros" },
     ...(myRole === "admin" ? [{ id: "settings" as const, label: "Configuración" }] : []),
@@ -451,13 +451,13 @@ export default function GroupPage() {
                 onClick={() => setBetSubTab("crear")}
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${betSubTab === "crear" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Crear apuesta
+                Crear predicción
               </button>
               <button
                 onClick={() => setBetSubTab("tomar")}
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-1.5 ${betSubTab === "tomar" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
               >
-                Tomar apuesta
+                Tomar predicción
                 {takableCount > 0 && (
                   <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${betSubTab === "tomar" ? "bg-primary text-primary-foreground" : "bg-muted-foreground/30 text-foreground"}`}>
                     {takableCount}
@@ -489,7 +489,7 @@ export default function GroupPage() {
               eventsWithBets.length === 0 ? (
                 <div className="text-center text-muted-foreground py-12">
                   <Coins className="w-8 h-8 mx-auto mb-2 opacity-40" />
-                  <p>No hay apuestas abiertas en este grupo.</p>
+                  <p>No hay predicciones abiertas en este grupo.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -556,7 +556,7 @@ export default function GroupPage() {
           {leaderboard.length === 0 ? (
             <div className="text-center text-muted-foreground py-12">
               <Trophy className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p>Aún no hay apuestas resueltas en este grupo.</p>
+              <p>Aún no hay predicciones resueltas en este grupo.</p>
             </div>
           ) : (
             leaderboard.map((entry, i) => (
@@ -636,7 +636,7 @@ export default function GroupPage() {
               <Settings className="w-4 h-4" /> Torneos del grupo
             </h3>
             <p className="text-xs text-muted-foreground mb-3">
-              Solo puedes quitar torneos si no hay apuestas del grupo en esos torneos.
+              Solo puedes quitar torneos si no hay predicciones del grupo en esos torneos.
             </p>
             {!group.sport ? (
               <p className="text-sm text-muted-foreground">Este grupo acepta todos los deportes — el filtro de torneo no aplica.</p>

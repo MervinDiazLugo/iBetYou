@@ -1,7 +1,7 @@
-import { ImageResponse } from "next/og"
+﻿import { ImageResponse } from "next/og"
 
 export const runtime = "edge"
-export const alt = "iBetYou – Apuestas P2P Deportivas"
+export const alt = "iBetYou – Predicciones P2P Deportivas"
 export const size = { width: 1200, height: 630 }
 export const contentType = "image/png"
 
@@ -39,7 +39,7 @@ export default function OgImage() {
             maxWidth: 800,
           }}
         >
-          Apuestas deportivas P2P · Fútbol · Básquetbol · Béisbol
+          Predicciones deportivas P2P · Fútbol · Básquetbol · Béisbol
         </div>
         <div
           style={{

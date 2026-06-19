@@ -193,7 +193,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({ error: "Error fetching clone bet" }))
-          const message = data.error || "No se pudo clonar la apuesta"
+          const message = data.error || "No se pudo clonar la predicción"
           setError(message)
           showToast(message, "error")
           return
@@ -231,7 +231,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         }
       } catch (err) {
         console.error("Error loading clone bet:", err)
-        const message = "No se pudo cargar la apuesta para clonar"
+        const message = "No se pudo cargar la predicción para clonar"
         setError(message)
         showToast(message, "error")
       }
@@ -420,18 +420,18 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           router.push("/")
           return
         }
-        const message = data.error || "Error al crear la apuesta"
+        const message = data.error || "Error al crear la predicción"
         showToast(message, "error")
         throw new Error(message)
       }
 
-      showToast("¡Apuesta publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
+      showToast("¡Predicción publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
       localStorage.setItem("lastBetAmount", String(amount))
       window.dispatchEvent(new Event("wallet:updated"))
       setLoading(false)
       onClose()
     } catch (err: any) {
-      setError(err.message || "Error al crear la apuesta")
+      setError(err.message || "Error al crear la predicción")
       setLoading(false)
     }
   }
@@ -443,7 +443,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       <CardHeader className="shrink-0">
         <CardTitle className="flex items-center gap-2">
           <Trophy className="h-6 w-6 text-primary" />
-          Crear Apuesta
+          Crear Predicción
         </CardTitle>
       </CardHeader>
       <CardContent className="px-4 sm:px-6 flex-1 overflow-y-auto">
@@ -474,7 +474,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Tipo de Apuesta</label>
+            <label className="text-sm font-medium">Tipo de Predicción</label>
             <div className="grid grid-cols-2 gap-2">
               {getAvailableBetTypes(selectedSport).map((type) => {
                 const isActive = betType === type.id
@@ -592,7 +592,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
           {selectedEvent?.metadata?.predictions?.percent && (
             <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-3">
-              <div className="text-xs font-semibold text-blue-300 mb-1">🤖 Predicción</div>
+              <div className="text-xs font-semibold text-blue-300 mb-1">🤖 Análisis</div>
               <div className="flex gap-2">
                 <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 p-2 text-center">
                   <div className="text-[10px] text-muted-foreground mb-0.5 truncate">{selectedEvent.home_team}</div>
@@ -643,17 +643,17 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               </label>
               {betType === "total_runs" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                  📊 Apuesta al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
+                  📊 Predicción al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
                 </p>
               )}
               {betType === "score_margin" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                  📏 Elegí un equipo <strong>y por cuántos puntos gana</strong>. Ej: <em>{selectedEvent?.home_team} +6–10</em> = ese equipo gana por entre 6 y 10 puntos. Si gana por 3 o por 15, tu apuesta pierde aunque aciertes el equipo ganador.
+                  📏 Elegí un equipo <strong>y por cuántos puntos gana</strong>. Ej: <em>{selectedEvent?.home_team} +6–10</em> = ese equipo gana por entre 6 y 10 puntos. Si gana por 3 o por 15, tu predicción pierde aunque aciertes el equipo ganador.
                 </p>
               )}
               {betType === "run_line" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                  📐 <strong>Run Line</strong> es una apuesta de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras. El equipo con <strong>+1.5</strong> gana si ese equipo gana <em>o</em> pierde por solo 1 carrera.
+                  📐 <strong>Run Line</strong> es una predicción de handicap de 1.5 carreras. El equipo con <strong>-1.5</strong> necesita ganar por 2 o más carreras. El equipo con <strong>+1.5</strong> gana si ese equipo gana <em>o</em> pierde por solo 1 carrera.
                 </p>
               )}
               {betType === "exact_score" ? (
@@ -764,7 +764,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 onChange={(e) => setAmount(Number(e.target.value))}
                 className="w-full accent-yellow-500"
                 style={{ accentColor: "#eab308" }}
-                aria-label="Monto de apuesta"
+                aria-label="Monto de predicción"
               />
               <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>$1</span>

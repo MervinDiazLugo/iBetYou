@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -133,7 +133,7 @@ export default function BalancePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Detalle por apuesta</CardTitle>
+            <CardTitle>Detalle por predicción</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (

@@ -117,8 +117,8 @@ export default function MyBetsPage() {
 
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold mb-2">Mis Apuestas</h1>
-          <p className="text-muted-foreground">Gestiona tus apuestas creadas y tomadas</p>
+          <h1 className="text-3xl font-bold mb-2">Mis Predicciones</h1>
+          <p className="text-muted-foreground">Gestiona tus predicciones creadas y tomadas</p>
         </div>
 
         {/* Mode tabs */}
@@ -152,7 +152,7 @@ export default function MyBetsPage() {
             <div className="border rounded-lg p-3 bg-card">
               <div className="text-xs text-muted-foreground mb-1">Apostado</div>
               <div className="font-bold text-sm">{formatCurrency(wagerStats.wagered)}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">{wagerStats.resolved} apuestas</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{wagerStats.resolved} predicciones</div>
             </div>
             <div className="border rounded-lg p-3 bg-card">
               <div className="text-xs text-muted-foreground mb-1">Ganado</div>
@@ -191,9 +191,9 @@ export default function MyBetsPage() {
         ) : filteredBets.length === 0 ? (
           <div className="text-center py-12">
             <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-4">No hay apuestas</h3>
+            <h3 className="text-lg font-semibold mb-4">No hay predicciones</h3>
             <Link href="/create" className={createBetCtaClass} style={createBetCtaStyle}>
-              Crear Apuesta
+              Crear Predicción
             </Link>
           </div>
         ) : (
@@ -295,7 +295,7 @@ export default function MyBetsPage() {
                     {(bet as any).house_bet ? (
                       <div className="p-3 rounded-md bg-orange-500/5 border border-orange-500/20 space-y-1">
                         <div className="text-xs text-orange-400 font-semibold uppercase tracking-wide mb-2">
-                          Apuesta contra la Casa
+                          Predicción contra la Casa
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground font-medium">Tu selección:</span>
@@ -321,14 +321,14 @@ export default function MyBetsPage() {
                     ) : (
                       <div className="flex flex-wrap gap-3 p-2 rounded-md bg-muted/40 border border-border/40">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground font-medium">Apuesta creador:</span>
+                          <span className="text-xs text-muted-foreground font-medium">Predicción creador:</span>
                           <span className="text-sm font-bold text-green-400">
                             {bet.creator_selection ? formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team) : "—"}
                           </span>
                         </div>
                         {bet.acceptor && (
                           <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground font-medium">Apuesta aceptante:</span>
+                            <span className="text-xs text-muted-foreground font-medium">Predicción aceptante:</span>
                             <span className="text-sm font-bold text-blue-400">
                               {bet.acceptor_selection ? formatHouseSelection(bet.bet_type, bet.acceptor_selection, bet.event?.home_team, bet.event?.away_team) : "Contra creador"}
                             </span>
@@ -415,7 +415,7 @@ export default function MyBetsPage() {
                         <div className="rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2">
                           <p className="text-xs text-green-600 font-medium">
                             {bet.decision_history[0].reason ||
-                              "Tu apuesta se cerró automáticamente porque el evento ya inició."}
+                              "Tu predicción se cerró automáticamente porque el evento ya inició."}
                           </p>
                         </div>
                       )}

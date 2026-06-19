@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
@@ -100,7 +100,7 @@ export default function ComoJugarPage() {
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3">Cómo Jugar</h1>
           <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-            iBetYou es una plataforma de apuestas deportivas{" "}
+            iBetYou es una plataforma de predicciones deportivas{" "}
             <strong>entre usuarios reales</strong>. No apostás contra la casa, sino contra otra
             persona.
           </p>
@@ -120,8 +120,8 @@ export default function ComoJugarPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>• Propone la apuesta eligiendo deporte, partido, tipo de apuesta y monto.</p>
-                <p>• Define cuál resultado apuesta (ej. "Gana River").</p>
+                <p>• Propone la predicción eligiendo deporte, partido, tipo de predicción y monto.</p>
+                <p>• Define cuál resultado predice (ej. "Gana River").</p>
                 <p>• Paga el monto + 3% de fee al publicar.</p>
                 <p>• Espera a que alguien la acepte.</p>
               </CardContent>
@@ -134,8 +134,8 @@ export default function ComoJugarPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground space-y-1">
-                <p>• Ve la apuesta en el Marketplace y decide tomarla.</p>
-                <p>• Apuesta automáticamente por el resultado contrario.</p>
+                <p>• Ve la predicción en el Marketplace y decide tomarla.</p>
+                <p>• Predice automáticamente por el resultado contrario.</p>
                 <p>• En simétricas paga el mismo monto; en resultado exacto cubre monto × multiplicador.</p>
                 <p>• El ganador recibe el pozo completo.</p>
               </CardContent>
@@ -155,7 +155,7 @@ export default function ComoJugarPage() {
                   <p className="text-sm text-muted-foreground">
                     Tanto el <strong>creador</strong> como el <strong>aceptante</strong> pagan un
                     fee del 3% sobre el monto que reservan. El fee se descuenta al publicar o al
-                    aceptar la apuesta.
+                    aceptar la predicción.
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     Ejemplo: apostás $20 → fee = $0.60 → se descontan $20.60 de tu balance.
@@ -169,11 +169,11 @@ export default function ComoJugarPage() {
         <section className="mb-12">
           <h2 className="text-xl font-bold mb-2 flex items-center gap-2">
             <Target className="h-5 w-5 text-primary" />
-            Tipos de apuesta
+            Tipos de predicción
           </h2>
           <p className="text-muted-foreground text-sm mb-6">
             Hay dos categorías: <strong>Simétricas</strong> (ambos arriesgan igual) y{" "}
-            <strong>Asimétricas</strong> (solo para resultado exacto, donde el creador apuesta a un resultado difícil con mejor
+            <strong>Asimétricas</strong> (solo para resultado exacto, donde el creador predice un resultado difícil con mejor
             pago potencial).
           </p>
 
@@ -183,11 +183,11 @@ export default function ComoJugarPage() {
               title="Directa"
               tag="Simétrica · Fútbol / Basketball / Béisbol"
               tagColor="bg-blue-500/10 text-blue-400"
-              description="Apostás al ganador del partido (o empate si aplica). El aceptante apuesta por el resultado contrario. Ambos ponen la misma cantidad en juego."
+              description="Predecís al ganador del partido (o empate si aplica). El aceptante predice el resultado contrario. Ambos ponen la misma cantidad en juego."
               example="Partido: River vs. Boca. Monto: $20 cada uno."
               rows={[
-                { label: "Creador apuesta:", value: "Gana River" },
-                { label: "Aceptante apuesta:", value: "No gana River (Boca o empate)" },
+                { label: "Creador predice:", value: "Gana River" },
+                { label: "Aceptante predice:", value: "No gana River (Boca o empate)" },
                 { label: "Pozo total:", value: "$40" },
                 { label: "Si gana River → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
                 { label: "Si no gana River → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
@@ -204,8 +204,8 @@ export default function ComoJugarPage() {
               description="Igual que Directa pero el resultado que importa es el del primer tiempo, no el partido completo. El partido puede terminar distinto."
               example="Partido: Real Madrid vs. Barça. Monto: $15 cada uno."
               rows={[
-                { label: "Creador apuesta:", value: "Gana Madrid al descanso" },
-                { label: "Aceptante apuesta:", value: "No gana Madrid al descanso" },
+                { label: "Creador predice:", value: "Gana Madrid al descanso" },
+                { label: "Aceptante predice:", value: "No gana Madrid al descanso" },
                 { label: "Pozo total:", value: "$30" },
                 { label: "Si Madrid va ganando al 45':", value: "+$15 neto · $30 total", highlight: "green" },
                 { label: "Si empata o gana Barça al 45':", value: "+$15 neto · $30 total", highlight: "green" },
@@ -219,10 +219,10 @@ export default function ComoJugarPage() {
               title="Primer Anotador"
               tag="Simétrica · Solo Fútbol"
               tagColor="bg-blue-500/10 text-blue-400"
-              description="El creador elige quién anotará primero. El aceptante apuesta a que no será ese equipo. Ambos arriesgan el mismo monto base."
-              example="Creador apuesta $10 a que Boca anota primero."
+              description="El creador elige quién anotará primero. El aceptante predice que no será ese equipo. Ambos arriesgan el mismo monto base."
+              example="Creador predice: $10 a Boca anota primero."
               rows={[
-                { label: "Creador apuesta:", value: "$10 (Boca anota primero)" },
+                { label: "Creador predice:", value: "$10 (Boca anota primero)" },
                 { label: "Aceptante cubre:", value: "$10" },
                 { label: "Pozo total:", value: "$20" },
                 { label: "Si Boca anota primero → creador gana:", value: "+$10 neto · $20 total", highlight: "green" },
@@ -237,11 +237,11 @@ export default function ComoJugarPage() {
               title="Run Line"
               tag="Simétrica · Solo Béisbol"
               tagColor="bg-orange-500/10 text-orange-400"
-              description="Apuesta de handicap. El creador elige un equipo y apuesta a que gana por 2 o más carreras. El aceptante apuesta a que ese equipo gana por 1 o pierde. No hay decimales en béisbol — el marcador siempre es en números enteros."
+              description="Predicción de handicap. El creador elige un equipo y predice que gana por 2 o más carreras. El aceptante predice que ese equipo gana por 1 o pierde. No hay decimales en béisbol — el marcador siempre es en números enteros."
               example="Pittsburgh Pirates vs Chicago Cubs. Monto: $20 cada uno."
               rows={[
-                { label: "Creador apuesta:", value: "Pirates — gana por 2 o más carreras" },
-                { label: "Aceptante apuesta:", value: "Cubs — gana el partido o pierde por 1 carrera" },
+                { label: "Creador predice:", value: "Pirates — gana por 2 o más carreras" },
+                { label: "Aceptante predice:", value: "Cubs — gana el partido o pierde por 1 carrera" },
                 { label: "Pozo total:", value: "$40" },
                 { label: "Si Pirates gana 5-3 (dif. 2+) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
                 { label: "Si Cubs gana o Pirates gana 4-3 → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
@@ -255,11 +255,11 @@ export default function ComoJugarPage() {
               title="Total Carreras"
               tag="Simétrica · Solo Béisbol"
               tagColor="bg-orange-500/10 text-orange-400"
-              description="Apuesta al total de carreras sumadas entre ambos equipos al final del partido, sin importar quién gane. No es sobre un equipo en particular — es sobre el número total del juego."
+              description="Predicción al total de carreras sumadas entre ambos equipos al final del partido, sin importar quién gane. No es sobre un equipo en particular — es sobre el número total del juego."
               example="Pittsburgh Pirates vs Chicago Cubs. Monto: $20 cada uno."
               rows={[
-                { label: "Creador apuesta:", value: "Más de 8 carreras totales" },
-                { label: "Aceptante apuesta:", value: "Menos de 8 carreras totales" },
+                { label: "Creador predice:", value: "Más de 8 carreras totales" },
+                { label: "Aceptante predice:", value: "Menos de 8 carreras totales" },
                 { label: "Pozo total:", value: "$40" },
                 { label: "Si el marcador es 5-4 (9 carreras) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
                 { label: "Si el marcador es 4-3 (7 carreras) → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
@@ -273,11 +273,11 @@ export default function ComoJugarPage() {
               title="Margen de Victoria"
               tag="Simétrica · Solo Basketball"
               tagColor="bg-purple-500/10 text-purple-400"
-              description="Apostás a que un equipo gana por un rango específico de puntos. El aceptante apuesta a que ese margen no se cumple (el equipo gana por más, por menos, o pierde)."
-              example="Lakers vs Celtics. Creador apuesta $20 a que Lakers gana por 6-10 puntos."
+              description="Predecís a que un equipo gana por un rango específico de puntos. El aceptante predice que ese margen no se cumple (el equipo gana por más, por menos, o pierde)."
+              example="Lakers vs Celtics. Creador predice: Lakers gana por 6-10 puntos ($20)."
               rows={[
-                { label: "Creador apuesta:", value: "Lakers gana por 6 a 10 puntos" },
-                { label: "Aceptante apuesta:", value: "Lakers NO gana por ese margen" },
+                { label: "Creador predice:", value: "Lakers gana por 6 a 10 puntos" },
+                { label: "Aceptante predice:", value: "Lakers NO gana por ese margen" },
                 { label: "Pozo total:", value: "$40" },
                 { label: "Si Lakers gana 108-100 (8 puntos) → creador gana:", value: "+$20 neto · $40 total", highlight: "green" },
                 { label: "Si Lakers gana por 2 o por 15+ → aceptante gana:", value: "+$20 neto · $40 total", highlight: "green" },
@@ -295,7 +295,7 @@ export default function ComoJugarPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
           <p className="text-sm text-muted-foreground mb-6 text-center max-w-xl mx-auto">
-            En las apuestas asimétricas el creador apuesta a un resultado de baja probabilidad (un
+            En las predicciones asimétricas el creador predice un resultado de baja probabilidad (un
             marcador exacto) y, para compensar el riesgo, define un{" "}
             <strong>multiplicador</strong> entre ×1 y ×5. A mayor multiplicador,{" "}
             <strong>el aceptante pone más tokens en juego</strong> mientras el creador pone menos.
@@ -307,10 +307,10 @@ export default function ComoJugarPage() {
               title="Resultado Exacto"
               tag="Asimétrica"
               tagColor="bg-yellow-500/10 text-yellow-400"
-              description="El creador pronostica el marcador exacto del partido (ej. 2-1). Si atina, gana un premio multiplicado. El aceptante apuesta a que ese resultado no sucede."
-              example="Creador apuesta $10 a que sale 2-1. Multiplicador ×3."
+              description="El creador pronostica el marcador exacto del partido (ej. 2-1). Si atina, gana un premio multiplicado. El aceptante predice que ese resultado no sucede."
+              example="Creador predice marcador 2-1 ($10). Multiplicador ×3."
               rows={[
-                { label: "Creador apuesta:", value: "$10 (marcador exacto 2-1)" },
+                { label: "Creador predice:", value: "$10 (marcador exacto 2-1)" },
                 { label: "Aceptante cubre:", value: "$30 (×3 del monto)" },
                 { label: "Pozo total:", value: "$40" },
                 { label: "Si sale 2-1 → creador gana:", value: "+$30 neto · $40 total", highlight: "green" },
@@ -330,8 +330,8 @@ export default function ComoJugarPage() {
           <Card>
             <CardContent className="pt-5">
               <p className="text-sm text-muted-foreground mb-4">
-                En las apuestas asimétricas (solo Resultado Exacto), el creador define
-                un multiplicador al publicar la apuesta. Este número indica cuántas veces el monto
+                En las predicciones asimétricas (solo Resultado Exacto), el creador define
+                un multiplicador al publicar la predicción. Este número indica cuántas veces el monto
                 base debe cubrir el aceptante.
               </p>
               <div className="overflow-x-auto">
@@ -373,7 +373,7 @@ export default function ComoJugarPage() {
         <section className="mb-12">
           <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" />
-            Ciclo de vida de una apuesta
+            Ciclo de vida de una predicción
           </h2>
           <div className="space-y-2">
             {[
@@ -381,13 +381,13 @@ export default function ComoJugarPage() {
                 step: "1",
                 label: "Abierta",
                 color: "bg-green-500",
-                desc: 'El creador publicó la apuesta. Está esperando un aceptante en el Marketplace. El monto del creador queda reservado.',
+                desc: 'El creador publicó la predicción. Está esperando un aceptante en el Marketplace. El monto del creador queda reservado.',
               },
               {
                 step: "2",
                 label: "Tomada",
                 color: "bg-blue-500",
-                desc: 'Un aceptante la tomó. Ambos montos están reservados. La apuesta queda en curso hasta que finalice el evento.',
+                desc: 'Un aceptante la tomó. Ambos montos están reservados. La predicción queda en curso hasta que finalice el evento.',
               },
               {
                 step: "3",
@@ -405,7 +405,7 @@ export default function ComoJugarPage() {
                 step: "4b",
                 label: "Cancelada",
                 color: "bg-red-500",
-                desc: 'Si el admin cancela la apuesta, ambos jugadores reciben de vuelta sus tokens automáticamente.',
+                desc: 'Si el admin cancela la predicción, ambos jugadores reciben de vuelta sus tokens automáticamente.',
               },
             ].map((item) => (
               <div key={item.step} className="flex gap-3 items-start">
@@ -431,7 +431,7 @@ export default function ComoJugarPage() {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground mt-3">
-            ¿Querés crear tu propia apuesta?{" "}
+            ¿Querés crear tu propia predicción?{" "}
             <Link href="/?create=true" className="underline hover:text-foreground">
               Publicá una aquí
             </Link>

@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { Suspense, useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -54,7 +54,7 @@ function CreateBetFormWithParams() {
         <AlertCircle className="h-10 w-10 mx-auto text-amber-500" />
         <h2 className="text-lg font-semibold">Acción no disponible para cuentas backoffice</h2>
         <p className="text-sm text-muted-foreground">
-          Las cuentas de administración no pueden crear, tomar ni clonar apuestas en el marketplace.
+          Las cuentas de administración no pueden crear, tomar ni clonar predicciones en el marketplace.
         </p>
         <Button onClick={() => router.push("/backoffice")}>
           Ir al Backoffice

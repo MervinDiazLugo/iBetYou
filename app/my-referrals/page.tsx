@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -105,7 +105,7 @@ export default function MyReferralsPage() {
               <ul className="space-y-1.5 text-xs text-gray-300">
                 <li>• <span className="text-white">50 fichas</span> para ti + 50 fichas para tu referido</li>
                 <li>• Las fichas llegan <span className="text-white">bloqueadas</span> — se desbloquean apostando</li>
-                <li>• Requisito: apostar <span className="text-white">750 fichas</span> en apuestas de 10+ fichas</li>
+                <li>• Requisito: predecir <span className="text-white">750 fichas</span> en predicciones de 10+ fichas</li>
                 <li>• Al completarlo, las 50 fichas pasan a tu saldo disponible automáticamente</li>
                 <li>• Puedes referir hasta <span className="text-white">{stats.max_referrals} personas</span></li>
               </ul>

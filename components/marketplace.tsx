@@ -258,9 +258,9 @@ function HomeContent() {
       })
       if (!res.ok) {
         const data = await res.json()
-        throw new Error(data.error || "Error al tomar la apuesta")
+        throw new Error(data.error || "Error al tomar la predicción")
       }
-      showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
+      showToast("¡Predicción aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
       window.dispatchEvent(new Event("wallet:updated"))
       setSelectedBetForModal(null)
       // Refresh open bets list
@@ -271,7 +271,7 @@ function HomeContent() {
       fetch(`/api/bets?limit=50${userParam}${sportParam}`, { headers: freshHeaders })
         .then(r => r.json()).then(data => setBets(data.bets || [])).catch(() => {})
     } catch (err: any) {
-      showToast(err.message || "Error al tomar la apuesta", "error")
+      showToast(err.message || "Error al tomar la predicción", "error")
     } finally {
       setTakingBetModal(false)
     }
@@ -806,7 +806,7 @@ function HomeContent() {
                 </div>
 
                 <div className="bg-primary/10 rounded-lg p-3 border border-primary/20 text-center">
-                  <div className="text-xs text-muted-foreground mb-1">{betTypeLabels[bet.bet_type]} · @{bet.creator?.nickname} apuesta por</div>
+                  <div className="text-xs text-muted-foreground mb-1">{betTypeLabels[bet.bet_type]} · @{bet.creator?.nickname} predice:</div>
                   <div className="text-base font-bold text-primary">{formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}</div>
                   {bet.acceptor_selection && <div className="text-xs text-muted-foreground mt-1">Tú tomarías: <span className="font-semibold text-foreground">{formatHouseSelection(bet.bet_type, bet.acceptor_selection, bet.event?.home_team, bet.event?.away_team)}</span></div>}
                 </div>
@@ -838,7 +838,7 @@ function HomeContent() {
                     disabled={takingBetModal || isOwn || !user}
                     onClick={handleTakeBetFromModal}
                   >
-                    {takingBetModal ? "Aceptando..." : isOwn ? "Es tu apuesta" : !user ? "Inicia sesión" : "Tomar apuesta"}
+                    {takingBetModal ? "Aceptando..." : isOwn ? "Es tu predicción" : !user ? "Inicia sesión" : "Tomar predicción"}
                   </Button>
                 </div>
               </div>
@@ -854,15 +854,15 @@ function HomeContent() {
             <span className="text-2xl">🎮</span>
             <div>
               <div className="font-bold text-yellow-400 text-sm">MODO DEMO ACTIVO</div>
-              <div className="text-xs text-yellow-300/80">Estás viendo eventos y apuestas de demostración. Los resultados son generados por el sistema al día siguiente. Solo se usan tokens Fantasy.</div>
+              <div className="text-xs text-yellow-300/80">Estás viendo eventos y predicciones de demostración. Los resultados son generados por el sistema al día siguiente. Solo se usan tokens Fantasy.</div>
             </div>
           </div>
         )}
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace de Apuestas</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold mb-2">Marketplace de Predicciones</h1>
           <p className="text-muted-foreground">
-            Encuentra apuestas y retos de otros usuarios
+            Encuentra predicciones y retos de otros usuarios
           </p>
         </div>
 
@@ -878,7 +878,7 @@ function HomeContent() {
           >
             <CardContent className="py-4">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">Quiero tomar apuestas</h3>
+                <h3 className="font-semibold">Quiero tomar predicciones</h3>
                 <Badge variant={marketMode === "take" ? "default" : "outline"}>Modo Activo</Badge>
               </div>
               <p className="text-sm text-muted-foreground">Explora rápido, compara riesgo y entra en oportunidades que vencen pronto.</p>
@@ -887,7 +887,7 @@ function HomeContent() {
           <Card className={`cursor-pointer border-2 transition-all ${marketMode === "create" ? "border-primary" : "border-border"}`} onClick={() => setMarketMode("create")}>
             <CardContent className="py-4">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="font-semibold">Quiero crear apuestas</h3>
+                <h3 className="font-semibold">Quiero crear predicciones</h3>
                 <Button
                   size="sm"
                   className={createBetCtaClass}
@@ -904,7 +904,7 @@ function HomeContent() {
                   Crear ahora
                 </Button>
               </div>
-              <p className="text-sm text-muted-foreground">Publica una apuesta clara y gana visibilidad con mejores señales para tomadores.</p>
+              <p className="text-sm text-muted-foreground">Publica una predicción clara y gana visibilidad con mejores señales para tomadores.</p>
             </CardContent>
           </Card>
         </div>
@@ -933,7 +933,7 @@ function HomeContent() {
                     </div>
                     <div className="text-sm font-semibold truncate">{bet.event.home_team} vs {bet.event.away_team}</div>
                     <div className="text-xs text-muted-foreground">{getPostedAgo(bet.created_at)}</div>
-                    <div className="text-xs">Apuesta: <span className="font-semibold text-primary">{formatCurrency(bet.amount)}</span></div>
+                    <div className="text-xs">Predicción: <span className="font-semibold text-primary">{formatCurrency(bet.amount)}</span></div>
                     <Button size="sm" className="w-full" onClick={() => {
                       if (!user) { router.push("/login"); return }
                       setSelectedBetForModal(bet)
@@ -1186,7 +1186,7 @@ function HomeContent() {
 
                     {event.metadata?.predictions?.percent && (
                       <div className="mt-2 space-y-2" onClick={e => e.stopPropagation()}>
-                        <div className="text-[10px] text-muted-foreground font-medium text-center">🤖 Predicción</div>
+                        <div className="text-[10px] text-muted-foreground font-medium text-center">🤖 Análisis</div>
                         <div className="flex gap-1.5">
                           <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 py-1.5 text-center">
                             <div className="text-[10px] text-muted-foreground leading-none mb-0.5">Local</div>
@@ -1231,7 +1231,7 @@ function HomeContent() {
                           setShowCreateModal(true)
                         }}
                       >
-                        🤝 Apostar P2P
+                        🤝 Predecir P2P
                       </Button>
                       {(event.metadata as any)?.predictions?.percent && (
                         <Button
@@ -1364,7 +1364,7 @@ function HomeContent() {
                             </div>
 
                             <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                              Haz clic para crear apuesta
+                              Haz clic para crear predicción
                             </div>
                           </CardContent>
                         </Card>
@@ -1405,28 +1405,28 @@ function HomeContent() {
           </div>
         )}
 
-        {/* Apuestas Disponibles */}
+        {/* Predicciones Disponibles */}
         {!loading && (
           <>
             <div ref={takeBetsSectionRef} className="flex items-center gap-2 mb-4">
               <Trophy className="h-5 w-5 text-primary" />
-              <h2 className="text-lg sm:text-xl font-bold">Apuestas Disponibles</h2>
+              <h2 className="text-lg sm:text-xl font-bold">Predicciones Disponibles</h2>
             </div>
             {sortedBets.length === 0 ? (
               <div className="text-center py-12">
                 <Trophy className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No hay apuestas disponibles</h3>
+                <h3 className="text-lg font-semibold mb-2">No hay predicciones disponibles</h3>
                 {ownOpenBetsCount > 0 ? (
                   <p className="text-muted-foreground mb-4">
-                    Tienes {ownOpenBetsCount} apuesta{ownOpenBetsCount > 1 ? 's' : ''} abierta{ownOpenBetsCount > 1 ? 's' : ''}. El marketplace solo muestra apuestas de otros usuarios.
+                    Tienes {ownOpenBetsCount} predicción{ownOpenBetsCount > 1 ? 's' : ''} abierta{ownOpenBetsCount > 1 ? 's' : ''}. El marketplace solo muestra predicciones de otros usuarios.
                   </p>
                 ) : (
                   <p className="text-muted-foreground mb-4">
-                    Sé el primero en crear una apuesta
+                    Sé el primero en crear una predicción
                   </p>
                 )}
                 <Link href="/create" className={createBetCtaClass} style={createBetCtaStyle}>
-                  Crear Apuesta
+                  Crear Predicción
                 </Link>
               </div>
             ) : (
@@ -1512,7 +1512,7 @@ function HomeContent() {
                       )}
 
                       <div className="bg-primary/10 rounded p-2 border border-primary/20">
-                        <div className="text-[9px] text-muted-foreground text-center mb-0.5">Apuesta</div>
+                        <div className="text-[9px] text-muted-foreground text-center mb-0.5">Predicción</div>
                         <div className="text-sm font-bold text-center text-primary truncate">
                           {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}
                         </div>
@@ -1579,7 +1579,7 @@ function HomeContent() {
               {sortedBets.length > betsVisible && (
                 <div className="mt-6 flex justify-center">
                   <Button variant="outline" onClick={() => setBetsVisible((prev) => prev + 20)}>
-                    Cargar más apuestas ({sortedBets.length - betsVisible} restantes)
+                    Cargar más predicciones ({sortedBets.length - betsVisible} restantes)
                   </Button>
                 </div>
               )}
@@ -1588,15 +1588,15 @@ function HomeContent() {
           </>
         )}
 
-        {/* Apuestas Tomadas - Para clonar */}
+        {/* Predicciones Tomadas - Para clonar */}
         {!loading && filteredTakenBets.length > 0 && (
           <>
             <div className="flex items-center gap-2 mb-4 mt-8">
               <Trophy className="h-5 w-5 text-orange-500" />
-              <h2 className="text-lg sm:text-xl font-bold">Apuestas Tomadas</h2>
+              <h2 className="text-lg sm:text-xl font-bold">Predicciones Tomadas</h2>
             </div>
             <p className="text-muted-foreground text-sm mb-4">
-              Estas apuestas ya fueron tomadas. ¡Puedes clonar una para crear la tuya!
+              Estas predicciones ya fueron tomadas. ¡Puedes clonar una para crear la tuya!
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
               {filteredTakenBets.map((bet) => {
@@ -1683,7 +1683,7 @@ function HomeContent() {
                         setSelectedEventForBet(null)
                         setShowCreateModal(true)
                       }}>
-                        Clonar Apuesta
+                        Clonar Predicción
                       </Button>
                     </div>
                   </CardFooter>
@@ -1693,12 +1693,12 @@ function HomeContent() {
           </>
         )}
 
-        {/* Mis Apuestas en Curso */}
+        {/* Mis Predicciones en Curso */}
         {!loading && user && (
           <div className="mt-8">
             <div className="flex items-center gap-2 mb-4">
               <Clock className="h-5 w-5 text-orange-500" />
-              <h2 className="text-lg sm:text-xl font-bold">Mis Apuestas en Curso</h2>
+              <h2 className="text-lg sm:text-xl font-bold">Mis Predicciones en Curso</h2>
             </div>
             {(() => {
               const betsForMode = inProgressBets.filter(bet => ((bet as any).mode ?? "fantasy") === mode)
@@ -1748,7 +1748,7 @@ function HomeContent() {
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-[10px]">
                           <div className="rounded-md bg-secondary/30 px-2 py-1.5">
-                            <div className="text-muted-foreground mb-0.5">Apuesta</div>
+                            <div className="text-muted-foreground mb-0.5">Predicción</div>
                             <div className="text-foreground font-semibold text-xs">{formatCurrency(bet.amount)}</div>
                           </div>
                           <div className="rounded-md bg-green-500/10 px-2 py-1.5">
@@ -1769,13 +1769,13 @@ function HomeContent() {
             ) : (
               <Card>
                 <CardContent className="py-6 text-center">
-                  <p className="text-muted-foreground mb-4">No tienes apuestas en curso</p>
+                  <p className="text-muted-foreground mb-4">No tienes predicciones en curso</p>
                   <Button
                     className={createBetCtaClass}
                     style={createBetCtaStyle}
                     onClick={() => setShowCreateModal(true)}
                   >
-                    Crear una apuesta
+                    Crear una predicción
                   </Button>
                 </CardContent>
               </Card>
@@ -1848,7 +1848,7 @@ function HomeContent() {
                 const pred = predSrc
                 return (
                   <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 space-y-2">
-                    <div className="text-xs font-semibold text-blue-300">🤖 Predicción</div>
+                    <div className="text-xs font-semibold text-blue-300">🤖 Análisis</div>
                     <div className="flex gap-2">
                       <div className="flex-1 rounded-md bg-blue-500/10 border border-blue-500/20 p-2 text-center">
                         <div className="text-[10px] text-muted-foreground truncate mb-0.5">{houseBetModal.event.home_team}</div>
@@ -2120,7 +2120,7 @@ function HomeContent() {
                       <>
                         <div className="border-t border-border/40" />
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">Tu apuesta</span>
+                          <span className="text-muted-foreground">Tu predicción</span>
                           <span className="font-medium">{stake.toLocaleString()} tokens</span>
                         </div>
                         <div className="flex justify-between">
@@ -2155,7 +2155,7 @@ function HomeContent() {
                     setHouseBetSubmitting(true)
                     try {
                       const { data: { session } } = await supabase.auth.getSession()
-                      if (!session) { showToast("Inicia sesión para apostar", "error"); return }
+                      if (!session) { showToast("Inicia sesión para predecir", "error"); return }
                       const selectionValue = houseBetType === "exact_score" ? houseBetExactScore : houseBetSelection
                       const res = await fetch("/api/bets/house", {
                         method: "POST",
@@ -2180,10 +2180,10 @@ function HomeContent() {
                           router.push("/")
                           return
                         }
-                        showToast(json.error || "Error al crear apuesta", "error")
+                        showToast(json.error || "Error al crear predicción", "error")
                         return
                       }
-                      showToast("¡Apuesta creada contra la casa!", "success")
+                      showToast("¡Predicción creada contra la casa!", "success")
                       setHouseBetModal(null)
                       setHouseBetSelection(null)
                       setHouseBetExactScore("")

@@ -1,4 +1,4 @@
-import { Metadata } from "next"
+﻿import { Metadata } from "next"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 
 const BASE_URL = "https://i-bet-you.vercel.app"
@@ -30,8 +30,8 @@ export async function generateMetadata({
 
   if (!bet) {
     return {
-      title: "Apuesta",
-      description: "Ver detalles de esta apuesta en iBetYou",
+      title: "Predicción",
+      description: "Ver detalles de esta predicción en iBetYou",
     }
   }
 
@@ -42,8 +42,8 @@ export async function generateMetadata({
   const league = event?.league ?? ""
   const who = bet.house_bet ? "vs La Casa" : `(${typeLabel})`
 
-  const title = `${creator?.nickname ?? "Apuesta"} apostó ${bet.creator_selection} en ${matchup} ${who}`
-  const description = `${league ? league + " · " : ""}${matchup}. Apuesta de ${bet.amount} tokens. Únete a iBetYou y compite.`
+  const title = `${creator?.nickname ?? "Predicción"} predice ${bet.creator_selection} en ${matchup} ${who}`
+  const description = `${league ? league + " · " : ""}${matchup}. Predicción de ${bet.amount} tokens. Únete a iBetYou y compite.`
   const url = `${BASE_URL}/bet/${params.id}`
 
   return {

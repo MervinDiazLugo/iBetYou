@@ -1,4 +1,4 @@
-// app/groups/[id]/create-bet/page.tsx
+﻿// app/groups/[id]/create-bet/page.tsx
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
@@ -249,8 +249,8 @@ function CreateGroupBetInner() {
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Error al crear apuesta"); return }
-      showToast("Apuesta creada en el grupo", "success")
+      if (!res.ok) { setError(data.error || "Error al crear predicción"); return }
+      showToast("Predicción creada en el grupo", "success")
       router.push(`/groups/${groupId}`)
     } finally {
       setSubmitting(false)
@@ -275,7 +275,7 @@ function CreateGroupBetInner() {
         <CardHeader className="shrink-0">
           <CardTitle className="flex items-center gap-2">
             <Trophy className="h-6 w-6 text-primary" />
-            Crear Apuesta
+            Crear Predicción
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 sm:px-6 flex-1">
@@ -315,7 +315,7 @@ function CreateGroupBetInner() {
 
             {/* Bet type cards */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Apuesta</label>
+              <label className="text-sm font-medium">Tipo de Predicción</label>
               <div className="grid grid-cols-2 gap-2">
                 {getAvailableBetTypes(selectedSport).map((type) => (
                   <div
@@ -464,7 +464,7 @@ function CreateGroupBetInner() {
                 <label className="text-sm font-medium">Tu Selección</label>
                 {betType === "total_runs" && (
                   <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                    📊 Apuesta al <strong>total de carreras sumadas</strong> entre los dos equipos.
+                    📊 Predicción al <strong>total de carreras sumadas</strong> entre los dos equipos.
                   </p>
                 )}
                 {betType === "score_margin" && (

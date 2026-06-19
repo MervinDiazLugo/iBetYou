@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
@@ -53,7 +53,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
               {referrerNickname} te invitó a iBetYou
             </p>
             <p className="text-gray-300 text-sm mb-4">
-              Regístrate ahora y recibe <span className="text-amber-400 font-bold">50 fichas gratis</span> para empezar a apostar.
+              Regístrate ahora y recibe <span className="text-amber-400 font-bold">50 fichas gratis</span> para empezar a predecir.
             </p>
             <div className="inline-flex items-center gap-2 bg-gray-800 rounded-lg px-4 py-2 mb-4">
               <span className="text-gray-400 text-sm">Código aplicado:</span>
@@ -74,14 +74,14 @@ export function LandingPage({ refCode }: LandingPageProps) {
         <div className="grid md:grid-cols-2 gap-10 items-center mb-16">
           <div>
             <h1 className="text-4xl font-bold leading-tight mb-4">
-              La apuesta es entre{" "}
+              La predicción es entre{" "}
               <span className="text-blue-400">tú y otro fan</span>
             </h1>
             <p className="text-gray-300 text-lg mb-3">
-              Sin casa de apuestas. El pozo va 100% al ganador.
+              Sin casa de predicciones. El pozo va 100% al ganador.
             </p>
             <p className="text-gray-400 mb-8">
-              Elige un partido, crea tu apuesta o toma la de otro usuario. Fútbol, béisbol y basketball.
+              Elige un partido, crea tu predicción o toma la de otro usuario. Fútbol, béisbol y basketball.
             </p>
             <div className="flex gap-4 flex-wrap">
               <Link href="/login">
@@ -115,7 +115,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
           {/* Live bets preview */}
           <div className="space-y-3">
             <p className="text-gray-400 text-sm uppercase tracking-wide font-medium mb-4">
-              Apuestas activas ahora
+              Predicciones activas ahora
             </p>
             {previewBets.length === 0 && (
               <div className="space-y-3">
@@ -134,7 +134,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
                     {bet.event?.home_team} vs {bet.event?.away_team}
                   </p>
                   <p className="text-gray-400 text-xs mt-0.5">
-                    {bet.creator?.nickname} apuesta: {bet.creator_selection}
+                    {bet.creator?.nickname} predice: {bet.creator_selection}
                   </p>
                 </div>
                 <Badge className="bg-green-600 text-white text-sm font-bold">
@@ -143,7 +143,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
               </div>
             ))}
             <p className="text-center text-gray-500 text-xs pt-2">
-              Regístrate gratis para ver todas las apuestas y crear las tuyas
+              Regístrate gratis para ver todas las predicciones y crear las tuyas
             </p>
           </div>
         </div>
@@ -152,9 +152,9 @@ export function LandingPage({ refCode }: LandingPageProps) {
         <div className="grid md:grid-cols-3 gap-6 border-t border-gray-800 pt-12">
           <div className="text-center">
             <div className="text-3xl mb-3">🤝</div>
-            <h3 className="font-semibold text-white mb-2">Apuestas P2P</h3>
+            <h3 className="font-semibold text-white mb-2">Predicciones P2P</h3>
             <p className="text-gray-400 text-sm">
-              Apuestas directamente contra otro usuario. Sin intermediario, sin margen de la casa.
+              Predicciones directamente contra otro usuario. Sin intermediario, sin margen de la casa.
             </p>
           </div>
           <div className="text-center">

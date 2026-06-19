@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -172,8 +172,8 @@ export function GroupBetModal({ groupId, groupBalance, initialEvent, groupSport,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setError(data.error || "Error al crear apuesta"); return }
-      showToast("Apuesta creada en el grupo", "success")
+      if (!res.ok) { setError(data.error || "Error al crear predicción"); return }
+      showToast("Predicción creada en el grupo", "success")
       onSuccess()
     } finally {
       setSubmitting(false)
@@ -189,7 +189,7 @@ export function GroupBetModal({ groupId, groupBalance, initialEvent, groupSport,
           {/* Header */}
           <div className="flex items-center gap-2 px-5 pt-5 pb-3 border-b">
             <Trophy className="h-5 w-5 text-primary shrink-0" />
-            <span className="font-semibold">Crear Apuesta</span>
+            <span className="font-semibold">Crear Predicción</span>
             <div className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
               <Coins className="w-4 h-4 text-yellow-500" />
               <span className="font-semibold text-foreground">{groupBalance.toLocaleString()}</span> tokens
@@ -231,7 +231,7 @@ export function GroupBetModal({ groupId, groupBalance, initialEvent, groupSport,
 
             {/* Bet type cards */}
             <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Apuesta</label>
+              <label className="text-sm font-medium">Tipo de Predicción</label>
               <div className="grid grid-cols-2 gap-2">
                 {getAvailableBetTypes(sport).map((type) => (
                   <div
@@ -295,7 +295,7 @@ export function GroupBetModal({ groupId, groupBalance, initialEvent, groupSport,
               <label className="text-sm font-medium">Tu Selección</label>
               {betType === "total_runs" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
-                  📊 Apuesta al <strong>total de carreras sumadas</strong> entre los dos equipos.
+                  📊 Predicción al <strong>total de carreras sumadas</strong> entre los dos equipos.
                 </p>
               )}
               {betType === "score_margin" && (

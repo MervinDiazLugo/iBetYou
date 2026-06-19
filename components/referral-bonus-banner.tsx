@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect } from "react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -60,7 +60,7 @@ export function ReferralBonusBanner() {
           </p>
           {remaining !== null && (
             <p className="text-gray-400 text-xs mt-0.5">
-              Apuesta {remaining.toFixed(0)} fichas más para desbloquearlas
+              Predice {remaining.toFixed(0)} fichas más para desbloquearlas
             </p>
           )}
         </div>

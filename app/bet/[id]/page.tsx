@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import { useState, useEffect, useMemo } from "react"
 import { useRouter, useParams } from "next/navigation"
@@ -230,7 +230,7 @@ export default function BetDetailPage() {
     
     // Double check bet is still open
     if (bet.status !== "open") {
-      setError("Esta apuesta ya no está disponible")
+      setError("Esta predicción ya no está disponible")
       setTakingBet(false)
       return
     }
@@ -249,7 +249,7 @@ export default function BetDetailPage() {
     
     // Check if user is not the creator
     if (user.id === bet.creator_id) {
-      setError("No puedes aceptar tu propia apuesta")
+      setError("No puedes aceptar tu propia predicción")
       setTakingBet(false)
       return
     }
@@ -276,14 +276,14 @@ export default function BetDetailPage() {
       
       if (!res.ok) {
         const errorData = await res.json()
-        throw new Error(errorData.error || 'Error al tomar la apuesta')
+        throw new Error(errorData.error || 'Error al tomar la predicción')
       }
       
-      showToast("¡Apuesta aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
+      showToast("¡Predicción aceptada! 🏆", "win", "Tu dinero está en juego. ¡Mucha suerte!")
       window.dispatchEvent(new Event("wallet:updated"))
       router.push("/")
     } catch (err: any) {
-      const message = err.message || "Error al aceptar la apuesta"
+      const message = err.message || "Error al aceptar la predicción"
       setError(message)
       showToast(message, "error")
       setTakingBet(false)
@@ -322,7 +322,7 @@ export default function BetDetailPage() {
       if (action === "reject") {
         showToast("Resultado rechazado. Pasó a arbitraje manual.", "success")
       } else if (action === "confirm") {
-        showToast("Resultado confirmado. Apuesta resuelta.", "success")
+        showToast("Resultado confirmado. Predicción resuelta.", "success")
       } else {
         showToast("Resultado reportado. Esperando confirmación del rival.", "success")
       }
@@ -370,8 +370,8 @@ export default function BetDetailPage() {
           <Card>
             <CardContent className="py-12 text-center">
               <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Apuesta no encontrada</h2>
-              <p className="text-muted-foreground mb-4">Esta apuesta no existe o ya fue tomada.</p>
+              <h2 className="text-xl font-semibold mb-2">Predicción no encontrada</h2>
+              <p className="text-muted-foreground mb-4">Esta predicción no existe o ya fue tomada.</p>
               <Button asChild>
                 <Link href="/">Volver al inicio</Link>
               </Button>
@@ -417,9 +417,9 @@ export default function BetDetailPage() {
   } | null
   const cancellationText = cancellationInfo
     ? cancellationInfo.decided_by === "system"
-      ? "Esta apuesta fue cancelada por el sistema."
-      : `Esta apuesta fue cancelada por ${cancellationInfo.decided_by_nickname ?? "un usuario"}.`
-    : "Esta apuesta fue cancelada."
+      ? "Esta predicción fue cancelada por el sistema."
+      : `Esta predicción fue cancelada por ${cancellationInfo.decided_by_nickname ?? "un usuario"}.`
+    : "Esta predicción fue cancelada."
   // Net gain = opponent's stake minus own fee (symmetric with acceptorNetGain)
   const creatorNetGain = bet.amount * bet.multiplier - Number(bet.fee_amount || 0)
   // What the acceptor must put up (symmetric: same amount; asymmetric: amount * multiplier)
@@ -610,7 +610,7 @@ export default function BetDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "Error al retractarse")
       setRetractConfirm(false)
-      showToast("Apuesta cancelada. Tu reembolso fue procesado.", "success")
+      showToast("Predicción cancelada. Tu reembolso fue procesado.", "success")
       window.dispatchEvent(new Event("wallet:updated"))
       await loadBet()
     } catch (err: any) {
@@ -753,7 +753,7 @@ export default function BetDetailPage() {
                     userLost ? "text-red-600 dark:text-red-400" : ""
                   }`}>
                     <span>Veredicto</span>
-                    <span>{userWon ? "Ganaste esta apuesta" : userLost ? "Perdiste esta apuesta" : "Resuelta"}</span>
+                    <span>{userWon ? "Ganaste esta predicción" : userLost ? "Perdiste esta predicción" : "Resuelta"}</span>
                   </div>
                 </div>
               )}
@@ -765,12 +765,12 @@ export default function BetDetailPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Trophy className="h-5 w-5 text-primary" />
-              Detalles de la Apuesta
+              Detalles de la Predicción
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-between items-center py-2 border-b">
-              <span className="text-muted-foreground">Tipo de apuesta</span>
+              <span className="text-muted-foreground">Tipo de predicción</span>
               <div className="flex items-center gap-2">
                 <Badge>
                   {bet.house_bet ? formatHouseBetTypeLabel(bet.bet_type) : (betTypeLabels[bet.bet_type] || bet.bet_type)}
@@ -794,7 +794,7 @@ export default function BetDetailPage() {
             {bet.house_bet ? (
               <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 space-y-3">
                 <div className="text-xs text-orange-400 font-semibold uppercase tracking-wide">
-                  Apuesta contra la Casa
+                  Predicción contra la Casa
                 </div>
                 <div>
                   <div className="text-sm text-muted-foreground mb-1">
@@ -878,8 +878,8 @@ export default function BetDetailPage() {
             {bet.status === "taken" && (
               <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-4 text-center">
                 <CheckCircle className="h-8 w-8 mx-auto text-green-500 mb-2" />
-                <div className="font-medium text-green-500">Apuesta en curso</div>
-                <p className="text-sm text-muted-foreground">Esta apuesta ya fue aceptada</p>
+                <div className="font-medium text-green-500">Predicción en curso</div>
+                <p className="text-sm text-muted-foreground">Esta predicción ya fue aceptada</p>
               </div>
             )}
 
@@ -888,7 +888,7 @@ export default function BetDetailPage() {
               <div className="rounded-lg border border-orange-500/30 bg-orange-500/10 p-4 space-y-3">
                 <div className="font-medium text-orange-700 dark:text-orange-300">Controles de arbitraje (Admin)</div>
                 <p className="text-sm text-muted-foreground">
-                  Puedes arbitrar esta apuesta directamente desde la vista de detalle.
+                  Puedes arbitrar esta predicción directamente desde la vista de detalle.
                 </p>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -911,7 +911,7 @@ export default function BetDetailPage() {
                       }}
                       disabled={adminActionLoading || adminAutoResolving}
                     >
-                      Cancelar apuesta
+                      Cancelar predicción
                     </Button>
                   )}
 
@@ -1074,7 +1074,7 @@ export default function BetDetailPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-secondary rounded-lg p-4 text-center">
                   <div className="text-sm text-muted-foreground">
-                    {user?.id === bet.creator_id ? 'Tu apuesta' : 'Tu colateral'}
+                    {user?.id === bet.creator_id ? 'Tu predicción' : 'Tu colateral'}
                   </div>
                   <div className="text-2xl font-bold text-primary">
                     {formatCurrency(user?.id === bet.creator_id ? bet.amount : acceptorStake)}
@@ -1114,7 +1114,7 @@ export default function BetDetailPage() {
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  {bet.house_bet ? "Apostador" : "Creador de la apuesta"}
+                  {bet.house_bet ? "Apostador" : "Creador de la predicción"}
                 </span>
               </div>
               <span className="font-semibold">{bet.creator?.nickname}</span>
@@ -1138,7 +1138,7 @@ export default function BetDetailPage() {
                 onClick={handleTakeBet}
                 disabled={takingBet || (bet.mode === 'real' ? balance.iBY : balance.fantasy) < acceptorTotalNeeded}
               >
-                {takingBet ? "Aceptando..." : `Aceptar Apuesta por ${formatCurrency(acceptorStake)}`}
+                {takingBet ? "Aceptando..." : `Aceptar Predicción por ${formatCurrency(acceptorStake)}`}
               </Button>
 
               {(bet.mode === 'real' ? balance.iBY : balance.fantasy) < acceptorTotalNeeded && (
@@ -1156,27 +1156,27 @@ export default function BetDetailPage() {
               {bet.status === "resolved" ? (
                 <>
                   <Trophy className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Apuesta finalizada</h3>
+                  <h3 className="text-lg font-semibold mb-2">Predicción finalizada</h3>
                   <p className="text-muted-foreground">
-                    {bet.winner_id === user.id ? "¡Ganaste esta apuesta!" : "Perdiste esta apuesta."}
+                    {bet.winner_id === user.id ? "¡Ganaste esta predicción!" : "Perdiste esta predicción."}
                     {winnerNickname ? ` Ganador: ${winnerNickname}.` : ""}
                   </p>
                 </>
               ) : bet.status === "cancelled" ? (
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
+                  <h3 className="text-lg font-semibold mb-2">Predicción cancelada</h3>
                   <p className="text-muted-foreground">{cancellationText}</p>
                 </>
               ) : (
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-yellow-500 mb-4" />
                   <h3 className="text-lg font-semibold mb-2">En revisión</h3>
-                  <p className="text-muted-foreground">Esta apuesta está siendo revisada por el equipo de la plataforma.</p>
+                  <p className="text-muted-foreground">Esta predicción está siendo revisada por el equipo de la plataforma.</p>
                 </>
               )}
               <Button className="mt-4" asChild>
-                <Link href="/my-bets">Ver mis apuestas</Link>
+                <Link href="/my-bets">Ver mis predicciones</Link>
               </Button>
             </CardContent>
           </Card>
@@ -1257,7 +1257,7 @@ export default function BetDetailPage() {
                     className="w-full text-destructive border-destructive/40 hover:bg-destructive/10"
                     onClick={() => setRetractConfirm(true)}
                   >
-                    Retractarme de esta apuesta
+                    Retractarme de esta predicción
                   </Button>
                 </div>
               )}
@@ -1269,13 +1269,13 @@ export default function BetDetailPage() {
           <Card>
             <CardContent className="py-6 text-center">
               <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">Esta es tu apuesta</h3>
+              <h3 className="text-lg font-semibold mb-2">Esta es tu predicción</h3>
               <p className="text-muted-foreground">
                 Espera a que alguien la acepte en el marketplace.
               </p>
               <div className="flex flex-col gap-2 mt-4">
                 <Button asChild>
-                  <Link href="/my-bets">Ver mis apuestas</Link>
+                  <Link href="/my-bets">Ver mis predicciones</Link>
                 </Button>
                 {!isBackofficeAdmin && (
                   <Button
@@ -1283,7 +1283,7 @@ export default function BetDetailPage() {
                     className="text-destructive border-destructive/40 hover:bg-destructive/10"
                     onClick={() => setRetractConfirm(true)}
                   >
-                    Cancelar apuesta
+                    Cancelar predicción
                   </Button>
                 )}
               </div>
@@ -1297,28 +1297,28 @@ export default function BetDetailPage() {
               {bet.status === "resolved" ? (
                 <>
                   <Trophy className="h-12 w-12 mx-auto text-green-500 mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Apuesta finalizada</h3>
+                  <h3 className="text-lg font-semibold mb-2">Predicción finalizada</h3>
                   <p className="text-muted-foreground">
-                    {bet.winner_id === user.id ? "¡Ganaste esta apuesta!" : "Perdiste esta apuesta."}
+                    {bet.winner_id === user.id ? "¡Ganaste esta predicción!" : "Perdiste esta predicción."}
                     {winnerNickname ? ` Ganador: ${winnerNickname}.` : ""}
                   </p>
                 </>
               ) : bet.status === "cancelled" ? (
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Apuesta cancelada</h3>
+                  <h3 className="text-lg font-semibold mb-2">Predicción cancelada</h3>
                   <p className="text-muted-foreground">{cancellationText}</p>
                 </>
               ) : bet.status === "disputed" ? (
                 <>
                   <AlertCircle className="h-12 w-12 mx-auto text-yellow-500 mb-4" />
                   <h3 className="text-lg font-semibold mb-2">En revisión</h3>
-                  <p className="text-muted-foreground">Esta apuesta está siendo revisada por el equipo de la plataforma.</p>
+                  <p className="text-muted-foreground">Esta predicción está siendo revisada por el equipo de la plataforma.</p>
                 </>
               ) : (
                 <>
                   <CheckCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">Esta es tu apuesta</h3>
+                  <h3 className="text-lg font-semibold mb-2">Esta es tu predicción</h3>
 
                   {supportsPeerResolution && (
                     <div className="mt-5 space-y-3 text-left">
@@ -1380,7 +1380,7 @@ export default function BetDetailPage() {
                   {!supportsPeerResolution && bet.status === "taken" && (
                     <div className="mt-4 rounded-lg border border-muted bg-muted/40 p-3 text-left">
                       <p className="text-sm text-muted-foreground">
-                        Para este tipo de apuesta, el resultado se confirmará automáticamente o será revisado por el equipo de la plataforma.
+                        Para este tipo de predicción, el resultado se confirmará automáticamente o será revisado por el equipo de la plataforma.
                       </p>
                     </div>
                   )}
@@ -1393,12 +1393,12 @@ export default function BetDetailPage() {
                   className="w-full mt-3 text-destructive border-destructive/40 hover:bg-destructive/10"
                   onClick={() => setRetractConfirm(true)}
                 >
-                  Retractarme de esta apuesta
+                  Retractarme de esta predicción
                 </Button>
               )}
 
               <Button className="mt-4" asChild>
-                <Link href="/my-bets">Ver mis apuestas</Link>
+                <Link href="/my-bets">Ver mis predicciones</Link>
               </Button>
             </CardContent>
           </Card>
@@ -1410,7 +1410,7 @@ export default function BetDetailPage() {
               <AlertCircle className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
               <h3 className="text-lg font-semibold mb-2">Inicia sesión para aceptar</h3>
               <p className="text-muted-foreground mb-4">
-                Necesitas una cuenta para participar en apuestas.
+                Necesitas una cuenta para participar en predicciones.
               </p>
               <Button asChild>
                 <Link href="/login">Iniciar Sesión</Link>
@@ -1429,7 +1429,7 @@ export default function BetDetailPage() {
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
             <div className="bg-background rounded-lg shadow-xl p-6 max-w-sm w-full mx-4 space-y-4">
-              <h2 className="text-lg font-semibold">¿Retractarte de la apuesta?</h2>
+              <h2 className="text-lg font-semibold">¿Retractarte de la predicción?</h2>
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Ventana temporal</span>
