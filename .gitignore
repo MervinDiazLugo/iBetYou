@@ -1,5 +1,8 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
+# Local snapshots / exports (may contain production data)
+scripts/demo-snapshot.json
+
 # dependencies
 /node_modules
 /.pnp
