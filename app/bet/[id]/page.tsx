@@ -1002,9 +1002,9 @@ export default function BetDetailPage() {
                 <div className="text-sm font-medium">¿Qué ganás si aceptás?</div>
                 <div className="text-sm">
                   {bet.bet_type === "exact_score" ? (
-                    <>Si el resultado <span className="font-bold text-red-400">NO</span> es <span className="font-bold text-primary">{bet.creator_selection}</span>:</>  
+                    <>Si el resultado <span className="font-bold text-red-400">NO</span> es <span className="font-bold text-primary">{bet.creator_selection}</span>:</>
                   ) : (
-                    <>Si <span className="font-bold text-red-400">NO</span> gana <span className="font-bold text-primary">{bet.creator_selection}</span>:</>  
+                    <>Si <span className="font-bold text-red-400">NO</span> ocurre: <span className="font-bold text-primary">{formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event.home_team, bet.event.away_team)}</span>:</>
                   )}
                 </div>
                 <div className="flex items-baseline gap-2 flex-wrap">

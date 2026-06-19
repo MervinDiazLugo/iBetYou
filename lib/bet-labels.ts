@@ -59,5 +59,23 @@ export function formatHouseSelection(
     return `Resultado ${selection}`
   }
 
+  if (betType === "half_time") {
+    const base = selection.replace(/ HT$/, "")
+    if (base === "Empate") return "Empate al medio tiempo"
+    const home = homeTeam ?? "Local"
+    const away = awayTeam ?? "Visitante"
+    if (base === home) return `${home} gana al medio tiempo`
+    if (base === away) return `${away} gana al medio tiempo`
+    return `${base} gana al medio tiempo`
+  }
+
+  if (betType === "first_scorer") {
+    const home = homeTeam ?? "Local"
+    const away = awayTeam ?? "Visitante"
+    if (selection === home) return `${home} anota primero`
+    if (selection === away) return `${away} anota primero`
+    return `${selection} anota primero`
+  }
+
   return selection
 }

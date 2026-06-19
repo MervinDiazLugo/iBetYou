@@ -323,14 +323,14 @@ export default function MyBetsPage() {
                         <div className="flex items-center gap-2">
                           <span className="text-xs text-muted-foreground font-medium">Apuesta creador:</span>
                           <span className="text-sm font-bold text-green-400">
-                            {bet.creator_selection || "—"}
+                            {bet.creator_selection ? formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team) : "—"}
                           </span>
                         </div>
                         {bet.acceptor && (
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-muted-foreground font-medium">Apuesta aceptante:</span>
                             <span className="text-sm font-bold text-blue-400">
-                              {bet.acceptor_selection || "Contra creador"}
+                              {bet.acceptor_selection ? formatHouseSelection(bet.bet_type, bet.acceptor_selection, bet.event?.home_team, bet.event?.away_team) : "Contra creador"}
                             </span>
                           </div>
                         )}

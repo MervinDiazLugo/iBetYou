@@ -807,8 +807,8 @@ function HomeContent() {
 
                 <div className="bg-primary/10 rounded-lg p-3 border border-primary/20 text-center">
                   <div className="text-xs text-muted-foreground mb-1">{betTypeLabels[bet.bet_type]} · @{bet.creator?.nickname} apuesta por</div>
-                  <div className="text-base font-bold text-primary">{bet.creator_selection}</div>
-                  {bet.acceptor_selection && <div className="text-xs text-muted-foreground mt-1">Tú tomarías: <span className="font-semibold text-foreground">{bet.acceptor_selection}</span></div>}
+                  <div className="text-base font-bold text-primary">{formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}</div>
+                  {bet.acceptor_selection && <div className="text-xs text-muted-foreground mt-1">Tú tomarías: <span className="font-semibold text-foreground">{formatHouseSelection(bet.bet_type, bet.acceptor_selection, bet.event?.home_team, bet.event?.away_team)}</span></div>}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
@@ -1514,7 +1514,7 @@ function HomeContent() {
                       <div className="bg-primary/10 rounded p-2 border border-primary/20">
                         <div className="text-[9px] text-muted-foreground text-center mb-0.5">Apuesta</div>
                         <div className="text-sm font-bold text-center text-primary truncate">
-                          {bet.creator_selection}
+                          {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}
                         </div>
                       </div>
 
@@ -1644,7 +1644,7 @@ function HomeContent() {
                     <div className="bg-gradient-to-r from-orange-500/20 via-orange-500/10 to-red-500/20 rounded-lg p-3 border border-orange-500/20">
                       <div className="text-[9px] text-muted-foreground text-center uppercase tracking-wider mb-1">A favor de</div>
                       <div className="text-base font-bold text-center bg-gradient-to-r from-orange-400 to-red-400 bg-clip-text text-transparent">
-                        {bet.creator_selection}
+                        {formatHouseSelection(bet.bet_type, bet.creator_selection, bet.event?.home_team, bet.event?.away_team)}
                       </div>
                     </div>
 
