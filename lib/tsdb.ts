@@ -160,6 +160,30 @@ export async function tsdbSchedulePrevious(leagueId: string): Promise<any[]> {
   return data.schedule || []
 }
 
+// ─── V1 season events (full season, no 15-event cap) ────────────────────────
+
+/** All events for a league in a given season (V1). Season format: "2026" or "2025-2026". */
+export async function tsdbSeasonEvents(leagueId: string, season: string): Promise<any[]> {
+  const data = await fetchTsdbV1(`/eventsseason.php?id=${leagueId}&s=${encodeURIComponent(season)}`)
+  return data.events || []
+}
+
+/**
+ * Returns the two most likely season strings for the current date.
+ * TheSportsDB uses "2026" for competitions that run Jan-Dec (World Cup, Copa Libertadores)
+ * and "2025-2026" for competitions that span two calendar years (European leagues).
+ */
+export function currentSeasons(): string[] {
+  const now = new Date()
+  const year = now.getUTCFullYear()
+  const month = now.getUTCMonth() + 1 // 1-12
+  // European leagues run Aug-May: if before July we're in YYYY-1/YYYY, else YYYY/YYYY+1
+  const crossYear = month < 7
+    ? `${year - 1}-${year}`
+    : `${year}-${year + 1}`
+  return [String(year), crossYear]
+}
+
 // ─── V2 livescore endpoints ──────────────────────────────────────────────────
 
 /** All currently live soccer matches */

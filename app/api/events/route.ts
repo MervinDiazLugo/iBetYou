@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
-import { TSDB_LEAGUES, tsdbScheduleNext, tsdbSchedulePrevious, mapTsdbStatus } from "@/lib/tsdb"
+import { TSDB_LEAGUES, tsdbSeasonEvents, tsdbScheduleNext, tsdbSchedulePrevious, currentSeasons, mapTsdbStatus } from "@/lib/tsdb"
 
 // Returns events in a format compatible with the backoffice browser.
 // Each event has an `external_id` field (tsdb_{id}) plus a fixture-like shape
@@ -103,16 +103,27 @@ export async function GET(request: NextRequest) {
   const allEvents: any[] = []
   const errors: Array<{ league: string; error: string }> = []
 
-  // Fetch upcoming + recent past events for each league
+  // Fetch events for each league using season events (full coverage) + schedule (live/recent fallback)
+  const seasons = currentSeasons()
+
   await Promise.all(
     leaguesToFetch.map(async (league) => {
       try {
-        const [next, prev] = await Promise.all([
-          tsdbScheduleNext(league.id).catch(() => []),
-          tsdbSchedulePrevious(league.id).catch(() => []),
-        ])
+        // V1 season events give full season coverage (no 15-event cap)
+        const seasonResults = await Promise.all(
+          seasons.map(s => tsdbSeasonEvents(league.id, s).catch(() => []))
+        )
+        const seasonEvents = seasonResults.flat()
 
-        for (const raw of [...next, ...prev]) {
+        // V2 schedule fills gaps for leagues where season endpoint returns nothing
+        const scheduleEvents = seasonEvents.length === 0
+          ? await Promise.all([
+              tsdbScheduleNext(league.id).catch(() => []),
+              tsdbSchedulePrevious(league.id).catch(() => []),
+            ]).then(r => r.flat())
+          : []
+
+        for (const raw of [...seasonEvents, ...scheduleEvents]) {
           if (!raw.strHomeTeam || !raw.strAwayTeam) continue
           const isoDate = buildIsoDate(raw)
           if (!isoDate) continue
