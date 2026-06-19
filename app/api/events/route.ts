@@ -27,6 +27,26 @@ function mapStatusShort(strStatus: string | null | undefined): string {
   return "NS"
 }
 
+// Build a valid ISO-8601 UTC string from TSDB fields.
+// strTimestamp can be "2026-06-19 20:00:00" (space), "2026-06-19T20:00:00" (T), or just "2026-06-19" (date only).
+function buildIsoDate(raw: any): string | null {
+  const ts: string | null = raw.strTimestamp ?? null
+  if (ts) {
+    const s = ts.trim()
+    if (s.includes(" ")) return `${s.replace(" ", "T")}Z`  // "2026-06-19 20:00:00" → T + Z
+    if (s.includes("T")) return s.endsWith("Z") ? s : `${s}Z`
+    // date-only "2026-06-19" — combine with strTime if available
+    const t: string | null = raw.strTime ?? null
+    return t ? `${s}T${t}Z` : `${s}T00:00:00Z`
+  }
+  const d: string | null = raw.dateEvent ?? null
+  if (d) {
+    const t: string | null = raw.strTime ?? null
+    return t ? `${d}T${t}Z` : `${d}T00:00:00Z`
+  }
+  return null
+}
+
 // Convert TheSportsDB event to ExternalEvent-compatible shape
 function toExternalEvent(raw: any, sport: "football" | "basketball" | "baseball") {
   return {
@@ -35,7 +55,7 @@ function toExternalEvent(raw: any, sport: "football" | "basketball" | "baseball"
     sport,
     fixture: {
       id: Number(raw.idEvent),
-      date: raw.strTimestamp ? `${raw.strTimestamp}Z` : raw.dateEvent,
+      date: buildIsoDate(raw),
       status: {
         short: mapStatusShort(raw.strStatus),
         long: raw.strStatus || "Not Started",
@@ -93,9 +113,11 @@ export async function GET(request: NextRequest) {
         ])
 
         for (const raw of [...next, ...prev]) {
-          if (!raw.strTimestamp || !raw.strHomeTeam || !raw.strAwayTeam) continue
-          const dateMs = new Date(`${raw.strTimestamp}Z`).getTime()
-          if (dateMs < fromMs || dateMs > toMs) continue
+          if (!raw.strHomeTeam || !raw.strAwayTeam) continue
+          const isoDate = buildIsoDate(raw)
+          if (!isoDate) continue
+          const dateMs = new Date(isoDate).getTime()
+          if (!Number.isFinite(dateMs) || dateMs < fromMs || dateMs > toMs) continue
           allEvents.push(toExternalEvent(raw, targetSport))
         }
       } catch (e: any) {

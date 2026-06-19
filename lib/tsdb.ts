@@ -99,12 +99,30 @@ function toScore(val: unknown): number | null {
 
 // ─── Normalize event row → our DB schema ────────────────────────────────────
 
+function buildStartTime(event: any): string | null {
+  const ts: string | null = event.strTimestamp ?? null
+  if (ts) {
+    const s = ts.trim()
+    if (s.includes(" ")) return `${s.replace(" ", "T")}Z`
+    if (s.includes("T")) return s.endsWith("Z") ? s : `${s}Z`
+    const t: string | null = event.strTime ?? null
+    return t ? `${s}T${t}Z` : `${s}T00:00:00Z`
+  }
+  const d: string | null = event.dateEvent ?? null
+  if (d) {
+    const t: string | null = event.strTime ?? null
+    return t ? `${d}T${t}Z` : `${d}T00:00:00Z`
+  }
+  return null
+}
+
 export function normalizeTsdbEvent(
   event: any,
   leagueSport?: "football" | "basketball" | "baseball"
 ): Record<string, unknown> | null {
   if (!event?.idEvent || !event.strHomeTeam || !event.strAwayTeam) return null
-  if (!event.strTimestamp) return null
+  const startTime = buildStartTime(event)
+  if (!startTime) return null
 
   const sport = mapSport(event.strSport, leagueSport)
 
@@ -117,7 +135,7 @@ export function normalizeTsdbEvent(
     away_team: event.strAwayTeam,
     home_logo: event.strHomeTeamBadge || null,
     away_logo: event.strAwayTeamBadge || null,
-    start_time: `${event.strTimestamp}Z`, // strTimestamp is UTC, append Z
+    start_time: startTime,
     status: mapTsdbStatus(event.strStatus),
     home_score: toScore(event.intHomeScore),
     away_score: toScore(event.intAwayScore),
