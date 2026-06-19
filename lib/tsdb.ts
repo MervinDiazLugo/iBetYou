@@ -99,20 +99,28 @@ function toScore(val: unknown): number | null {
 
 // ─── Normalize event row → our DB schema ────────────────────────────────────
 
+// Attach timezone to a time string, avoiding double-suffix when strTime already has +HH:MM.
+function attachTz(dateStr: string, timeStr: string | null): string {
+  if (!timeStr) return `${dateStr}T00:00:00Z`
+  const t = timeStr.trim()
+  // Already has timezone offset — use as-is (e.g. "21:00:00+00:00")
+  if (t.includes("+") || /\d-\d{2}:\d{2}$/.test(t)) return `${dateStr}T${t}`
+  return `${dateStr}T${t}Z`
+}
+
 function buildStartTime(event: any): string | null {
   const ts: string | null = event.strTimestamp ?? null
   if (ts) {
     const s = ts.trim()
-    if (s.includes(" ")) return `${s.replace(" ", "T")}Z`
-    if (s.includes("T")) return s.endsWith("Z") ? s : `${s}Z`
-    const t: string | null = event.strTime ?? null
-    return t ? `${s}T${t}Z` : `${s}T00:00:00Z`
+    if (s.includes(" ")) {
+      const [d, t] = s.split(" ")
+      return attachTz(d, t)
+    }
+    if (s.includes("T")) return s.endsWith("Z") || s.includes("+") ? s : `${s}Z`
+    return attachTz(s, event.strTime ?? null)
   }
   const d: string | null = event.dateEvent ?? null
-  if (d) {
-    const t: string | null = event.strTime ?? null
-    return t ? `${d}T${t}Z` : `${d}T00:00:00Z`
-  }
+  if (d) return attachTz(d, event.strTime ?? null)
   return null
 }
 

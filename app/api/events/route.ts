@@ -27,23 +27,28 @@ function mapStatusShort(strStatus: string | null | undefined): string {
   return "NS"
 }
 
+// Attach timezone to a time string, avoiding double-suffix when strTime already has +HH:MM.
+function attachTz(dateStr: string, timeStr: string | null): string {
+  if (!timeStr) return `${dateStr}T00:00:00Z`
+  const t = timeStr.trim()
+  if (t.includes("+") || /\d-\d{2}:\d{2}$/.test(t)) return `${dateStr}T${t}`
+  return `${dateStr}T${t}Z`
+}
+
 // Build a valid ISO-8601 UTC string from TSDB fields.
-// strTimestamp can be "2026-06-19 20:00:00" (space), "2026-06-19T20:00:00" (T), or just "2026-06-19" (date only).
 function buildIsoDate(raw: any): string | null {
   const ts: string | null = raw.strTimestamp ?? null
   if (ts) {
     const s = ts.trim()
-    if (s.includes(" ")) return `${s.replace(" ", "T")}Z`  // "2026-06-19 20:00:00" → T + Z
-    if (s.includes("T")) return s.endsWith("Z") ? s : `${s}Z`
-    // date-only "2026-06-19" — combine with strTime if available
-    const t: string | null = raw.strTime ?? null
-    return t ? `${s}T${t}Z` : `${s}T00:00:00Z`
+    if (s.includes(" ")) {
+      const [d, t] = s.split(" ")
+      return attachTz(d, t)
+    }
+    if (s.includes("T")) return s.endsWith("Z") || s.includes("+") ? s : `${s}Z`
+    return attachTz(s, raw.strTime ?? null)
   }
   const d: string | null = raw.dateEvent ?? null
-  if (d) {
-    const t: string | null = raw.strTime ?? null
-    return t ? `${d}T${t}Z` : `${d}T00:00:00Z`
-  }
+  if (d) return attachTz(d, raw.strTime ?? null)
   return null
 }
 
