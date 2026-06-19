@@ -76,22 +76,22 @@ const TOTAL_RUNS_OPTIONS = [
   { value: "under_10", label: "Menos de 10", odds: 1.30 },
 ]
 
-function getHouseBetTypes(sport: string): Array<{ id: string; label: string }> {
+function getHouseBetTypes(sport: string): Array<{ id: string; label: string; icon: string; desc: string }> {
   if (sport === "football") return [
-    { id: "direct", label: "Resultado" },
-    { id: "exact_score", label: "Marcador exacto" },
+    { id: "direct",      label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
+    { id: "exact_score", label: "Marcador exacto",  icon: "🎯", desc: "Score exacto" },
   ]
   if (sport === "basketball") return [
-    { id: "direct", label: "Resultado" },
-    { id: "score_margin", label: "Margen" },
+    { id: "direct",       label: "Resultado", icon: "🏆", desc: "¿Quién gana?" },
+    { id: "score_margin", label: "Margen",    icon: "📏", desc: "Por cuántos puntos" },
   ]
   if (sport === "baseball") return [
-    { id: "direct", label: "Resultado" },
-    { id: "run_line", label: "Run Line" },
-    { id: "total_runs", label: "Total carreras" },
-    { id: "exact_score", label: "Marcador exacto" },
+    { id: "direct",      label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
+    { id: "run_line",    label: "Run Line",         icon: "⚡", desc: "±1.5 carreras" },
+    { id: "total_runs",  label: "Total carreras",   icon: "📊", desc: "Over / Under" },
+    { id: "exact_score", label: "Marcador exacto",  icon: "🎯", desc: "Score exacto" },
   ]
-  return [{ id: "direct", label: "Resultado" }]
+  return [{ id: "direct", label: "Resultado", icon: "🏆", desc: "¿Quién gana?" }]
 }
 
 function translateAdvice(advice: string | null | undefined): string {
@@ -1872,17 +1872,31 @@ function HomeContent() {
                 )
               })()}
               {/* Bet type tabs */}
-              <div className="flex gap-2 flex-wrap">
-                {houseBetTypes.map(bt => (
-                  <Button
-                    key={bt.id}
-                    variant={houseBetType === bt.id ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
-                  >
-                    {bt.label}
-                  </Button>
-                ))}
+              <div className={`grid gap-2 ${houseBetTypes.length <= 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+                {houseBetTypes.map(bt => {
+                  const isActive = houseBetType === bt.id
+                  return (
+                    <button
+                      key={bt.id}
+                      type="button"
+                      onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
+                      className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all select-none ${
+                        isActive
+                          ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                          : "border-border bg-muted/10 hover:border-primary/40 hover:bg-muted/20"
+                      }`}
+                    >
+                      {isActive && (
+                        <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                          <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                        </div>
+                      )}
+                      <div className="text-xl mb-1">{bt.icon}</div>
+                      <div className={`text-xs font-bold leading-tight ${isActive ? "text-primary" : ""}`}>{bt.label}</div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{bt.desc}</div>
+                    </button>
+                  )
+                })}
               </div>
               {/* Direct — no predicciones */}
               {houseBetType === "direct" && !houseBetModal.odds && (

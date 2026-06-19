@@ -36,13 +36,13 @@ interface Event {
 }
 
 const betTypes = [
-  { id: "direct", label: "Directa", icon: "⚔️", desc: "Ambos arriesgan lo mismo" },
-  { id: "exact_score", label: "Resultado Exacto", icon: "🎯", desc: "Apuesta al score exacto" },
-  { id: "run_line", label: "Run Line", icon: "📐", desc: "Equipo cubre el -1.5 carreras" },
-  { id: "total_runs", label: "Total Carreras", icon: "🔢", desc: "Over/Under de carreras totales" },
-  { id: "score_margin", label: "Margen de Victoria", icon: "📏", desc: "Apuesta al margen de puntos" },
-  { id: "first_scorer", label: "Primer Anotador", icon: "🥅", desc: "Quién anota primero" },
-  { id: "half_time", label: "Medio Tiempo", icon: "⏱️", desc: "Resultado primer tiempo" },
+  { id: "direct",       label: "Resultado",     icon: "🏆", desc: "¿Quién gana?" },
+  { id: "exact_score",  label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
+  { id: "run_line",     label: "Run Line",      icon: "⚡", desc: "±1.5 carreras" },
+  { id: "total_runs",   label: "Total carreras", icon: "📊", desc: "Over / Under" },
+  { id: "score_margin", label: "Margen",        icon: "📏", desc: "Por cuántos puntos" },
+  { id: "first_scorer", label: "Primer gol",    icon: "🥅", desc: "Quién anota primero" },
+  { id: "half_time",    label: "Medio tiempo",  icon: "⏱️", desc: "Resultado 1er tiempo" },
 ]
 
 const sports = [
@@ -476,18 +476,29 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           <div className="space-y-2">
             <label className="text-sm font-medium">Tipo de Apuesta</label>
             <div className="grid grid-cols-2 gap-2">
-              {getAvailableBetTypes(selectedSport).map((type) => (
-                <div
-                  key={type.id}
-                  className={`p-2 rounded-lg border cursor-pointer ${betType === type.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
-                  onClick={() => setBetType(type.id)}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span>{type.icon}</span>
-                    <span className="font-medium text-sm truncate">{type.label}</span>
+              {getAvailableBetTypes(selectedSport).map((type) => {
+                const isActive = betType === type.id
+                return (
+                  <div
+                    key={type.id}
+                    onClick={() => setBetType(type.id)}
+                    className={`relative cursor-pointer rounded-xl border-2 py-3 px-2 text-center transition-all select-none ${
+                      isActive
+                        ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                        : "border-border bg-muted/10 hover:border-primary/40 hover:bg-muted/20"
+                    }`}
+                  >
+                    {isActive && (
+                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                        <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                      </div>
+                    )}
+                    <div className="text-xl mb-1">{type.icon}</div>
+                    <div className={`text-xs font-bold leading-tight ${isActive ? "text-primary" : ""}`}>{type.label}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{type.desc}</div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
 
