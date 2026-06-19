@@ -173,47 +173,8 @@ export default function BackofficeEvents() {
         return
       }
 
-      const normalizedEvents = raw.map((event: any) => {
-        if (effectiveSport === 'basketball') {
-          return {
-            fixture: {
-              id: event.id,
-              date: event.date,
-              status: event.status,
-              venue: { name: event.venue || null, city: null },
-            },
-            league: {
-              name: event.league?.name || 'Unknown',
-              country: event.country?.name || 'Unknown',
-            },
-            teams: {
-              home: { name: event.teams?.home?.name || '', logo: event.teams?.home?.logo || null },
-              away: { name: event.teams?.away?.name || '', logo: event.teams?.away?.logo || null },
-            },
-            scores: event.scores,
-          }
-        }
-        if (effectiveSport === 'baseball') {
-          return {
-            fixture: {
-              id: event.id,
-              date: event.date,
-              status: event.status,
-              venue: { name: event.venue?.name, city: event.venue?.city },
-            },
-            league: {
-              name: event.league?.name || 'Unknown',
-              country: event.country?.name || 'Unknown',
-            },
-            teams: {
-              home: { name: event.teams?.home?.name || '', logo: event.teams?.home?.logo || null },
-              away: { name: event.teams?.away?.name || '', logo: event.teams?.away?.logo || null },
-            },
-            scores: event.scores,
-          }
-        }
-        return event
-      })
+      // All sports now return the same nested structure from /api/events (TSDB)
+      const normalizedEvents = raw
 
       const sorted = normalizedEvents.sort((a: any, b: any) =>
         new Date(a.fixture?.date || '').getTime() - new Date(b.fixture?.date || '').getTime()

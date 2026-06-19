@@ -44,7 +44,7 @@ function buildIsoDate(raw: any): string | null {
       const [d, t] = s.split(" ")
       return attachTz(d, t)
     }
-    if (s.includes("T")) return s.endsWith("Z") || s.includes("+") ? s : `${s}Z`
+    if (s.includes("T")) return s.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(s) ? s : `${s}Z`
     return attachTz(s, raw.strTime ?? null)
   }
   const d: string | null = raw.dateEvent ?? null
