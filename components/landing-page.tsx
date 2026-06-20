@@ -78,7 +78,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
               <span className="text-blue-400">tú y otro fan</span>
             </h1>
             <p className="text-gray-300 text-lg mb-3">
-              Sin casa de predicciones. El pozo va 100% al ganador.
+              Sin intermediario. El pozo va 100% al ganador.
             </p>
             <p className="text-gray-400 mb-8">
               Elige un partido, crea tu predicción o toma la de otro usuario. Fútbol, béisbol y basketball.
