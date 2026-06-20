@@ -168,3 +168,66 @@ const BOTH_TEAMS_SCORE_ODDS: Record<string, number> = {
 export function calcBothTeamsScoreOdds(selection: string): number | null {
   return BOTH_TEAMS_SCORE_ODDS[selection] ?? null
 }
+
+// ─── first_inning_score (NRFI/YRFI) ─────────────────────────────────────────
+// MLB historical: ~55% NRFI, ~45% YRFI
+
+const FIRST_INNING_SCORE_ODDS: Record<string, number> = {
+  nrfi: 1.65,
+  yrfi: 2.00,
+}
+
+export function calcFirstInningScoreOdds(selection: string): number | null {
+  return FIRST_INNING_SCORE_ODDS[selection] ?? null
+}
+
+// ─── total_hits_over_under (baseball) ────────────────────────────────────────
+// MLB avg ~16-17 combined hits
+
+const TOTAL_HITS_OVER_UNDER_ODDS: Record<string, number> = {
+  "over_12.5": 1.25, "under_12.5": 3.50,
+  "over_14.5": 1.50, "under_14.5": 2.50,
+  "over_16.5": 1.82, "under_16.5": 1.82,
+  "over_18.5": 2.50, "under_18.5": 1.50,
+  "over_20.5": 3.50, "under_20.5": 1.25,
+}
+
+export function calcTotalHitsOverUnderOdds(selection: string): number | null {
+  return TOTAL_HITS_OVER_UNDER_ODDS[selection] ?? null
+}
+
+// ─── first_half_winner (basketball) ──────────────────────────────────────────
+
+const FIRST_HALF_WINNER_ODDS: Record<string, number> = {
+  home:  1.80,
+  away:  1.90,
+  draw: 12.00,
+}
+
+export function calcFirstHalfWinnerOdds(selection: string): number | null {
+  return FIRST_HALF_WINNER_ODDS[selection] ?? null
+}
+
+// ─── total_points_over_under (basketball) ────────────────────────────────────
+// NBA avg ~232 total pts. EuroLeague avg ~155.
+
+const TOTAL_POINTS_NBA_ODDS: Record<string, number> = {
+  "over_210.5": 1.30, "under_210.5": 3.20,
+  "over_220.5": 1.52, "under_220.5": 2.30,
+  "over_230.5": 1.85, "under_230.5": 1.82,
+  "over_240.5": 2.30, "under_240.5": 1.52,
+  "over_250.5": 3.20, "under_250.5": 1.30,
+}
+
+const TOTAL_POINTS_EURO_ODDS: Record<string, number> = {
+  "over_140.5": 1.30, "under_140.5": 3.20,
+  "over_150.5": 1.52, "under_150.5": 2.30,
+  "over_160.5": 1.85, "under_160.5": 1.82,
+  "over_170.5": 2.30, "under_170.5": 1.52,
+  "over_180.5": 3.20, "under_180.5": 1.30,
+}
+
+export function calcTotalPointsOverUnderOdds(selection: string, isNBA: boolean): number | null {
+  const table = isNBA ? TOTAL_POINTS_NBA_ODDS : TOTAL_POINTS_EURO_ODDS
+  return table[selection] ?? null
+}

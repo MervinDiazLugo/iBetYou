@@ -12,6 +12,8 @@ import {
   tsdbEventTimeline,
   extractFirstScorer,
   extractYellowCards,
+  parseBaseballInnings,
+  parseBasketballQuarters,
 } from "@/lib/tsdb"
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -61,6 +63,9 @@ export async function GET(request: NextRequest) {
     metadata: any
     hasFirstScorer: boolean
     hasCardsOverUnder: boolean
+    hasFirstInningScore: boolean
+    hasTotalHits: boolean
+    hasFirstHalfWinner: boolean
   }>()
 
   for (const bet of activeBets || []) {
@@ -78,6 +83,9 @@ export async function GET(request: NextRequest) {
       ...event,
       hasFirstScorer: existing?.hasFirstScorer || betType === "first_scorer",
       hasCardsOverUnder: existing?.hasCardsOverUnder || betType === "cards_over_under",
+      hasFirstInningScore: existing?.hasFirstInningScore || betType === "first_inning_score",
+      hasTotalHits: existing?.hasTotalHits || betType === "total_hits_over_under",
+      hasFirstHalfWinner: existing?.hasFirstHalfWinner || betType === "first_half_winner",
     })
   }
 
@@ -95,7 +103,7 @@ export async function GET(request: NextRequest) {
   for (const event of featuredEvents || []) {
     if (!event.external_id?.startsWith("tsdb_")) continue
     if (!eventMap.has(event.id)) {
-      eventMap.set(event.id, { ...event, hasFirstScorer: false, hasCardsOverUnder: false })
+      eventMap.set(event.id, { ...event, hasFirstScorer: false, hasCardsOverUnder: false, hasFirstInningScore: false, hasTotalHits: false, hasFirstHalfWinner: false })
     }
   }
 
@@ -129,7 +137,8 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 3. For events in window NOT found in livescore, fetch individually ───
-  const justFinished: Array<{ id: number; external_id: string; hasFirstScorer: boolean; hasCardsOverUnder: boolean; sport: string }> = []
+  const strResultDataMap = new Map<number, string>()
+  const justFinished: Array<{ id: number; external_id: string; hasFirstScorer: boolean; hasCardsOverUnder: boolean; hasFirstInningScore: boolean; hasTotalHits: boolean; hasFirstHalfWinner: boolean; sport: string }> = []
   const justPostponed: number[] = []
   let updated = 0
 
@@ -149,6 +158,9 @@ export async function GET(request: NextRequest) {
               awayScore: toScore(raw.intAwayScore),
               status: mapTsdbStatus(raw.strStatus),
               rawStatus: (raw.strStatus || "").toUpperCase(),
+            }
+            if (raw.strResult && (event.sport === "baseball" || event.sport === "basketball")) {
+              strResultDataMap.set(event.id, raw.strResult)
             }
           }
         } catch (e: any) {
@@ -186,7 +198,7 @@ export async function GET(request: NextRequest) {
       updated++
 
       if (scoreData.status === "finished") {
-        justFinished.push({ id: event.id, external_id: event.external_id, hasFirstScorer: event.hasFirstScorer, hasCardsOverUnder: event.hasCardsOverUnder, sport: event.sport })
+        justFinished.push({ id: event.id, external_id: event.external_id, hasFirstScorer: event.hasFirstScorer, hasCardsOverUnder: event.hasCardsOverUnder, hasFirstInningScore: event.hasFirstInningScore, hasTotalHits: event.hasTotalHits, hasFirstHalfWinner: event.hasFirstHalfWinner, sport: event.sport })
       }
       if (scoreData.status === "postponed") {
         justPostponed.push(event.id)
@@ -226,6 +238,54 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── 4b. Parse strResult for finished baseball/basketball events ────────────
+  for (const ev of justFinished) {
+    if (ev.sport !== "baseball" && ev.sport !== "basketball") continue
+    const hasStrResultBet = ev.hasFirstInningScore || ev.hasTotalHits || ev.hasFirstHalfWinner
+    if (!hasStrResultBet) continue
+
+    let strResult = strResultDataMap.get(ev.id) ?? null
+    if (!strResult) {
+      const idEvent = ev.external_id.replace("tsdb_", "")
+      try {
+        const raw = await tsdbLookupEvent(idEvent)
+        apiCalls++
+        strResult = raw?.strResult || null
+      } catch (e: any) {
+        apiErrors.push(`strResult/${ev.external_id}: ${e.message}`)
+        continue
+      }
+    }
+    if (!strResult) continue
+
+    const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+    const md = eventRow?.metadata || {}
+    const matchDetails = { ...(md.match_details || {}) }
+    let changed = false
+
+    if (ev.sport === "baseball") {
+      const parsed = parseBaseballInnings(strResult)
+      if (parsed) {
+        matchDetails.first_inning_home = parsed.homeInnings[0] ?? null
+        matchDetails.first_inning_away = parsed.awayInnings[0] ?? null
+        matchDetails.total_home_hits = parsed.homeHits
+        matchDetails.total_away_hits = parsed.awayHits
+        changed = true
+      }
+    } else if (ev.sport === "basketball") {
+      const parsed = parseBasketballQuarters(strResult)
+      if (parsed && parsed.homeQuarters.length >= 2 && parsed.awayQuarters.length >= 2) {
+        matchDetails.half1_home = parsed.homeQuarters[0] + parsed.homeQuarters[1]
+        matchDetails.half1_away = parsed.awayQuarters[0] + parsed.awayQuarters[1]
+        changed = true
+      }
+    }
+
+    if (changed) {
+      await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
+    }
+  }
+
   // ── 5. Trigger auto-resolve for each just-finished event ─────────────────
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
@@ -254,12 +314,13 @@ export async function GET(request: NextRequest) {
     .from("bets")
     .select("bet_type, event:events!event_id(id, external_id, sport, status, metadata, home_score, away_score)")
     .in("status", ["taken", "disputed"])
-    .in("bet_type", ["first_scorer", "half_time", "cards_over_under"])
+    .in("bet_type", ["first_scorer", "half_time", "cards_over_under", "first_inning_score", "total_hits_over_under", "first_half_winner"])
 
   const needsMetaMap = new Map<number, {
     id: number; external_id: string; sport: string; metadata: any
     home_score: number; away_score: number
     needsFirstScorer: boolean; needsHalfTime: boolean; needsCards: boolean
+    needsInnings: boolean; needsQuarters: boolean
   }>()
 
   for (const bet of pendingMetaBets || []) {
@@ -272,8 +333,10 @@ export async function GET(request: NextRequest) {
     const missingFirstScorer = betType === "first_scorer" && !md?.first_scorer?.team
     const missingHalfTime = betType === "half_time" && md?.halftime_home_score == null
     const missingCards = betType === "cards_over_under" && md?.yellow_cards_total == null
+    const missingInnings = (betType === "first_inning_score" || betType === "total_hits_over_under") && md?.first_inning_home == null
+    const missingQuarters = betType === "first_half_winner" && md?.half1_home == null
 
-    if (!missingFirstScorer && !missingHalfTime && !missingCards) continue
+    if (!missingFirstScorer && !missingHalfTime && !missingCards && !missingInnings && !missingQuarters) continue
 
     const existing = needsMetaMap.get(event.id)
     needsMetaMap.set(event.id, {
@@ -281,46 +344,86 @@ export async function GET(request: NextRequest) {
       needsFirstScorer: !!(existing?.needsFirstScorer || missingFirstScorer),
       needsHalfTime: !!(existing?.needsHalfTime || missingHalfTime),
       needsCards: !!(existing?.needsCards || missingCards),
+      needsInnings: !!(existing?.needsInnings || missingInnings),
+      needsQuarters: !!(existing?.needsQuarters || missingQuarters),
     })
   }
 
   const metaFixedEvents: number[] = []
 
   for (const ev of needsMetaMap.values()) {
-    if (ev.sport !== "football") continue
-
     const idEvent = ev.external_id.replace("tsdb_", "")
-    try {
-      const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
-      const md = eventRow?.metadata || {}
-      const matchDetails = { ...(md.match_details || {}) }
-      let updated = false
 
-      const needsTimeline = ev.needsFirstScorer || ev.needsCards
-      if (needsTimeline) {
-        const timeline = await tsdbEventTimeline(idEvent)
+    if (ev.sport === "football") {
+      try {
+        const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+        const md = eventRow?.metadata || {}
+        const matchDetails = { ...(md.match_details || {}) }
+        let updated = false
+
+        const needsTimeline = ev.needsFirstScorer || ev.needsCards
+        if (needsTimeline) {
+          const timeline = await tsdbEventTimeline(idEvent)
+          apiCalls++
+
+          if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
+            const firstGoal = extractFirstScorer(timeline)
+            if (firstGoal) { matchDetails.first_scorer = firstGoal; updated = true }
+          }
+
+          if (ev.needsCards) {
+            const cards = extractYellowCards(timeline)
+            matchDetails.yellow_cards_home = cards.home
+            matchDetails.yellow_cards_away = cards.away
+            matchDetails.yellow_cards_total = cards.total
+            updated = true
+          }
+        }
+
+        if (updated) {
+          await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
+          metaFixedEvents.push(ev.id)
+        }
+      } catch (e: any) {
+        apiErrors.push(`meta-fix/${ev.external_id}: ${e.message}`)
+      }
+    } else if ((ev.sport === "baseball" && ev.needsInnings) || (ev.sport === "basketball" && ev.needsQuarters)) {
+      try {
+        const raw = await tsdbLookupEvent(idEvent)
         apiCalls++
+        if (!raw?.strResult) continue
 
-        if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
-          const firstGoal = extractFirstScorer(timeline)
-          if (firstGoal) { matchDetails.first_scorer = firstGoal; updated = true }
+        const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+        const md = eventRow?.metadata || {}
+        const matchDetails = { ...(md.match_details || {}) }
+        let updated = false
+
+        if (ev.sport === "baseball" && ev.needsInnings) {
+          const parsed = parseBaseballInnings(raw.strResult)
+          if (parsed) {
+            matchDetails.first_inning_home = parsed.homeInnings[0] ?? null
+            matchDetails.first_inning_away = parsed.awayInnings[0] ?? null
+            matchDetails.total_home_hits = parsed.homeHits
+            matchDetails.total_away_hits = parsed.awayHits
+            updated = true
+          }
+        }
+        if (ev.sport === "basketball" && ev.needsQuarters) {
+          const parsed = parseBasketballQuarters(raw.strResult)
+          if (parsed && parsed.homeQuarters.length >= 2 && parsed.awayQuarters.length >= 2) {
+            matchDetails.half1_home = parsed.homeQuarters[0] + parsed.homeQuarters[1]
+            matchDetails.half1_away = parsed.awayQuarters[0] + parsed.awayQuarters[1]
+            updated = true
+          }
         }
 
-        if (ev.needsCards) {
-          const cards = extractYellowCards(timeline)
-          matchDetails.yellow_cards_home = cards.home
-          matchDetails.yellow_cards_away = cards.away
-          matchDetails.yellow_cards_total = cards.total
-          updated = true
+        if (updated) {
+          await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
+          metaFixedEvents.push(ev.id)
         }
+      } catch (e: any) {
+        apiErrors.push(`strResult-retry/${ev.external_id}: ${e.message}`)
       }
-
-      if (updated) {
-        await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
-        metaFixedEvents.push(ev.id)
-      }
-    } catch (e: any) {
-      apiErrors.push(`meta-fix/${ev.external_id}: ${e.message}`)
     }
   }
 

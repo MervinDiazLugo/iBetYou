@@ -220,6 +220,26 @@ export async function tsdbEventTimeline(idEvent: string): Promise<any[]> {
   return data.lookup || []
 }
 
+/** Reconstruct halftime score from V2 timeline by counting goals in first 45 minutes.
+ * Own goals credited to opposing team. Goals at min > 45 treated as second half.
+ */
+export function extractHalfTimeScore(
+  timeline: any[]
+): { home: number; away: number } | null {
+  if (!timeline?.length) return null
+  let home = 0, away = 0
+  for (const e of timeline) {
+    if ((e.strTimeline || "").toLowerCase() !== "goal") continue
+    const min = Number(e.intTime)
+    if (!Number.isFinite(min) || min > 45) continue
+    const isOwnGoal = (e.strTimelineDetail || "").toLowerCase().includes("own goal")
+    const scoredByHome = (e.strHome || "").toLowerCase() === "yes"
+    if (isOwnGoal) { if (scoredByHome) away++; else home++ }
+    else { if (scoredByHome) home++; else away++ }
+  }
+  return { home, away }
+}
+
 /** Count yellow cards from timeline (soccer).
  * TSDB V2 timeline: strTimeline="Card", strTimelineDetail="Yellow Card", strHome="Yes"|"No"
  */
@@ -267,4 +287,68 @@ export function extractFirstScorer(
 export async function tsdbLookupEvent(idEvent: string): Promise<any | null> {
   const data = await fetchTsdbV1(`/lookupevent.php?id=${idEvent}`)
   return data.events?.[0] || null
+}
+
+// ─── strResult parsers (V1 lookupevent) ─────────────────────────────────────
+
+/** Parse inning-by-inning data from TSDB V1 strResult field (baseball).
+ * Format: "TeamA Innings:<br>1 0 2 ...<br>Hits: N - Errors: N<br><br>TeamB Innings:<br>..."
+ */
+export function parseBaseballInnings(strResult: string | null | undefined): {
+  homeInnings: number[]
+  awayInnings: number[]
+  homeHits: number
+  awayHits: number
+} | null {
+  if (!strResult) return null
+  const normalized = strResult.replace(/<br>/gi, "\n")
+  const sections = normalized.split(/\n\n+/)
+  if (sections.length < 2) return null
+
+  const parseTeam = (section: string) => {
+    const innMatch = section.match(/Innings:\s*\n([\d\s]+)/i)
+    const innings = innMatch
+      ? innMatch[1].trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n))
+      : []
+    const hitsMatch = section.match(/Hits:\s*(\d+)/i)
+    const hits = hitsMatch ? Number(hitsMatch[1]) : 0
+    return { innings, hits }
+  }
+
+  const home = parseTeam(sections[0])
+  const away = parseTeam(sections[1])
+  if (home.innings.length === 0 || away.innings.length === 0) return null
+
+  return {
+    homeInnings: home.innings,
+    awayInnings: away.innings,
+    homeHits: home.hits,
+    awayHits: away.hits,
+  }
+}
+
+/** Parse quarter-by-quarter data from TSDB V1 strResult field (basketball).
+ * Format: "TeamA Quarters:<br>25 30 28 22 <br><br>TeamB Quarters:<br>21 27 30 25"
+ */
+export function parseBasketballQuarters(strResult: string | null | undefined): {
+  homeQuarters: number[]
+  awayQuarters: number[]
+} | null {
+  if (!strResult) return null
+  const normalized = strResult.replace(/<br>/gi, "\n")
+  const sections = normalized.split(/\n\n+/)
+  if (sections.length < 2) return null
+
+  const parseTeam = (section: string) => {
+    const qMatch = section.match(/Quarters:\s*\n([\d\s]+)/i)
+    return qMatch
+      ? qMatch[1].trim().split(/\s+/).map(Number).filter((n) => Number.isFinite(n))
+      : []
+  }
+
+  const home = parseTeam(sections[0])
+  const away = parseTeam(sections[1])
+  if (home.length === 0 || away.length === 0) return null
+
+  return { homeQuarters: home, awayQuarters: away }
 }

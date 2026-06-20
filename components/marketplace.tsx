@@ -94,6 +94,50 @@ const BOTH_TEAMS_SCORE_OPTIONS = [
   { value: "no",  label: "No — al menos uno no anota", odds: 1.90 },
 ]
 
+const NRFI_YRFI_OPTIONS = [
+  { value: "nrfi", label: "NRFI — Nadie anota en el 1er inning", odds: 1.65 },
+  { value: "yrfi", label: "YRFI — Al menos uno anota en el 1er inning", odds: 2.00 },
+]
+
+const TOTAL_HITS_HOUSE_OPTIONS = [
+  { value: "over_12.5",  label: "Más de 12.5",  odds: 1.25 },
+  { value: "under_12.5", label: "Menos de 12.5", odds: 3.50 },
+  { value: "over_14.5",  label: "Más de 14.5",  odds: 1.50 },
+  { value: "under_14.5", label: "Menos de 14.5", odds: 2.50 },
+  { value: "over_16.5",  label: "Más de 16.5",  odds: 1.82 },
+  { value: "under_16.5", label: "Menos de 16.5", odds: 1.82 },
+  { value: "over_18.5",  label: "Más de 18.5",  odds: 2.50 },
+  { value: "under_18.5", label: "Menos de 18.5", odds: 1.50 },
+  { value: "over_20.5",  label: "Más de 20.5",  odds: 3.50 },
+  { value: "under_20.5", label: "Menos de 20.5", odds: 1.25 },
+]
+
+const TOTAL_POINTS_NBA_OPTIONS = [
+  { value: "over_210.5",  label: "Más de 210.5",  odds: 1.30 },
+  { value: "under_210.5", label: "Menos de 210.5", odds: 3.20 },
+  { value: "over_220.5",  label: "Más de 220.5",  odds: 1.52 },
+  { value: "under_220.5", label: "Menos de 220.5", odds: 2.30 },
+  { value: "over_230.5",  label: "Más de 230.5",  odds: 1.85 },
+  { value: "under_230.5", label: "Menos de 230.5", odds: 1.82 },
+  { value: "over_240.5",  label: "Más de 240.5",  odds: 2.30 },
+  { value: "under_240.5", label: "Menos de 240.5", odds: 1.52 },
+  { value: "over_250.5",  label: "Más de 250.5",  odds: 3.20 },
+  { value: "under_250.5", label: "Menos de 250.5", odds: 1.30 },
+]
+
+const TOTAL_POINTS_EURO_OPTIONS = [
+  { value: "over_140.5",  label: "Más de 140.5",  odds: 1.30 },
+  { value: "under_140.5", label: "Menos de 140.5", odds: 3.20 },
+  { value: "over_150.5",  label: "Más de 150.5",  odds: 1.52 },
+  { value: "under_150.5", label: "Menos de 150.5", odds: 2.30 },
+  { value: "over_160.5",  label: "Más de 160.5",  odds: 1.85 },
+  { value: "under_160.5", label: "Menos de 160.5", odds: 1.82 },
+  { value: "over_170.5",  label: "Más de 170.5",  odds: 2.30 },
+  { value: "under_170.5", label: "Menos de 170.5", odds: 1.52 },
+  { value: "over_180.5",  label: "Más de 180.5",  odds: 3.20 },
+  { value: "under_180.5", label: "Menos de 180.5", odds: 1.30 },
+]
+
 function getHouseBetTypes(sport: string): Array<{ id: string; label: string; icon: string; desc: string }> {
   if (sport === "football") return [
     { id: "direct",           label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
@@ -103,14 +147,18 @@ function getHouseBetTypes(sport: string): Array<{ id: string; label: string; ico
     { id: "cards_over_under", label: "Tarjetas",        icon: "🟨", desc: "Over/Under amarillas" },
   ]
   if (sport === "basketball") return [
-    { id: "direct",       label: "Resultado", icon: "🏆", desc: "¿Quién gana?" },
-    { id: "score_margin", label: "Margen",    icon: "📏", desc: "Por cuántos puntos" },
+    { id: "direct",                 label: "Resultado",   icon: "🏆", desc: "¿Quién gana?" },
+    { id: "total_points_over_under",label: "Puntos",      icon: "🔢", desc: "Over / Under" },
+    { id: "first_half_winner",      label: "1er Tiempo",  icon: "⏱️", desc: "Gana el 1er tiempo" },
+    { id: "score_margin",           label: "Margen",      icon: "📏", desc: "Por cuántos puntos" },
   ]
   if (sport === "baseball") return [
-    { id: "direct",      label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
-    { id: "run_line",    label: "Run Line",         icon: "⚡", desc: "±1.5 carreras" },
-    { id: "total_runs",  label: "Total carreras",   icon: "📊", desc: "Over / Under" },
-    { id: "exact_score", label: "Marcador exacto",  icon: "🎯", desc: "Score exacto" },
+    { id: "direct",                label: "Resultado",      icon: "🏆", desc: "¿Quién gana?" },
+    { id: "first_inning_score",    label: "1er Inning",     icon: "⚾", desc: "NRFI / YRFI" },
+    { id: "total_hits_over_under", label: "Total Hits",     icon: "💥", desc: "Over / Under hits" },
+    { id: "run_line",              label: "Run Line",       icon: "⚡", desc: "±1.5 carreras" },
+    { id: "total_runs",            label: "Total carreras", icon: "📊", desc: "Over / Under" },
+    { id: "exact_score",           label: "Marcador exacto",icon: "🎯", desc: "Score exacto" },
   ]
   return [{ id: "direct", label: "Resultado", icon: "🏆", desc: "¿Quién gana?" }]
 }
@@ -722,6 +770,10 @@ function HomeContent() {
     if (houseBetType === "cards_over_under") return houseBetSelectionOdds
     if (houseBetType === "goals_over_under") return houseBetSelectionOdds
     if (houseBetType === "both_teams_score") return houseBetSelectionOdds
+    if (houseBetType === "first_inning_score") return NRFI_YRFI_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
+    if (houseBetType === "total_hits_over_under") return TOTAL_HITS_HOUSE_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
+    if (houseBetType === "first_half_winner") return houseBetSelectionOdds
+    if (houseBetType === "total_points_over_under") return houseBetSelectionOdds
     return null
   }
 
@@ -2189,6 +2241,131 @@ function HomeContent() {
                   ))}
                 </div>
               )}
+              {/* First inning score (NRFI/YRFI) */}
+              {houseBetType === "first_inning_score" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                    ⚾ <strong>NRFI</strong> (No Run First Inning) = ningún equipo anota en el 1er inning. <strong>YRFI</strong> = al menos uno anota.
+                  </p>
+                  <div className="grid grid-cols-1 gap-2">
+                    {NRFI_YRFI_OPTIONS.map(opt => {
+                      const isSelected = houseBetSelection === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => setHouseBetSelection(opt.value)}
+                          className={`relative rounded-xl border-2 py-3 px-4 text-left transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                              : "border-border bg-muted/10 hover:border-primary/40"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                            </div>
+                          )}
+                          <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
+                          <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Total hits over/under */}
+              {houseBetType === "total_hits_over_under" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                    💥 Total de <strong>hits combinados</strong> de ambos equipos. MLB promedio: ~16-17 hits por partido.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {TOTAL_HITS_HOUSE_OPTIONS.map(opt => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setHouseBetSelection(opt.value)}
+                        className={`rounded-lg border p-2 text-center transition-colors ${
+                          houseBetSelection === opt.value
+                            ? "border-yellow-500 bg-yellow-500/10"
+                            : "border-border hover:border-yellow-400"
+                        }`}
+                      >
+                        <div className="text-xs">{opt.label}</div>
+                        <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {/* First half winner (basketball) */}
+              {houseBetType === "first_half_winner" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                    ⏱️ ¿Quién gana el <strong>1er tiempo</strong> (cuartos 1 y 2)? El empate al descanso es posible pero poco frecuente.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: "home", label: houseBetModal?.event.home_team ?? "Local",     odds: 1.80 },
+                      { value: "draw", label: "Empate",                                       odds: 12.00 },
+                      { value: "away", label: houseBetModal?.event.away_team ?? "Visitante",  odds: 1.90 },
+                    ].map(opt => {
+                      const isSelected = houseBetSelection === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
+                          className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                              : "border-border bg-muted/10 hover:border-primary/40"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                            </div>
+                          )}
+                          <p className={`text-xs font-bold truncate ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
+                          <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              {/* Total points over/under (basketball) */}
+              {houseBetType === "total_points_over_under" && (() => {
+                const league = (houseBetModal?.event.league ?? "").toLowerCase()
+                const isNBA = league.includes("nba") || league.includes("national basketball")
+                const opts = isNBA ? TOTAL_POINTS_NBA_OPTIONS : TOTAL_POINTS_EURO_OPTIONS
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                      🔢 Total de <strong>puntos combinados</strong> de ambos equipos.{" "}
+                      {isNBA ? "NBA promedio: ~232 pts." : "EuroLeague promedio: ~155 pts."}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {opts.map(opt => {
+                        const isSelected = houseBetSelection === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
+                            className={`rounded-lg border p-2 text-center transition-colors ${
+                              isSelected
+                                ? "border-yellow-500 bg-yellow-500/10"
+                                : "border-border hover:border-yellow-400"
+                            }`}
+                          >
+                            <div className="text-xs">{opt.label}</div>
+                            <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })()}
               {/* Amount slider */}
               {(() => {
                 const walletBal = mode === "real" ? balance.iBY : balance.fantasy

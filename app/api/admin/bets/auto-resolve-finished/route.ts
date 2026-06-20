@@ -7,7 +7,7 @@ import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { houseWalletCredit } from "@/lib/house-wallet"
-import { tsdbEventTimeline, extractYellowCards } from "@/lib/tsdb"
+import { tsdbEventTimeline, extractYellowCards, extractHalfTimeScore, tsdbLookupEvent, parseBaseballInnings, parseBasketballQuarters } from "@/lib/tsdb"
 
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
@@ -413,9 +413,105 @@ function resolveCardsOverUnder(
   }
 }
 
+// ─── first_inning_score (NRFI/YRFI) ──────────────────────────────────────────
+
+function resolveFirstInningScore(
+  creatorSelection: string,
+  event: { metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const md = event.metadata?.match_details
+  const inn1Home = md?.first_inning_home
+  const inn1Away = md?.first_inning_away
+  if (inn1Home === null || inn1Home === undefined || inn1Away === null || inn1Away === undefined) return null
+
+  const yrfi = inn1Home > 0 || inn1Away > 0
+  const sel = creatorSelection.toLowerCase().trim()
+  if (sel !== "nrfi" && sel !== "yrfi") return null
+
+  const creatorWins = sel === "yrfi" ? yrfi : !yrfi
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `first_inning_score: selección "${creatorSelection}", 1er inning local ${inn1Home} - visita ${inn1Away}`,
+  }
+}
+
+// ─── total_hits_over_under ────────────────────────────────────────────────────
+
+function resolveTotalHitsOverUnder(
+  creatorSelection: string,
+  event: { metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const md = event.metadata?.match_details
+  const homeHits = md?.total_home_hits
+  const awayHits = md?.total_away_hits
+  if (homeHits === null || homeHits === undefined || awayHits === null || awayHits === undefined) return null
+
+  const m = creatorSelection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+  if (!m) return null
+  const direction = m[1]
+  const threshold = Number(m[2])
+  const total = homeHits + awayHits
+  const creatorWins = direction === "over" ? total > threshold : total < threshold
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `total_hits_over_under: selección "${creatorSelection}", total ${total} hits (${homeHits}+${awayHits})`,
+  }
+}
+
+// ─── first_half_winner (basketball) ──────────────────────────────────────────
+
+function resolveFirstHalfWinner(
+  creatorSelection: string,
+  event: { metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const md = event.metadata?.match_details
+  const half1Home = md?.half1_home
+  const half1Away = md?.half1_away
+  if (half1Home === null || half1Home === undefined || half1Away === null || half1Away === undefined) return null
+
+  const sel = creatorSelection.toLowerCase().trim()
+  const homeWon = half1Home > half1Away
+  const awayWon = half1Away > half1Home
+  const isDraw = half1Home === half1Away
+
+  let creatorWins: boolean
+  if (sel === "home")      creatorWins = homeWon
+  else if (sel === "away") creatorWins = awayWon
+  else if (sel === "draw") creatorWins = isDraw
+  else return null
+
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `first_half_winner: selección "${creatorSelection}", 1er tiempo ${half1Home}-${half1Away}`,
+  }
+}
+
+// ─── total_points_over_under (basketball) ────────────────────────────────────
+
+function resolveTotalPointsOverUnder(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const m = creatorSelection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+  if (!m) return null
+  const direction = m[1]
+  const threshold = Number(m[2])
+  const total = event.home_score + event.away_score
+  if (total === threshold) return null
+  const creatorWins = direction === "over" ? total > threshold : total < threshold
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `total_points_over_under: selección "${creatorSelection}", total ${total} puntos (${event.home_score}+${event.away_score})`,
+  }
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under", "goals_over_under", "both_teams_score"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under", "goals_over_under", "both_teams_score", "first_inning_score", "total_hits_over_under", "first_half_winner", "total_points_over_under"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -682,6 +778,21 @@ export async function POST(request: NextRequest) {
             }
           } catch (_) { /* proceed without halftime, will skip */ }
         }
+        // For TSDB events: reconstruct HT score from V2 timeline (count goals ≤ min 45)
+        if (htMissing && externalIdHT.startsWith("tsdb_")) {
+          try {
+            const idEvent = externalIdHT.replace("tsdb_", "")
+            const timeline = await tsdbEventTimeline(idEvent)
+            const ht = extractHalfTimeScore(timeline)
+            if (ht !== null) {
+              const meta = eventRow.metadata || {}
+              const matchDetails = { ...(meta.match_details || {}), halftime_home_score: ht.home, halftime_away_score: ht.away }
+              const updatedMetadata = { ...meta, match_details: matchDetails }
+              await supabase.from("events").update({ metadata: updatedMetadata }).eq("id", eventRow.id)
+              eventRow.metadata = updatedMetadata
+            }
+          } catch (_) { /* proceed without halftime, will skip */ }
+        }
         resolution = resolveHalfTime(creatorSelection, eventRow, betForResolver)
       } else if (betType === "first_scorer") {
         // Fetch first_scorer metadata on-demand if missing (e.g. admin manually set status=finished)
@@ -733,6 +844,62 @@ export async function POST(request: NextRequest) {
         resolution = resolveGoalsOverUnder(creatorSelection, eventRow, betForResolver)
       } else if (betType === "both_teams_score") {
         resolution = resolveBothTeamsScore(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "total_points_over_under") {
+        resolution = resolveTotalPointsOverUnder(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "first_inning_score" || betType === "total_hits_over_under") {
+        // Fetch strResult on-demand if inning metadata is missing
+        const hasMeta = eventRow.metadata?.match_details?.first_inning_home != null
+        const externalId: string = eventRow.external_id || ""
+        if (!hasMeta && externalId.startsWith("tsdb_")) {
+          try {
+            const idEvent = externalId.replace("tsdb_", "")
+            const raw = await tsdbLookupEvent(idEvent)
+            if (raw?.strResult) {
+              const parsed = parseBaseballInnings(raw.strResult)
+              if (parsed) {
+                const md = eventRow.metadata || {}
+                const matchDetails = {
+                  ...(md.match_details || {}),
+                  first_inning_home: parsed.homeInnings[0] ?? null,
+                  first_inning_away: parsed.awayInnings[0] ?? null,
+                  total_home_hits: parsed.homeHits,
+                  total_away_hits: parsed.awayHits,
+                }
+                await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", eventRow.id)
+                eventRow.metadata = { ...md, match_details: matchDetails }
+              }
+            }
+          } catch (_) { /* will skip if metadata still missing */ }
+        }
+        if (betType === "first_inning_score") {
+          resolution = resolveFirstInningScore(creatorSelection, eventRow, betForResolver)
+        } else {
+          resolution = resolveTotalHitsOverUnder(creatorSelection, eventRow, betForResolver)
+        }
+      } else if (betType === "first_half_winner") {
+        // Fetch strResult on-demand if half1 metadata is missing
+        const hasHalf1 = eventRow.metadata?.match_details?.half1_home != null
+        const externalId: string = eventRow.external_id || ""
+        if (!hasHalf1 && externalId.startsWith("tsdb_")) {
+          try {
+            const idEvent = externalId.replace("tsdb_", "")
+            const raw = await tsdbLookupEvent(idEvent)
+            if (raw?.strResult) {
+              const parsed = parseBasketballQuarters(raw.strResult)
+              if (parsed && parsed.homeQuarters.length >= 2 && parsed.awayQuarters.length >= 2) {
+                const md = eventRow.metadata || {}
+                const matchDetails = {
+                  ...(md.match_details || {}),
+                  half1_home: parsed.homeQuarters[0] + parsed.homeQuarters[1],
+                  half1_away: parsed.awayQuarters[0] + parsed.awayQuarters[1],
+                }
+                await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", eventRow.id)
+                eventRow.metadata = { ...md, match_details: matchDetails }
+              }
+            }
+          } catch (_) { /* will skip if metadata still missing */ }
+        }
+        resolution = resolveFirstHalfWinner(creatorSelection, eventRow, betForResolver)
       }
 
       if (!resolution) {

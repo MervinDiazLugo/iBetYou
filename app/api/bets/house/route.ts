@@ -11,6 +11,10 @@ import {
   calcTotalRunsOdds,
   calcGoalsOverUnderOdds,
   calcBothTeamsScoreOdds,
+  calcFirstInningScoreOdds,
+  calcTotalHitsOverUnderOdds,
+  calcFirstHalfWinnerOdds,
+  calcTotalPointsOverUnderOdds,
   oddsForOutcome,
   MAX_DIRECT_EXPOSURE,
   MAX_EXACT_EXPOSURE,
@@ -111,11 +115,11 @@ export async function POST(request: NextRequest) {
     if (sport === "football") {
       allowedBetTypes = ["direct", "exact_score", "cards_over_under", "goals_over_under", "both_teams_score"]
     } else if (sport === "basketball") {
-      allowedBetTypes = ["direct", "score_margin"]
+      allowedBetTypes = ["direct", "score_margin", "first_half_winner", "total_points_over_under"]
     } else if (sport === "baseball") {
       allowedBetTypes = isMLBLeague
-        ? ["direct", "exact_score", "run_line", "total_runs"]
-        : ["direct", "exact_score", "total_runs"]
+        ? ["direct", "exact_score", "run_line", "total_runs", "first_inning_score", "total_hits_over_under"]
+        : ["direct", "exact_score", "total_runs", "first_inning_score", "total_hits_over_under"]
     } else {
       allowedBetTypes = ["direct"]
     }
@@ -292,6 +296,38 @@ export async function POST(request: NextRequest) {
       if (houseOdds === null) {
         return NextResponse.json(
           { error: "Selección inválida para ambos equipos anotan (debe ser 'yes' o 'no')" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "first_inning_score") {
+      houseOdds = calcFirstInningScoreOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para 1er inning (debe ser 'nrfi' o 'yrfi')" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "total_hits_over_under") {
+      houseOdds = calcTotalHitsOverUnderOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para total de hits" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "first_half_winner") {
+      houseOdds = calcFirstHalfWinnerOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para ganador del 1er tiempo (debe ser 'home', 'away' o 'draw')" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "total_points_over_under") {
+      houseOdds = calcTotalPointsOverUnderOdds(String(selection), isNBALeague)
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para total de puntos" },
           { status: 400 }
         )
       }

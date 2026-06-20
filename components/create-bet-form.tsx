@@ -36,16 +36,20 @@ interface Event {
 }
 
 const betTypes = [
-  { id: "direct",            label: "Resultado",      icon: "🏆", desc: "¿Quién gana?" },
-  { id: "exact_score",       label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
-  { id: "goals_over_under",  label: "Goles",          icon: "⚽", desc: "Over/Under goles" },
-  { id: "both_teams_score",  label: "Ambos anotan",   icon: "🔁", desc: "¿Ambos equipos marcan?" },
-  { id: "cards_over_under",  label: "Tarjetas",       icon: "🟨", desc: "Over/Under amarillas" },
-  { id: "run_line",          label: "Run Line",       icon: "⚡", desc: "±1.5 carreras" },
-  { id: "total_runs",        label: "Total carreras", icon: "📊", desc: "Over / Under" },
-  { id: "score_margin",      label: "Margen",         icon: "📏", desc: "Por cuántos puntos" },
-  { id: "first_scorer",      label: "Primer gol",     icon: "🥅", desc: "Quién anota primero" },
-  { id: "half_time",         label: "Medio tiempo",   icon: "⏱️", desc: "Resultado 1er tiempo" },
+  { id: "direct",                 label: "Resultado",      icon: "🏆", desc: "¿Quién gana?" },
+  { id: "exact_score",            label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
+  { id: "goals_over_under",       label: "Goles",          icon: "⚽", desc: "Over/Under goles" },
+  { id: "both_teams_score",       label: "Ambos anotan",   icon: "🔁", desc: "¿Ambos equipos marcan?" },
+  { id: "cards_over_under",       label: "Tarjetas",       icon: "🟨", desc: "Over/Under amarillas" },
+  { id: "run_line",               label: "Run Line",       icon: "⚡", desc: "±1.5 carreras" },
+  { id: "total_runs",             label: "Total carreras", icon: "📊", desc: "Over / Under" },
+  { id: "first_inning_score",     label: "1er Inning",     icon: "⚾", desc: "NRFI / YRFI" },
+  { id: "total_hits_over_under",  label: "Total Hits",     icon: "💥", desc: "Over / Under hits" },
+  { id: "score_margin",           label: "Margen",         icon: "📏", desc: "Por cuántos puntos" },
+  { id: "first_half_winner",      label: "1er Tiempo",     icon: "⏱️", desc: "Gana el 1er tiempo" },
+  { id: "total_points_over_under",label: "Total Puntos",   icon: "🔢", desc: "Over / Under puntos" },
+  { id: "first_scorer",           label: "Primer gol",     icon: "🥅", desc: "Quién anota primero" },
+  { id: "half_time",              label: "Medio tiempo",   icon: "🕐", desc: "Resultado 1er tiempo" },
 ]
 
 const sports = [
@@ -55,9 +59,15 @@ const sports = [
 ]
 
 function getAvailableBetTypes(sport: string) {
-  if (sport === "football") return betTypes.filter((t) => !["run_line", "total_runs", "score_margin"].includes(t.id))
-  if (sport === "basketball") return betTypes.filter((t) => ["direct", "score_margin"].includes(t.id))
-  if (sport === "baseball") return betTypes.filter((t) => ["direct", "run_line", "total_runs"].includes(t.id))
+  if (sport === "football") return betTypes.filter((t) =>
+    !["run_line", "total_runs", "score_margin", "first_inning_score", "total_hits_over_under", "first_half_winner", "total_points_over_under"].includes(t.id)
+  )
+  if (sport === "basketball") return betTypes.filter((t) =>
+    ["direct", "score_margin", "first_half_winner", "total_points_over_under"].includes(t.id)
+  )
+  if (sport === "baseball") return betTypes.filter((t) =>
+    ["direct", "run_line", "total_runs", "first_inning_score", "total_hits_over_under"].includes(t.id)
+  )
   return betTypes.filter((t) => t.id === "direct")
 }
 
@@ -77,6 +87,43 @@ const GOALS_OPTIONS = [
 const BOTH_TEAMS_OPTIONS = [
   { id: "yes", label: "Sí — ambos anotan",          value: "yes" },
   { id: "no",  label: "No — al menos uno no anota", value: "no" },
+]
+
+const FIRST_INNING_OPTIONS = [
+  { id: "nrfi", label: "NRFI — Ningún equipo anota en el 1er inning", value: "nrfi" },
+  { id: "yrfi", label: "YRFI — Al menos un equipo anota en el 1er inning", value: "yrfi" },
+]
+
+const TOTAL_HITS_OPTIONS = [
+  { id: "over_12.5",  label: "Más de 12.5 hits",  value: "over_12.5" },
+  { id: "under_12.5", label: "Menos de 12.5 hits", value: "under_12.5" },
+  { id: "over_14.5",  label: "Más de 14.5 hits",  value: "over_14.5" },
+  { id: "under_14.5", label: "Menos de 14.5 hits", value: "under_14.5" },
+  { id: "over_16.5",  label: "Más de 16.5 hits",  value: "over_16.5" },
+  { id: "under_16.5", label: "Menos de 16.5 hits", value: "under_16.5" },
+  { id: "over_18.5",  label: "Más de 18.5 hits",  value: "over_18.5" },
+  { id: "under_18.5", label: "Menos de 18.5 hits", value: "under_18.5" },
+  { id: "over_20.5",  label: "Más de 20.5 hits",  value: "over_20.5" },
+  { id: "under_20.5", label: "Menos de 20.5 hits", value: "under_20.5" },
+]
+
+const FIRST_HALF_WINNER_OPTIONS = [
+  { id: "home", label: "Local gana el 1er tiempo",    value: "home" },
+  { id: "draw", label: "Empate al descanso",           value: "draw" },
+  { id: "away", label: "Visitante gana el 1er tiempo", value: "away" },
+]
+
+const TOTAL_POINTS_OPTIONS = [
+  { id: "over_210.5",  label: "Más de 210.5 puntos",  value: "over_210.5" },
+  { id: "under_210.5", label: "Menos de 210.5 puntos", value: "under_210.5" },
+  { id: "over_220.5",  label: "Más de 220.5 puntos",  value: "over_220.5" },
+  { id: "under_220.5", label: "Menos de 220.5 puntos", value: "under_220.5" },
+  { id: "over_230.5",  label: "Más de 230.5 puntos",  value: "over_230.5" },
+  { id: "under_230.5", label: "Menos de 230.5 puntos", value: "under_230.5" },
+  { id: "over_240.5",  label: "Más de 240.5 puntos",  value: "over_240.5" },
+  { id: "under_240.5", label: "Menos de 240.5 puntos", value: "under_240.5" },
+  { id: "over_250.5",  label: "Más de 250.5 puntos",  value: "over_250.5" },
+  { id: "under_250.5", label: "Menos de 250.5 puntos", value: "under_250.5" },
 ]
 
 const CARDS_OPTIONS = [
@@ -387,6 +434,18 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           { id: "over_10",  label: "Más de 10",  value: "over_10" },
           { id: "under_10", label: "Menos de 10", value: "under_10" },
         ]
+      case "first_inning_score":
+        return FIRST_INNING_OPTIONS
+      case "total_hits_over_under":
+        return TOTAL_HITS_OPTIONS
+      case "first_half_winner":
+        return [
+          { id: "home", label: `${selectedEvent.home_team} gana el 1er tiempo`,    value: "home", logo: selectedEvent.home_logo ?? null },
+          { id: "draw", label: "Empate al descanso",                                  value: "draw", logo: null },
+          { id: "away", label: `${selectedEvent.away_team} gana el 1er tiempo`, value: "away", logo: selectedEvent.away_logo ?? null },
+        ]
+      case "total_points_over_under":
+        return TOTAL_POINTS_OPTIONS
       case "score_margin":
         return [
           { id: "home_1_5",    label: `${selectedEvent.home_team} +1–5`,   value: "home_1_5" },
