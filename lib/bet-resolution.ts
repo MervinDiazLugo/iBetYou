@@ -17,6 +17,8 @@ const PEER_RESOLUTION_BY_TYPE: Record<string, boolean> = {
   first_scorer: true,
   half_time: true,
   cards_over_under: true,
+  goals_over_under: true,
+  both_teams_score: true,
 }
 
 export function supportsPeerResolution(betType: string | null | undefined) {

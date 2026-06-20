@@ -7,6 +7,9 @@ export function formatHouseBetTypeLabel(betType: string): string {
     score_margin: "Margen",
     half_time: "Medio Tiempo",
     first_scorer: "Primer Anotador",
+    cards_over_under: "Tarjetas",
+    goals_over_under: "Goles",
+    both_teams_score: "Ambos Anotan",
   }
   return labels[betType] ?? betType
 }
@@ -75,6 +78,30 @@ export function formatHouseSelection(
     if (selection === home) return `${home} anota primero`
     if (selection === away) return `${away} anota primero`
     return `${selection} anota primero`
+  }
+
+  if (betType === "goals_over_under") {
+    const m = selection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+    if (m) {
+      const dir = m[1] === "over" ? "Más de" : "Menos de"
+      return `${dir} ${m[2]} goles`
+    }
+    return selection
+  }
+
+  if (betType === "both_teams_score") {
+    if (selection === "yes") return "Ambos equipos anotan"
+    if (selection === "no") return "Al menos un equipo no anota"
+    return selection
+  }
+
+  if (betType === "cards_over_under") {
+    const m = selection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+    if (m) {
+      const dir = m[1] === "over" ? "Más de" : "Menos de"
+      return `${dir} ${m[2]} tarjetas`
+    }
+    return selection
   }
 
   return selection

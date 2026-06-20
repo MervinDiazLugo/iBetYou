@@ -38,6 +38,8 @@ interface Event {
 const betTypes = [
   { id: "direct",            label: "Resultado",      icon: "🏆", desc: "¿Quién gana?" },
   { id: "exact_score",       label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
+  { id: "goals_over_under",  label: "Goles",          icon: "⚽", desc: "Over/Under goles" },
+  { id: "both_teams_score",  label: "Ambos anotan",   icon: "🔁", desc: "¿Ambos equipos marcan?" },
   { id: "cards_over_under",  label: "Tarjetas",       icon: "🟨", desc: "Over/Under amarillas" },
   { id: "run_line",          label: "Run Line",       icon: "⚡", desc: "±1.5 carreras" },
   { id: "total_runs",        label: "Total carreras", icon: "📊", desc: "Over / Under" },
@@ -58,6 +60,24 @@ function getAvailableBetTypes(sport: string) {
   if (sport === "baseball") return betTypes.filter((t) => ["direct", "run_line", "total_runs"].includes(t.id))
   return betTypes.filter((t) => t.id === "direct")
 }
+
+const GOALS_OPTIONS = [
+  { id: "over_0.5",  label: "Más de 0.5",  value: "over_0.5" },
+  { id: "under_0.5", label: "Menos de 0.5", value: "under_0.5" },
+  { id: "over_1.5",  label: "Más de 1.5",  value: "over_1.5" },
+  { id: "under_1.5", label: "Menos de 1.5", value: "under_1.5" },
+  { id: "over_2.5",  label: "Más de 2.5",  value: "over_2.5" },
+  { id: "under_2.5", label: "Menos de 2.5", value: "under_2.5" },
+  { id: "over_3.5",  label: "Más de 3.5",  value: "over_3.5" },
+  { id: "under_3.5", label: "Menos de 3.5", value: "under_3.5" },
+  { id: "over_4.5",  label: "Más de 4.5",  value: "over_4.5" },
+  { id: "under_4.5", label: "Menos de 4.5", value: "under_4.5" },
+]
+
+const BOTH_TEAMS_OPTIONS = [
+  { id: "yes", label: "Sí — ambos anotan",          value: "yes" },
+  { id: "no",  label: "No — al menos uno no anota", value: "no" },
+]
 
 const CARDS_OPTIONS = [
   { id: "over_1.5",  label: "Más de 1.5",  value: "over_1.5" },
@@ -327,6 +347,10 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         }
         options.push({ id: "away_win", label: selectedEvent.away_team, value: selectedEvent.away_team, logo: selectedEvent.away_logo ?? null })
         return options
+      case "goals_over_under":
+        return GOALS_OPTIONS
+      case "both_teams_score":
+        return BOTH_TEAMS_OPTIONS
       case "cards_over_under":
         return CARDS_OPTIONS
       case "exact_score":
@@ -666,6 +690,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 <span className="w-1 h-4 rounded-full bg-primary inline-block" />
                 Tu Selección
               </label>
+              {betType === "goals_over_under" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  ⚽ Predicción al <strong>total de goles del partido</strong> (ambos equipos). Ej: <em>Más de 2.5</em> = el partido debe terminar con 3 o más goles.
+                </p>
+              )}
+              {betType === "both_teams_score" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  🔁 Predicción sobre si <strong>ambos equipos marcan al menos un gol</strong>. Si alguno de los dos no anota, la opción "No" gana.
+                </p>
+              )}
               {betType === "cards_over_under" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
                   🟨 Predicción al <strong>total de tarjetas amarillas</strong> en el partido (ambos equipos). Las rojas no cuentan. Ej: <em>Más de 3.5</em> = el partido debe tener 4 o más amarillas.

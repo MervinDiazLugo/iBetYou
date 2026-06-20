@@ -95,7 +95,7 @@ export async function GET(request: NextRequest) {
   for (const event of featuredEvents || []) {
     if (!event.external_id?.startsWith("tsdb_")) continue
     if (!eventMap.has(event.id)) {
-      eventMap.set(event.id, { ...event, hasFirstScorer: false })
+      eventMap.set(event.id, { ...event, hasFirstScorer: false, hasCardsOverUnder: false })
     }
   }
 

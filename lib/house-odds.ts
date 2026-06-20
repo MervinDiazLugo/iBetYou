@@ -143,3 +143,28 @@ export function calcScoreMarginOdds(selection: string): number | null {
   const rangeKey = parts.slice(1).join("_")
   return SCORE_MARGIN_ODDS[rangeKey] ?? null
 }
+
+// ─── goals_over_under ────────────────────────────────────────────────────────
+
+const GOALS_OVER_UNDER_ODDS: Record<string, number> = {
+  "over_0.5": 1.10,  "under_0.5": 7.00,
+  "over_1.5": 1.50,  "under_1.5": 2.50,
+  "over_2.5": 1.85,  "under_2.5": 1.90,
+  "over_3.5": 2.50,  "under_3.5": 1.50,
+  "over_4.5": 3.50,  "under_4.5": 1.25,
+}
+
+export function calcGoalsOverUnderOdds(selection: string): number | null {
+  return GOALS_OVER_UNDER_ODDS[selection] ?? null
+}
+
+// ─── both_teams_score ────────────────────────────────────────────────────────
+
+const BOTH_TEAMS_SCORE_ODDS: Record<string, number> = {
+  yes: 1.75,
+  no:  1.90,
+}
+
+export function calcBothTeamsScoreOdds(selection: string): number | null {
+  return BOTH_TEAMS_SCORE_ODDS[selection] ?? null
+}

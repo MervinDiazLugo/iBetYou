@@ -353,6 +353,41 @@ function resolveScoreMargin(
   }
 }
 
+// ─── goals_over_under ─────────────────────────────────────────────────────────
+
+function resolveGoalsOverUnder(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const m = creatorSelection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+  if (!m) return null
+  const direction = m[1]
+  const threshold = Number(m[2])
+  const total = event.home_score + event.away_score
+  const creatorWins = direction === "over" ? total > threshold : total < threshold
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `goals_over_under: selección "${creatorSelection}", goles totales: ${total} (${event.home_score}+${event.away_score})`,
+  }
+}
+
+// ─── both_teams_score ─────────────────────────────────────────────────────────
+
+function resolveBothTeamsScore(
+  creatorSelection: string,
+  event: { home_score: number; away_score: number },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  if (creatorSelection !== "yes" && creatorSelection !== "no") return null
+  const btts = event.home_score > 0 && event.away_score > 0
+  const creatorWins = creatorSelection === "yes" ? btts : !btts
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `both_teams_score: selección "${creatorSelection}", resultado ${event.home_score}-${event.away_score} → BTTS=${btts}`,
+  }
+}
+
 // ─── cards_over_under ─────────────────────────────────────────────────────────
 
 function resolveCardsOverUnder(
@@ -380,7 +415,7 @@ function resolveCardsOverUnder(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under", "goals_over_under", "both_teams_score"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -694,6 +729,10 @@ export async function POST(request: NextRequest) {
           } catch (_) { /* proceed, resolver will return null and skip */ }
         }
         resolution = resolveCardsOverUnder(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "goals_over_under") {
+        resolution = resolveGoalsOverUnder(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "both_teams_score") {
+        resolution = resolveBothTeamsScore(creatorSelection, eventRow, betForResolver)
       }
 
       if (!resolution) {

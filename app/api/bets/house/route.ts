@@ -9,6 +9,8 @@ import {
   calcScoreMarginOdds,
   calcRunLineOdds,
   calcTotalRunsOdds,
+  calcGoalsOverUnderOdds,
+  calcBothTeamsScoreOdds,
   oddsForOutcome,
   MAX_DIRECT_EXPOSURE,
   MAX_EXACT_EXPOSURE,
@@ -107,7 +109,7 @@ export async function POST(request: NextRequest) {
     const sport = eventRow.sport as string
     let allowedBetTypes: string[]
     if (sport === "football") {
-      allowedBetTypes = ["direct", "exact_score", "cards_over_under"]
+      allowedBetTypes = ["direct", "exact_score", "cards_over_under", "goals_over_under", "both_teams_score"]
     } else if (sport === "basketball") {
       allowedBetTypes = ["direct", "score_margin"]
     } else if (sport === "baseball") {
@@ -274,6 +276,22 @@ export async function POST(request: NextRequest) {
       if (houseOdds === null) {
         return NextResponse.json(
           { error: "Selección inválida para total de carreras" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "goals_over_under") {
+      houseOdds = calcGoalsOverUnderOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para goles over/under" },
+          { status: 400 }
+        )
+      }
+    } else if (betType === "both_teams_score") {
+      houseOdds = calcBothTeamsScoreOdds(String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json(
+          { error: "Selección inválida para ambos equipos anotan (debe ser 'yes' o 'no')" },
           { status: 400 }
         )
       }
