@@ -72,30 +72,42 @@ export default function ProfilePage() {
 
       // Get profile and stats from API
       try {
-        const { data: { session } } = await supabase.auth.getSession()
+        let { data: { session } } = await supabase.auth.getSession()
+
+        // Session may be stale — refresh once if no token
+        if (!session?.access_token) {
+          const { data: refreshed } = await supabase.auth.refreshSession()
+          session = refreshed.session
+        }
+
         const token = session?.access_token
 
-        if (token) {
-          const res = await fetch("/api/user/profile", {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
+        if (!token) {
+          // Can't get a valid token even after refresh → force re-login
+          router.push("/login")
+          return
+        }
 
-          if (res.ok) {
-            const data = await res.json()
-            setProfile(data.profile)
-            setSelectedCountry(data.profile.country || "")
-            setUser({
-              email: authUser.email!,
-              nickname: data.profile.nickname,
-            })
-            setBalance({
-              fantasy: data.wallet?.balance_fantasy || 0,
-              real: data.wallet?.balance_real || 0,
-            })
-            setStats(data.stats)
-          }
+        const res = await fetch("/api/user/profile", {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (res.ok) {
+          const data = await res.json()
+          setProfile(data.profile)
+          setSelectedCountry(data.profile.country || "")
+          setUser({
+            email: authUser.email!,
+            nickname: data.profile.nickname,
+          })
+          setBalance({
+            fantasy: data.wallet?.balance_fantasy || 0,
+            real: data.wallet?.balance_real || 0,
+          })
+          setStats(data.stats)
+        } else if (res.status === 401) {
+          router.push("/login")
+          return
         }
       } catch (err) {
         console.error("Error loading profile:", err)
@@ -161,7 +173,20 @@ export default function ProfilePage() {
   }
 
   if (!user || !profile) {
-    return null
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <p className="text-muted-foreground">No se pudo cargar el perfil.</p>
+          <button
+            onClick={() => router.push("/login")}
+            className="text-sm text-primary underline"
+          >
+            Volver a iniciar sesión
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
