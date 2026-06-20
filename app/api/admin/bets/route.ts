@@ -7,6 +7,7 @@ import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { houseWalletCredit } from "@/lib/house-wallet"
 import { creditGroupWallet } from "@/lib/group-wallet-utils"
+import { tsdbEventTimeline, extractHalfTimeScore } from "@/lib/tsdb"
 
 const API_FOOTBALL_KEY = process.env.API_FOOTBALL_KEY
 const API_FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
@@ -757,60 +758,87 @@ export async function POST(request: NextRequest) {
 
     // Prefer our stored event result; only hit external API if required for the current bet type.
     if (needsFullScore || needsHalftimeScore) {
-      scoreSource = 'external_api'
-      let apiUrl = ''
-
-      if (sportPrefix === 'football') {
-        apiUrl = `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
-      } else if (sportPrefix === 'basketball') {
-        apiUrl = `${API_BASKETBALL_URL}/games?id=${externalNumericId}`
-      } else if (sportPrefix === 'baseball') {
-        apiUrl = `${API_BASEBALL_URL}/games?id=${externalNumericId}`
+      if (sportPrefix === 'tsdb') {
+        // TSDB events: fetch halftime via timeline API (no full-score API available here)
+        if (needsHalftimeScore) {
+          try {
+            const timeline = await tsdbEventTimeline(externalNumericId)
+            const ht = extractHalfTimeScore(timeline)
+            if (ht !== null) {
+              halftimeHomeScore = ht.home
+              halftimeAwayScore = ht.away
+              await supabase.from('events').update({
+                metadata: {
+                  ...currentMetadata,
+                  match_details: {
+                    ...currentMatchDetails,
+                    halftime_home_score: ht.home,
+                    halftime_away_score: ht.away,
+                    updated_at: new Date().toISOString(),
+                  },
+                },
+              }).eq('id', event_id)
+            }
+          } catch (err) {
+            console.error('Failed to fetch TSDB halftime for bet resolution:', err)
+          }
+        }
       } else {
-        return NextResponse.json({ error: `Deporte no soportado: ${sportPrefix}` }, { status: 400 })
+        scoreSource = 'external_api'
+        let apiUrl = ''
+
+        if (sportPrefix === 'football') {
+          apiUrl = `${API_FOOTBALL_URL}/fixtures?id=${externalNumericId}`
+        } else if (sportPrefix === 'basketball') {
+          apiUrl = `${API_BASKETBALL_URL}/games?id=${externalNumericId}`
+        } else if (sportPrefix === 'baseball') {
+          apiUrl = `${API_BASEBALL_URL}/games?id=${externalNumericId}`
+        } else {
+          return NextResponse.json({ error: `Deporte no soportado: ${sportPrefix}` }, { status: 400 })
+        }
+
+        const apiResponse = await fetch(apiUrl, {
+          headers: { "x-apisports-key": API_FOOTBALL_KEY! },
+          next: { revalidate: 0 }
+        })
+
+        if (!apiResponse.ok) {
+          return NextResponse.json({ error: 'Failed to fetch external API' }, { status: 500 })
+        }
+
+        const apiData = await apiResponse.json()
+        const fixture = apiData.response?.[0]
+
+        if (!fixture) {
+          return NextResponse.json({ error: 'No fixture data found' }, { status: 404 })
+        }
+
+        homeScore = toInt(fixture.goals?.home ?? fixture.scores?.home ?? fixture.score?.home)
+        awayScore = toInt(fixture.goals?.away ?? fixture.scores?.away ?? fixture.score?.away)
+        const halftimeHomeRaw = fixture.score?.halftime?.home ?? fixture.scores?.halftime?.home ?? null
+        const halftimeAwayRaw = fixture.score?.halftime?.away ?? fixture.scores?.halftime?.away ?? null
+        halftimeHomeScore = toInt(halftimeHomeRaw) ?? halftimeHomeScore
+        halftimeAwayScore = toInt(halftimeAwayRaw) ?? halftimeAwayScore
+
+        const nextMetadata = {
+          ...currentMetadata,
+          match_details: {
+            ...currentMatchDetails,
+            halftime_home_score: halftimeHomeScore,
+            halftime_away_score: halftimeAwayScore,
+            updated_at: new Date().toISOString(),
+          },
+        }
+
+        const rawStatus = fixture.fixture?.status?.short ?? fixture.status?.short ?? ''
+        const newEventStatus = ['FT', 'AOT', 'FIN'].includes(rawStatus) ? 'finished'
+          : rawStatus === 'NS' ? 'scheduled' : 'live'
+
+        await supabase
+          .from('events')
+          .update({ home_score: homeScore, away_score: awayScore, status: newEventStatus, metadata: nextMetadata })
+          .eq('id', event_id)
       }
-
-      const apiResponse = await fetch(apiUrl, {
-        headers: { "x-apisports-key": API_FOOTBALL_KEY! },
-        next: { revalidate: 0 }
-      })
-
-      if (!apiResponse.ok) {
-        return NextResponse.json({ error: 'Failed to fetch external API' }, { status: 500 })
-      }
-
-      const apiData = await apiResponse.json()
-      const fixture = apiData.response?.[0]
-
-      if (!fixture) {
-        return NextResponse.json({ error: 'No fixture data found' }, { status: 404 })
-      }
-
-      homeScore = toInt(fixture.goals?.home ?? fixture.scores?.home ?? fixture.score?.home)
-      awayScore = toInt(fixture.goals?.away ?? fixture.scores?.away ?? fixture.score?.away)
-      const halftimeHomeRaw = fixture.score?.halftime?.home ?? fixture.scores?.halftime?.home ?? null
-      const halftimeAwayRaw = fixture.score?.halftime?.away ?? fixture.scores?.halftime?.away ?? null
-      halftimeHomeScore = toInt(halftimeHomeRaw) ?? halftimeHomeScore
-      halftimeAwayScore = toInt(halftimeAwayRaw) ?? halftimeAwayScore
-
-      const nextMetadata = {
-        ...currentMetadata,
-        match_details: {
-          ...currentMatchDetails,
-          halftime_home_score: halftimeHomeScore,
-          halftime_away_score: halftimeAwayScore,
-          updated_at: new Date().toISOString(),
-        },
-      }
-
-      const rawStatus = fixture.fixture?.status?.short ?? fixture.status?.short ?? ''
-      const newEventStatus = ['FT', 'AOT', 'FIN'].includes(rawStatus) ? 'finished'
-        : rawStatus === 'NS' ? 'scheduled' : 'live'
-
-      await supabase
-        .from('events')
-        .update({ home_score: homeScore, away_score: awayScore, status: newEventStatus, metadata: nextMetadata })
-        .eq('id', event_id)
     }
 
     if (needsFirstScorerData && sportPrefix === 'football' && externalNumericId) {
