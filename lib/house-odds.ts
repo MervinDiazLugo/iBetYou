@@ -2,11 +2,12 @@ const HOUSE_EDGE = 1.10
 const MAX_EXACT_SCORE_ODDS = 150
 const BASEBALL_EXACT_SCORE_ODDS = 15.0
 
-// Favorite-longshot bias research (Griffith 1949, Cain/Law/Peel 2000, 70+ studies):
-// Bettors at >5x odds lose ~15% vs ~2% at <1.66x. The bias is structural — bettors
-// chase longshots regardless of price, so we can cap underdog odds without losing action.
-// Cap at 4.0x keeps us in line with William Hill while halving variance from outlier upsets.
-const MAX_DIRECT_ODDS = 4.0
+// Favorite-longshot bias (Griffith 1949, Cain/Law/Peel 2000, 70+ studies):
+// Bettors at >5x odds lose ~15% vs ~2% at <1.66x — they chase longshots regardless of price.
+// Cap HOME/AWAY at 4.0x: reduces variance on upset wins without losing underdog action.
+// DRAW is NOT capped: research shows bettors underestimate draw probability (opposite bias),
+// so draws are already margin-friendly; artificially capping them would be too visible.
+const MAX_TEAM_ODDS = 4.0
 
 export const MAX_DIRECT_EXPOSURE = 500_000
 export const MAX_EXACT_EXPOSURE = 200_000
@@ -41,11 +42,12 @@ export function calcDirectOdds(percent: PredictionPercent): HouseOddsResult | nu
   if (!Number.isFinite(home) || !Number.isFinite(away) || home <= 0 || away <= 0) return null
   if (draw !== undefined && !Number.isFinite(draw)) return null
 
-  const cap = (odds: number) => parseFloat(Math.min(odds, MAX_DIRECT_ODDS).toFixed(4))
+  const capTeam = (odds: number) => parseFloat(Math.min(odds, MAX_TEAM_ODDS).toFixed(4))
+  const raw = (odds: number) => parseFloat(odds.toFixed(4))
   return {
-    home: cap(1 / (home * HOUSE_EDGE)),
-    away: cap(1 / (away * HOUSE_EDGE)),
-    ...(draw !== undefined ? { draw: cap(1 / (draw * HOUSE_EDGE)) } : {}),
+    home: capTeam(1 / (home * HOUSE_EDGE)),
+    away: capTeam(1 / (away * HOUSE_EDGE)),
+    ...(draw !== undefined ? { draw: raw(1 / (draw * HOUSE_EDGE)) } : {}),
   }
 }
 
