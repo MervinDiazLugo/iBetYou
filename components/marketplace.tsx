@@ -268,7 +268,7 @@ function HomeContent() {
       const userParam = user ? `&user_id=${user.id}` : ""
       const freshHeaders: HeadersInit = {}
       if (sessionTokenRef.current) freshHeaders.Authorization = `Bearer ${sessionTokenRef.current}`
-      fetch(`/api/bets?limit=50${userParam}${sportParam}`, { headers: freshHeaders })
+      fetch(`/api/bets?limit=50${userParam}${sportParam}&mode=${mode}`, { headers: freshHeaders })
         .then(r => r.json()).then(data => setBets(data.bets || [])).catch(() => {})
     } catch (err: any) {
       showToast(err.message || "Error al tomar la predicción", "error")
@@ -308,11 +308,11 @@ function HomeContent() {
           ] = await Promise.all([
             fetch(`/api/wallet?user_id=${authUser.id}`, { headers: authHeaders }),
             fetch(`/api/iby/wallet`, { headers: authHeaders }),
-            fetch(`/api/bets?user_id=${authUser.id}&limit=50`, { headers: authHeaders }),
-            fetch(`/api/bets?type=my_open&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
-            fetch(`/api/bets?type=my_created_taken&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
-            fetch(`/api/bets?type=my_taken&user_id=${authUser.id}&limit=10`, { headers: authHeaders }),
-            fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=50`, { headers: authHeaders }),
+            fetch(`/api/bets?user_id=${authUser.id}&limit=50&mode=${mode}`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_open&user_id=${authUser.id}&limit=10&mode=${mode}`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_created_taken&user_id=${authUser.id}&limit=10&mode=${mode}`, { headers: authHeaders }),
+            fetch(`/api/bets?type=my_taken&user_id=${authUser.id}&limit=10&mode=${mode}`, { headers: authHeaders }),
+            fetch(`/api/bets?type=taken&user_id=${authUser.id}&limit=50&mode=${mode}`, { headers: authHeaders }),
           ])
 
           if (walletRes.ok && isMounted) {
@@ -362,8 +362,8 @@ function HomeContent() {
         } else {
           // Public marketplace for anonymous users — both in parallel
           const [marketplaceRes, takenBetsRes] = await Promise.all([
-            fetch(`/api/bets?limit=50`),
-            fetch(`/api/bets?type=taken&limit=50`),
+            fetch(`/api/bets?limit=50&mode=${mode}`),
+            fetch(`/api/bets?type=taken&limit=50&mode=${mode}`),
           ])
           const [marketplaceData, takenBetsData] = await Promise.all([
             marketplaceRes.json(),
@@ -559,7 +559,7 @@ function HomeContent() {
     return () => { supabase.removeChannel(channel) }
   }, [supabase])
 
-  // Re-fetch marketplace bets when sport filter changes (skip initial render)
+  // Re-fetch marketplace bets when sport filter or mode changes (skip initial render)
   useEffect(() => {
     if (!initialLoadDoneRef.current) return
     setLoadingBets(true)
@@ -567,12 +567,12 @@ function HomeContent() {
     const userParam = userIdRef.current ? `&user_id=${userIdRef.current}` : ''
     const headers: HeadersInit = {}
     if (sessionTokenRef.current) headers.Authorization = `Bearer ${sessionTokenRef.current}`
-    fetch(`/api/bets?limit=50${userParam}${sportParam}`, { headers })
+    fetch(`/api/bets?limit=50${userParam}${sportParam}&mode=${mode}`, { headers })
       .then(r => r.json())
       .then(data => setBets(data.bets || []))
       .catch(() => {})
       .finally(() => setLoadingBets(false))
-  }, [selectedSport])
+  }, [selectedSport, mode])
 
   const matchesMarketplaceFilters = useCallback((bet: BetWithDetails) => {
     const matchesSearch =

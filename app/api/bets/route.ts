@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
   const userId = searchParams.get('user_id')
   const limit = parseInt(searchParams.get('limit') || '20')
   const sport = searchParams.get('sport')
+  const modeParam = searchParams.get('mode') // 'fantasy' | 'real'
 
   // Public marketplace reads (safe):
   // - default listing -> open bets
@@ -104,6 +105,10 @@ export async function GET(request: NextRequest) {
 
     if (sport && sport !== 'all') {
       bets = bets.filter((bet: any) => bet.event?.sport === sport)
+    }
+
+    if (modeParam === 'fantasy' || modeParam === 'real') {
+      bets = bets.filter((bet: any) => (bet.mode ?? 'fantasy') === modeParam)
     }
 
     return NextResponse.json({ bets })
