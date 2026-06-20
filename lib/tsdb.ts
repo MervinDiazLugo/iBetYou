@@ -220,6 +220,25 @@ export async function tsdbEventTimeline(idEvent: string): Promise<any[]> {
   return data.lookup || []
 }
 
+/** Count yellow cards from timeline (soccer) */
+export function extractYellowCards(
+  timeline: any[]
+): { home: number; away: number; total: number } {
+  let home = 0
+  let away = 0
+  for (const e of timeline || []) {
+    const type = (e.strTimeline || "").toLowerCase()
+    if (type === "yellow card") {
+      // strSide: "home" | "away" is the reliable field in TSDB V2 timeline
+      const side = (e.strSide || e.strTeamSide || "").toLowerCase()
+      if (side === "home") home++
+      else if (side === "away") away++
+      else home++ // fallback: count as home to avoid losing data
+    }
+  }
+  return { home, away, total: home + away }
+}
+
 /** Extract first goal scorer from timeline (soccer) */
 export function extractFirstScorer(
   timeline: any[]

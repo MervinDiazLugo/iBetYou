@@ -36,13 +36,14 @@ interface Event {
 }
 
 const betTypes = [
-  { id: "direct",       label: "Resultado",     icon: "🏆", desc: "¿Quién gana?" },
-  { id: "exact_score",  label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
-  { id: "run_line",     label: "Run Line",      icon: "⚡", desc: "±1.5 carreras" },
-  { id: "total_runs",   label: "Total carreras", icon: "📊", desc: "Over / Under" },
-  { id: "score_margin", label: "Margen",        icon: "📏", desc: "Por cuántos puntos" },
-  { id: "first_scorer", label: "Primer gol",    icon: "🥅", desc: "Quién anota primero" },
-  { id: "half_time",    label: "Medio tiempo",  icon: "⏱️", desc: "Resultado 1er tiempo" },
+  { id: "direct",            label: "Resultado",      icon: "🏆", desc: "¿Quién gana?" },
+  { id: "exact_score",       label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
+  { id: "cards_over_under",  label: "Tarjetas",       icon: "🟨", desc: "Over/Under amarillas" },
+  { id: "run_line",          label: "Run Line",       icon: "⚡", desc: "±1.5 carreras" },
+  { id: "total_runs",        label: "Total carreras", icon: "📊", desc: "Over / Under" },
+  { id: "score_margin",      label: "Margen",         icon: "📏", desc: "Por cuántos puntos" },
+  { id: "first_scorer",      label: "Primer gol",     icon: "🥅", desc: "Quién anota primero" },
+  { id: "half_time",         label: "Medio tiempo",   icon: "⏱️", desc: "Resultado 1er tiempo" },
 ]
 
 const sports = [
@@ -57,6 +58,19 @@ function getAvailableBetTypes(sport: string) {
   if (sport === "baseball") return betTypes.filter((t) => ["direct", "run_line", "total_runs"].includes(t.id))
   return betTypes.filter((t) => t.id === "direct")
 }
+
+const CARDS_OPTIONS = [
+  { id: "over_1.5",  label: "Más de 1.5",  value: "over_1.5" },
+  { id: "under_1.5", label: "Menos de 1.5", value: "under_1.5" },
+  { id: "over_2.5",  label: "Más de 2.5",  value: "over_2.5" },
+  { id: "under_2.5", label: "Menos de 2.5", value: "under_2.5" },
+  { id: "over_3.5",  label: "Más de 3.5",  value: "over_3.5" },
+  { id: "under_3.5", label: "Menos de 3.5", value: "under_3.5" },
+  { id: "over_4.5",  label: "Más de 4.5",  value: "over_4.5" },
+  { id: "under_4.5", label: "Menos de 4.5", value: "under_4.5" },
+  { id: "over_5.5",  label: "Más de 5.5",  value: "over_5.5" },
+  { id: "under_5.5", label: "Menos de 5.5", value: "under_5.5" },
+]
 
 interface CreateBetFormProps {
   onClose: () => void
@@ -313,6 +327,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         }
         options.push({ id: "away_win", label: selectedEvent.away_team, value: selectedEvent.away_team, logo: selectedEvent.away_logo ?? null })
         return options
+      case "cards_over_under":
+        return CARDS_OPTIONS
       case "exact_score":
         return [
           { id: "1-0", label: "1-0", value: "1-0" },
@@ -650,6 +666,11 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 <span className="w-1 h-4 rounded-full bg-primary inline-block" />
                 Tu Selección
               </label>
+              {betType === "cards_over_under" && (
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
+                  🟨 Predicción al <strong>total de tarjetas amarillas</strong> en el partido (ambos equipos). Las rojas no cuentan. Ej: <em>Más de 3.5</em> = el partido debe tener 4 o más amarillas.
+                </p>
+              )}
               {betType === "total_runs" && (
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded-md px-3 py-2">
                   📊 Predicción al <strong>total de carreras sumadas entre los dos equipos</strong>. Ej: si el marcador es {selectedEvent?.home_team} 5 – {selectedEvent?.away_team} 3, hay <strong>8 carreras totales</strong> en el partido.
@@ -708,7 +729,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                   </div>
                 </div>
               ) : (
-                <div className={`grid gap-2 ${["score_margin", "total_runs"].includes(betType) ? "grid-cols-2" : "grid-cols-3"}`}>
+                <div className={`grid gap-2 ${["score_margin", "total_runs", "cards_over_under"].includes(betType) ? "grid-cols-2" : "grid-cols-3"}`}>
                   {getBetOptions().map((option) => {
                     const sub = (option as any).sublabel as string | undefined
                     const logo = (option as any).logo as string | null | undefined

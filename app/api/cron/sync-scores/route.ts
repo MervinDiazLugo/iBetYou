@@ -11,6 +11,7 @@ import {
   tsdbLookupEvent,
   tsdbEventTimeline,
   extractFirstScorer,
+  extractYellowCards,
 } from "@/lib/tsdb"
 
 const CRON_SECRET = process.env.CRON_SECRET
@@ -59,6 +60,7 @@ export async function GET(request: NextRequest) {
     status: string
     metadata: any
     hasFirstScorer: boolean
+    hasCardsOverUnder: boolean
   }>()
 
   for (const bet of activeBets || []) {
@@ -71,9 +73,11 @@ export async function GET(request: NextRequest) {
     if (startMs + WINDOW_MAX_MS < now) continue  // too old (> 8h ago)
 
     const existing = eventMap.get(event.id)
+    const betType = (bet as any).bet_type
     eventMap.set(event.id, {
       ...event,
-      hasFirstScorer: existing?.hasFirstScorer || (bet as any).bet_type === "first_scorer",
+      hasFirstScorer: existing?.hasFirstScorer || betType === "first_scorer",
+      hasCardsOverUnder: existing?.hasCardsOverUnder || betType === "cards_over_under",
     })
   }
 
@@ -125,7 +129,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── 3. For events in window NOT found in livescore, fetch individually ───
-  const justFinished: Array<{ id: number; external_id: string; hasFirstScorer: boolean; sport: string }> = []
+  const justFinished: Array<{ id: number; external_id: string; hasFirstScorer: boolean; hasCardsOverUnder: boolean; sport: string }> = []
   const justPostponed: number[] = []
   let updated = 0
 
@@ -182,7 +186,7 @@ export async function GET(request: NextRequest) {
       updated++
 
       if (scoreData.status === "finished") {
-        justFinished.push({ id: event.id, external_id: event.external_id, hasFirstScorer: event.hasFirstScorer, sport: event.sport })
+        justFinished.push({ id: event.id, external_id: event.external_id, hasFirstScorer: event.hasFirstScorer, hasCardsOverUnder: event.hasCardsOverUnder, sport: event.sport })
       }
       if (scoreData.status === "postponed") {
         justPostponed.push(event.id)
@@ -190,24 +194,35 @@ export async function GET(request: NextRequest) {
     })
   )
 
-  // ── 4. Fetch first_scorer timeline for finished football events ──────────
+  // ── 4. Fetch timeline for finished football events (first_scorer + cards) ──
   for (const ev of justFinished) {
-    if (!ev.hasFirstScorer || ev.sport !== "football") continue
+    const needsTimeline = ev.sport === "football" && (ev.hasFirstScorer || ev.hasCardsOverUnder)
+    if (!needsTimeline) continue
 
     const idEvent = ev.external_id.replace("tsdb_", "")
     try {
       const timeline = await tsdbEventTimeline(idEvent)
       apiCalls++
-      const firstGoal = extractFirstScorer(timeline)
 
-      if (firstGoal) {
-        const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
-        const md = eventRow?.metadata || {}
-        const matchDetails = { ...(md.match_details || {}), first_scorer: firstGoal }
-        await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
+      const { data: eventRow } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+      const md = eventRow?.metadata || {}
+      const matchDetails = { ...(md.match_details || {}) }
+
+      if (ev.hasFirstScorer) {
+        const firstGoal = extractFirstScorer(timeline)
+        if (firstGoal) matchDetails.first_scorer = firstGoal
       }
+
+      if (ev.hasCardsOverUnder) {
+        const cards = extractYellowCards(timeline)
+        matchDetails.yellow_cards_home = cards.home
+        matchDetails.yellow_cards_away = cards.away
+        matchDetails.yellow_cards_total = cards.total
+      }
+
+      await supabase.from("events").update({ metadata: { ...md, match_details: matchDetails } }).eq("id", ev.id)
     } catch (e: any) {
-      apiErrors.push(`first_scorer/${ev.external_id}: ${e.message}`)
+      apiErrors.push(`timeline/${ev.external_id}: ${e.message}`)
     }
   }
 
@@ -239,12 +254,12 @@ export async function GET(request: NextRequest) {
     .from("bets")
     .select("bet_type, event:events!event_id(id, external_id, sport, status, metadata, home_score, away_score)")
     .in("status", ["taken", "disputed"])
-    .in("bet_type", ["first_scorer", "half_time"])
+    .in("bet_type", ["first_scorer", "half_time", "cards_over_under"])
 
   const needsMetaMap = new Map<number, {
     id: number; external_id: string; sport: string; metadata: any
     home_score: number; away_score: number
-    needsFirstScorer: boolean; needsHalfTime: boolean
+    needsFirstScorer: boolean; needsHalfTime: boolean; needsCards: boolean
   }>()
 
   for (const bet of pendingMetaBets || []) {
@@ -256,14 +271,16 @@ export async function GET(request: NextRequest) {
     const md = event.metadata?.match_details
     const missingFirstScorer = betType === "first_scorer" && !md?.first_scorer?.team
     const missingHalfTime = betType === "half_time" && md?.halftime_home_score == null
+    const missingCards = betType === "cards_over_under" && md?.yellow_cards_total == null
 
-    if (!missingFirstScorer && !missingHalfTime) continue
+    if (!missingFirstScorer && !missingHalfTime && !missingCards) continue
 
     const existing = needsMetaMap.get(event.id)
     needsMetaMap.set(event.id, {
       ...event,
       needsFirstScorer: !!(existing?.needsFirstScorer || missingFirstScorer),
       needsHalfTime: !!(existing?.needsHalfTime || missingHalfTime),
+      needsCards: !!(existing?.needsCards || missingCards),
     })
   }
 
@@ -279,12 +296,21 @@ export async function GET(request: NextRequest) {
       const matchDetails = { ...(md.match_details || {}) }
       let updated = false
 
-      if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
+      const needsTimeline = ev.needsFirstScorer || ev.needsCards
+      if (needsTimeline) {
         const timeline = await tsdbEventTimeline(idEvent)
         apiCalls++
-        const firstGoal = extractFirstScorer(timeline)
-        if (firstGoal) {
-          matchDetails.first_scorer = firstGoal
+
+        if (ev.needsFirstScorer && ((ev.home_score || 0) + (ev.away_score || 0)) > 0) {
+          const firstGoal = extractFirstScorer(timeline)
+          if (firstGoal) { matchDetails.first_scorer = firstGoal; updated = true }
+        }
+
+        if (ev.needsCards) {
+          const cards = extractYellowCards(timeline)
+          matchDetails.yellow_cards_home = cards.home
+          matchDetails.yellow_cards_away = cards.away
+          matchDetails.yellow_cards_total = cards.total
           updated = true
         }
       }

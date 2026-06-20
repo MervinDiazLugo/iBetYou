@@ -7,6 +7,7 @@ import { calculateTotalPrize } from "@/lib/bet-resolution"
 import { updateWageringProgress } from "@/lib/referrals"
 import { payoutToMode, tokenTypeForMode } from "@/lib/wallet-utils"
 import { houseWalletCredit } from "@/lib/house-wallet"
+import { tsdbEventTimeline, extractYellowCards } from "@/lib/tsdb"
 
 const FOOTBALL_URL = process.env.API_FOOTBALL_URL || "https://v3.football.api-sports.io"
 const BASEBALL_URL = process.env.API_BASEBALL_URL || "https://v1.baseball.api-sports.io"
@@ -352,9 +353,34 @@ function resolveScoreMargin(
   }
 }
 
+// ─── cards_over_under ─────────────────────────────────────────────────────────
+
+function resolveCardsOverUnder(
+  creatorSelection: string,
+  event: { metadata?: any },
+  bet: { creator_id: string; acceptor_id: string }
+): { winnerId: string; reason: string } | null {
+  const totalCards = event.metadata?.match_details?.yellow_cards_total
+  if (totalCards === null || totalCards === undefined) return null
+
+  // selection format: "over_2.5" | "under_3.5"
+  const m = creatorSelection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+  if (!m) return null
+
+  const direction = m[1]
+  const threshold = Number(m[2])
+
+  const creatorWins = direction === "over" ? totalCards > threshold : totalCards < threshold
+
+  return {
+    winnerId: creatorWins ? bet.creator_id : bet.acceptor_id,
+    reason: `cards_over_under: selección "${creatorSelection}", tarjetas amarillas totales: ${totalCards}`,
+  }
+}
+
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -646,6 +672,28 @@ export async function POST(request: NextRequest) {
           } catch (_) { /* proceed without first_scorer, will skip */ }
         }
         resolution = resolveFirstScorer(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "cards_over_under") {
+        // Fetch yellow cards on-demand if missing from metadata
+        const hasCardsMeta = eventRow.metadata?.match_details?.yellow_cards_total != null
+        const externalId: string = eventRow.external_id || ""
+        if (!hasCardsMeta && externalId.startsWith("tsdb_")) {
+          try {
+            const idEvent = externalId.replace("tsdb_", "")
+            const timeline = await tsdbEventTimeline(idEvent)
+            const cards = extractYellowCards(timeline)
+            const md = eventRow.metadata || {}
+            const matchDetails = {
+              ...(md.match_details || {}),
+              yellow_cards_home: cards.home,
+              yellow_cards_away: cards.away,
+              yellow_cards_total: cards.total,
+            }
+            const updatedMetadata = { ...md, match_details: matchDetails }
+            await supabase.from("events").update({ metadata: updatedMetadata }).eq("id", eventRow.id)
+            eventRow.metadata = updatedMetadata
+          } catch (_) { /* proceed, resolver will return null and skip */ }
+        }
+        resolution = resolveCardsOverUnder(creatorSelection, eventRow, betForResolver)
       }
 
       if (!resolution) {

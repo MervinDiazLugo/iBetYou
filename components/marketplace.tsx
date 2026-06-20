@@ -78,8 +78,9 @@ const TOTAL_RUNS_OPTIONS = [
 
 function getHouseBetTypes(sport: string): Array<{ id: string; label: string; icon: string; desc: string }> {
   if (sport === "football") return [
-    { id: "direct",      label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
-    { id: "exact_score", label: "Marcador exacto",  icon: "🎯", desc: "Score exacto" },
+    { id: "direct",           label: "Resultado",       icon: "🏆", desc: "¿Quién gana?" },
+    { id: "exact_score",      label: "Marcador exacto", icon: "🎯", desc: "Score exacto" },
+    { id: "cards_over_under", label: "Tarjetas",        icon: "🟨", desc: "Over/Under amarillas" },
   ]
   if (sport === "basketball") return [
     { id: "direct",       label: "Resultado", icon: "🏆", desc: "¿Quién gana?" },
@@ -698,6 +699,7 @@ function HomeContent() {
     }
     if (houseBetType === "total_runs") return TOTAL_RUNS_OPTIONS.find(o => o.value === houseBetSelection)?.odds ?? null
     if (houseBetType === "exact_score") return houseBetSelectionOdds
+    if (houseBetType === "cards_over_under") return houseBetSelectionOdds
     return null
   }
 
@@ -1987,6 +1989,49 @@ function HomeContent() {
                           ? "calculando..."
                           : "ingresa el marcador"}
                   </p>
+                </div>
+              )}
+              {/* Cards over/under */}
+              {houseBetType === "cards_over_under" && (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                    🟨 Total de <strong>tarjetas amarillas</strong> en el partido (ambos equipos). Las rojas no cuentan.
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "over_1.5",  label: "Más de 1.5",   odds: 1.60 },
+                      { value: "under_1.5", label: "Menos de 1.5", odds: 2.10 },
+                      { value: "over_2.5",  label: "Más de 2.5",   odds: 1.80 },
+                      { value: "under_2.5", label: "Menos de 2.5", odds: 1.85 },
+                      { value: "over_3.5",  label: "Más de 3.5",   odds: 2.20 },
+                      { value: "under_3.5", label: "Menos de 3.5", odds: 1.60 },
+                      { value: "over_4.5",  label: "Más de 4.5",   odds: 3.00 },
+                      { value: "under_4.5", label: "Menos de 4.5", odds: 1.30 },
+                      { value: "over_5.5",  label: "Más de 5.5",   odds: 4.50 },
+                      { value: "under_5.5", label: "Menos de 5.5", odds: 1.15 },
+                    ].map(opt => {
+                      const isSelected = houseBetSelection === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
+                          className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
+                            isSelected
+                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                              : "border-border bg-muted/10 hover:border-primary/40"
+                          }`}
+                        >
+                          {isSelected && (
+                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                            </div>
+                          )}
+                          <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
+                          <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
+                        </button>
+                      )
+                    })}
+                  </div>
                 </div>
               )}
               {/* Score margin */}

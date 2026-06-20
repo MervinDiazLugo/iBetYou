@@ -2,7 +2,7 @@
 export const ACCEPT_WINDOW_MINUTES = 10
 
 // Bet types that must be placed strictly before the event starts (no tolerance window)
-export const PRE_MATCH_ONLY_BET_TYPES = new Set(['first_scorer', 'half_time'])
+export const PRE_MATCH_ONLY_BET_TYPES = new Set(['first_scorer', 'half_time', 'cards_over_under'])
 
 // Bet statuses that are neither resolved nor cancelled — still in play
 export const NON_FINAL_BET_STATUSES = [

@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     const sport = eventRow.sport as string
     let allowedBetTypes: string[]
     if (sport === "football") {
-      allowedBetTypes = ["direct", "exact_score"]
+      allowedBetTypes = ["direct", "exact_score", "cards_over_under"]
     } else if (sport === "basketball") {
       allowedBetTypes = ["direct", "score_margin"]
     } else if (sport === "baseball") {
