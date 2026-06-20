@@ -470,11 +470,11 @@ function HomeContent() {
         const res = await fetch(
           `/api/bets/house/odds?eventId=${houseBetModal.event.id}&betType=exact_score&selection=${encodeURIComponent(houseBetExactScore)}`
         )
-        if (res.ok) {
-          const json = await res.json()
-          setHouseBetSelectionOdds(Number(json.odds) || null)
-        }
-      } catch (_) {}
+        const json = await res.json()
+        setHouseBetSelectionOdds(res.ok && json.odds ? Number(json.odds) : -1)
+      } catch (_) {
+        setHouseBetSelectionOdds(-1)
+      }
     }, 600)
     return () => clearTimeout(timer)
   }, [houseBetExactScore, houseBetType, houseBetModal])
@@ -1792,7 +1792,7 @@ function HomeContent() {
         const activeOdds = getActiveHouseOdds()
         const canSubmit = !houseBetSubmitting && Number(houseBetAmount) > 0 && (
           houseBetType === "exact_score"
-            ? /^\d+[-:]\d+$/.test(houseBetExactScore) && houseBetSelectionOdds !== null
+            ? /^\d+[-:]\d+$/.test(houseBetExactScore) && houseBetSelectionOdds !== null && houseBetSelectionOdds > 0
             : houseBetSelection !== null
         )
         return (
@@ -1979,11 +1979,13 @@ function HomeContent() {
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground text-center">
-                    Cuota: {houseBetSelectionOdds !== null
+                    Cuota: {houseBetSelectionOdds !== null && houseBetSelectionOdds > 0
                       ? <span className="text-yellow-500 font-semibold">{houseBetSelectionOdds}x</span>
-                      : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore)
-                        ? "calculando..."
-                        : "ingresa el marcador"}
+                      : houseBetSelectionOdds === -1
+                        ? <span className="text-red-400">No disponible para este marcador</span>
+                        : houseBetExactScore && /^\d+[-:]\d+$/.test(houseBetExactScore)
+                          ? "calculando..."
+                          : "ingresa el marcador"}
                   </p>
                 </div>
               )}

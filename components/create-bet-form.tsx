@@ -80,12 +80,17 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [betType, setBetType] = useState("direct")
   const [betSelection, setBetSelection] = useState<string>("")
-  const [exactScoreHome, setExactScoreHome] = useState(0)
-  const [exactScoreAway, setExactScoreAway] = useState(0)
+  const [exactScoreHome, setExactScoreHome] = useState("0")
+  const [exactScoreAway, setExactScoreAway] = useState("0")
   const [amount, setAmount] = useState(() => {
     if (typeof window === "undefined") return 10
     const saved = Number(localStorage.getItem("lastBetAmount"))
     return Number.isFinite(saved) && saved > 0 ? saved : 10
+  })
+  const [amountStr, setAmountStr] = useState(() => {
+    if (typeof window === "undefined") return "10"
+    const saved = Number(localStorage.getItem("lastBetAmount"))
+    return String(Number.isFinite(saved) && saved > 0 ? saved : 10)
   })
   const [multiplier, setMultiplier] = useState(1)
   const [feeIncluded, setFeeIncluded] = useState(true)
@@ -135,8 +140,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
   useEffect(() => {
     if (!balanceLoaded) return
     setAmount((prev) => {
-      const normalized = Math.round(prev)
-      return Math.min(Math.max(normalized, 1), maxAmountInteger)
+      const normalized = Math.min(Math.max(Math.round(prev), 1), maxAmountInteger)
+      setAmountStr(String(normalized))
+      return normalized
     })
   }, [maxAmountInteger, balanceLoaded])
 
@@ -207,8 +213,9 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           setSelectedEvent(bet.event)
           setBetType(bet.bet_type)
           setAmount(bet.amount)
+          setAmountStr(String(bet.amount))
           setMultiplier(bet.multiplier || 1)
-          
+
           // Parse selection
           try {
             const sel = JSON.parse(bet.selection)
@@ -218,10 +225,10 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               setBetSelection(bet.creator_selection)
             }
             if (sel.exactScoreHome !== undefined) {
-              setExactScoreHome(sel.exactScoreHome)
+              setExactScoreHome(String(sel.exactScoreHome))
             }
             if (sel.exactScoreAway !== undefined) {
-              setExactScoreAway(sel.exactScoreAway)
+              setExactScoreAway(String(sel.exactScoreAway))
             }
           } catch {
             if (bet.creator_selection) {
@@ -372,12 +379,14 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
 
     let finalSelection = betSelection
     if (betType === "exact_score") {
-      finalSelection = `${exactScoreHome}-${exactScoreAway}`
-      if (exactScoreHome < 0 || exactScoreAway < 0) {
+      const homeNum = Number(exactScoreHome)
+      const awayNum = Number(exactScoreAway)
+      if (!Number.isFinite(homeNum) || !Number.isFinite(awayNum) || homeNum < 0 || awayNum < 0) {
         setError("Ingresa un resultado válido")
         setLoading(false)
         return
       }
+      finalSelection = `${homeNum}-${awayNum}`
     }
 
     if (!authUser || !selectedEvent || !finalSelection) {
@@ -664,11 +673,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                     )}
                     <p className="font-semibold mb-2 text-sm">{selectedEvent.home_team}</p>
                     <Input
-                      type="number"
-                      min={0}
-                      max={20}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={exactScoreHome}
-                      onChange={(e) => setExactScoreHome(Number(e.target.value))}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9]/g, "")
+                        setExactScoreHome(v)
+                      }}
+                      onBlur={() => {
+                        if (exactScoreHome === "") setExactScoreHome("0")
+                      }}
                       className="w-20 text-center"
                     />
                   </div>
@@ -679,11 +693,16 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                     )}
                     <p className="font-semibold mb-2 text-sm">{selectedEvent.away_team}</p>
                     <Input
-                      type="number"
-                      min={0}
-                      max={20}
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       value={exactScoreAway}
-                      onChange={(e) => setExactScoreAway(Number(e.target.value))}
+                      onChange={(e) => {
+                        const v = e.target.value.replace(/[^0-9]/g, "")
+                        setExactScoreAway(v)
+                      }}
+                      onBlur={() => {
+                        if (exactScoreAway === "") setExactScoreAway("0")
+                      }}
                       className="w-20 text-center"
                     />
                   </div>
@@ -761,7 +780,11 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 max={maxAmountInteger}
                 step={1}
                 value={amount}
-                onChange={(e) => setAmount(Number(e.target.value))}
+                onChange={(e) => {
+                  const v = Number(e.target.value)
+                  setAmount(v)
+                  setAmountStr(String(v))
+                }}
                 className="w-full accent-yellow-500"
                 style={{ accentColor: "#eab308" }}
                 aria-label="Monto de predicción"
@@ -771,13 +794,22 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                 <span>{formatPesos(maxAmountInteger)}</span>
               </div>
               <input
-                type="number"
-                min={1}
-                max={maxAmountInteger}
-                value={amount}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={amountStr}
                 onChange={(e) => {
-                  const v = Number(e.target.value)
-                  if (Number.isFinite(v) && v >= 1) setAmount(Math.min(v, maxAmountInteger))
+                  const raw = e.target.value.replace(/[^0-9]/g, "")
+                  setAmountStr(raw)
+                  const v = Number(raw)
+                  if (raw !== "" && Number.isFinite(v) && v >= 1) {
+                    setAmount(Math.min(v, maxAmountInteger))
+                  }
+                }}
+                onBlur={() => {
+                  const v = Number(amountStr)
+                  const clamped = Math.min(Math.max(Number.isFinite(v) ? v : 1, 1), maxAmountInteger)
+                  setAmount(clamped)
+                  setAmountStr(String(clamped))
                 }}
                 className="mt-2 w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
               />

@@ -1,6 +1,6 @@
 ﻿"use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -42,7 +42,7 @@ const avatars = [
 
 export default function ProfilePage() {
   const router = useRouter()
-  const supabase = createBrowserSupabaseClient()
+  const supabase = useMemo(() => createBrowserSupabaseClient(), [])
   
   const [user, setUser] = useState<{ email: string; nickname: string } | null>(null)
   const [balance, setBalance] = useState<{ fantasy: number; real: number }>({ fantasy: 0, real: 0 })
@@ -105,7 +105,7 @@ export default function ProfilePage() {
     }
 
     loadData()
-  }, [router, supabase])
+  }, [router, supabase]) // supabase is stable via useMemo — no re-run loop
 
   const handleSaveCountry = async () => {
     if (!selectedCountry) return
@@ -148,6 +148,17 @@ export default function ProfilePage() {
   }
 
   const { level, badge } = getLevel()
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center py-20">
+          <p className="text-muted-foreground">Cargando perfil...</p>
+        </div>
+      </div>
+    )
+  }
 
   if (!user || !profile) {
     return null

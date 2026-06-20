@@ -78,7 +78,8 @@ export function calcExactScoreOdds(
   const lambdaAway = parseFloat(metadata?.predictions?.away_goals_avg ?? "0")
 
   if (!Number.isFinite(lambdaHome) || !Number.isFinite(lambdaAway) || lambdaHome <= 0 || lambdaAway <= 0) {
-    return null
+    // No goal-average data → can't run Poisson model, offer fixed max multiplier
+    return MAX_EXACT_SCORE_ODDS
   }
 
   const prob = poissonPmf(score.home, lambdaHome) * poissonPmf(score.away, lambdaAway)
