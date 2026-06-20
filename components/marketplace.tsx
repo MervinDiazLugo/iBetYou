@@ -66,28 +66,23 @@ const SCORE_MARGIN_ODDS_MAP: Record<string, number> = {
 }
 
 const TOTAL_RUNS_OPTIONS = [
-  { value: "over_7",   label: "Más de 7",    odds: 1.40 },
-  { value: "under_7",  label: "Menos de 7",  odds: 2.60 },
-  { value: "over_8",   label: "Más de 8",    odds: 1.65 },
-  { value: "under_8",  label: "Menos de 8",  odds: 2.02 },
-  { value: "over_9",   label: "Más de 9",    odds: 2.27 },
-  { value: "under_9",  label: "Menos de 9",  odds: 1.52 },
-  { value: "over_10",  label: "Más de 10",   odds: 3.03 },
-  { value: "under_10", label: "Menos de 10", odds: 1.30 },
+  { value: "over_7",   label: "8+ carreras", odds: 1.40 },
+  { value: "under_7",  label: "6 o menos",   odds: 2.60 },
+  { value: "over_8",   label: "9+ carreras", odds: 1.65 },
+  { value: "under_8",  label: "7 o menos",   odds: 2.02 },
+  { value: "over_9",   label: "10+ carreras",odds: 2.27 },
+  { value: "under_9",  label: "8 o menos",   odds: 1.52 },
+  { value: "over_10",  label: "11+ carreras",odds: 3.03 },
+  { value: "under_10", label: "9 o menos",   odds: 1.30 },
 ]
 
-// Goals over/under labels only — odds computed dynamically per event via calcGoalsOverUnderOdds
-const GOALS_OVER_UNDER_LABELS = [
-  { value: "over_0.5",  label: "Más de 0.5"  },
-  { value: "under_0.5", label: "Menos de 0.5" },
-  { value: "over_1.5",  label: "Más de 1.5"  },
-  { value: "under_1.5", label: "Menos de 1.5" },
-  { value: "over_2.5",  label: "Más de 2.5"  },
-  { value: "under_2.5", label: "Menos de 2.5" },
-  { value: "over_3.5",  label: "Más de 3.5"  },
-  { value: "under_3.5", label: "Menos de 3.5" },
-  { value: "over_4.5",  label: "Más de 4.5"  },
-  { value: "under_4.5", label: "Menos de 4.5" },
+// Goals over/under thresholds — odds computed dynamically per event via calcGoalsOverUnderOdds
+const GOALS_OVER_UNDER_ROWS = [
+  { over: "over_0.5", under: "under_0.5", overLabel: "1+ goles",      underLabel: "Sin goles"    },
+  { over: "over_1.5", under: "under_1.5", overLabel: "2+ goles",      underLabel: "Máx. 1 gol"  },
+  { over: "over_2.5", under: "under_2.5", overLabel: "3+ goles",      underLabel: "Máx. 2 goles" },
+  { over: "over_3.5", under: "under_3.5", overLabel: "4+ goles",      underLabel: "Máx. 3 goles" },
+  { over: "over_4.5", under: "under_4.5", overLabel: "5+ goles",      underLabel: "Máx. 4 goles" },
 ]
 
 const BOTH_TEAMS_SCORE_OPTIONS = [
@@ -101,42 +96,42 @@ const NRFI_YRFI_OPTIONS = [
 ]
 
 const TOTAL_HITS_HOUSE_OPTIONS = [
-  { value: "over_12.5",  label: "Más de 12.5",  odds: 1.05 },
-  { value: "under_12.5", label: "Menos de 12.5", odds: 5.00 },
-  { value: "over_14.5",  label: "Más de 14.5",  odds: 1.29 },
-  { value: "under_14.5", label: "Menos de 14.5", odds: 3.10 },
-  { value: "over_16.5",  label: "Más de 16.5",  odds: 1.87 },
-  { value: "under_16.5", label: "Menos de 16.5", odds: 1.78 },
-  { value: "over_18.5",  label: "Más de 18.5",  odds: 3.32 },
-  { value: "under_18.5", label: "Menos de 18.5", odds: 1.25 },
-  { value: "over_20.5",  label: "Más de 20.5",  odds: 5.00 },
-  { value: "under_20.5", label: "Menos de 20.5", odds: 1.05 },
+  { value: "over_12.5",  label: "13+ hits",  odds: 1.05 },
+  { value: "under_12.5", label: "Máx. 12",   odds: 5.00 },
+  { value: "over_14.5",  label: "15+ hits",  odds: 1.29 },
+  { value: "under_14.5", label: "Máx. 14",   odds: 3.10 },
+  { value: "over_16.5",  label: "17+ hits",  odds: 1.87 },
+  { value: "under_16.5", label: "Máx. 16",   odds: 1.78 },
+  { value: "over_18.5",  label: "19+ hits",  odds: 3.32 },
+  { value: "under_18.5", label: "Máx. 18",   odds: 1.25 },
+  { value: "over_20.5",  label: "21+ hits",  odds: 5.00 },
+  { value: "under_20.5", label: "Máx. 20",   odds: 1.05 },
 ]
 
 const TOTAL_POINTS_NBA_OPTIONS = [
-  { value: "over_210.5",  label: "Más de 210.5",  odds: 1.10 },
-  { value: "under_210.5", label: "Menos de 210.5", odds: 4.00 },
-  { value: "over_220.5",  label: "Más de 220.5",  odds: 1.31 },
-  { value: "under_220.5", label: "Menos de 220.5", odds: 2.98 },
-  { value: "over_230.5",  label: "Más de 230.5",  odds: 1.72 },
-  { value: "under_230.5", label: "Menos de 230.5", odds: 1.92 },
-  { value: "over_240.5",  label: "Más de 240.5",  odds: 2.60 },
-  { value: "under_240.5", label: "Menos de 240.5", odds: 1.40 },
-  { value: "over_250.5",  label: "Más de 250.5",  odds: 4.00 },
-  { value: "under_250.5", label: "Menos de 250.5", odds: 1.14 },
+  { value: "over_210.5",  label: "211+ pts",  odds: 1.10 },
+  { value: "under_210.5", label: "Máx. 210",  odds: 4.00 },
+  { value: "over_220.5",  label: "221+ pts",  odds: 1.31 },
+  { value: "under_220.5", label: "Máx. 220",  odds: 2.98 },
+  { value: "over_230.5",  label: "231+ pts",  odds: 1.72 },
+  { value: "under_230.5", label: "Máx. 230",  odds: 1.92 },
+  { value: "over_240.5",  label: "241+ pts",  odds: 2.60 },
+  { value: "under_240.5", label: "Máx. 240",  odds: 1.40 },
+  { value: "over_250.5",  label: "251+ pts",  odds: 4.00 },
+  { value: "under_250.5", label: "Máx. 250",  odds: 1.14 },
 ]
 
 const TOTAL_POINTS_EURO_OPTIONS = [
-  { value: "over_140.5",  label: "Más de 140.5",  odds: 1.10 },
-  { value: "under_140.5", label: "Menos de 140.5", odds: 4.00 },
-  { value: "over_150.5",  label: "Más de 150.5",  odds: 1.40 },
-  { value: "under_150.5", label: "Menos de 150.5", odds: 2.59 },
-  { value: "over_160.5",  label: "Más de 160.5",  odds: 2.18 },
-  { value: "under_160.5", label: "Menos de 160.5", odds: 1.56 },
-  { value: "over_170.5",  label: "Más de 170.5",  odds: 4.00 },
-  { value: "under_170.5", label: "Menos de 170.5", odds: 1.16 },
-  { value: "over_180.5",  label: "Más de 180.5",  odds: 4.00 },
-  { value: "under_180.5", label: "Menos de 180.5", odds: 1.05 },
+  { value: "over_140.5",  label: "141+ pts",  odds: 1.10 },
+  { value: "under_140.5", label: "Máx. 140",  odds: 4.00 },
+  { value: "over_150.5",  label: "151+ pts",  odds: 1.40 },
+  { value: "under_150.5", label: "Máx. 150",  odds: 2.59 },
+  { value: "over_160.5",  label: "161+ pts",  odds: 2.18 },
+  { value: "under_160.5", label: "Máx. 160",  odds: 1.56 },
+  { value: "over_170.5",  label: "171+ pts",  odds: 4.00 },
+  { value: "under_170.5", label: "Máx. 170",  odds: 1.16 },
+  { value: "over_180.5",  label: "181+ pts",  odds: 4.00 },
+  { value: "under_180.5", label: "Máx. 180",  odds: 1.05 },
 ]
 
 function getHouseBetTypes(sport: string): Array<{ id: string; label: string; icon: string; desc: string }> {
@@ -1949,7 +1944,7 @@ function HomeContent() {
                 )
               })()}
               {/* Bet type tabs */}
-              <div className={`grid gap-2 ${houseBetTypes.length <= 2 ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-4"}`}>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                 {houseBetTypes.map(bt => {
                   const isActive = houseBetType === bt.id
                   return (
@@ -1957,20 +1952,14 @@ function HomeContent() {
                       key={bt.id}
                       type="button"
                       onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetSelectionOdds(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
-                      className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all select-none ${
+                      className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all border select-none ${
                         isActive
-                          ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
-                          : "border-border bg-muted/10 hover:border-primary/40 hover:bg-muted/20"
+                          ? "border-primary bg-primary/15 text-primary shadow-sm shadow-primary/20"
+                          : "border-border bg-muted/10 text-muted-foreground hover:border-primary/40 hover:text-foreground"
                       }`}
                     >
-                      {isActive && (
-                        <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                          <span className="text-[9px] text-primary-foreground font-bold">✓</span>
-                        </div>
-                      )}
-                      <div className="text-xl mb-1">{bt.icon}</div>
-                      <div className={`text-xs font-bold leading-tight ${isActive ? "text-primary" : ""}`}>{bt.label}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{bt.desc}</div>
+                      <span className="text-sm leading-none">{bt.icon}</span>
+                      <span>{bt.label}</span>
                     </button>
                   )
                 })}
@@ -1993,7 +1982,9 @@ function HomeContent() {
                       const teamName = outcome === "home" ? houseBetModal.event.home_team
                         : outcome === "away" ? houseBetModal.event.away_team
                         : "Empate"
-                      const actionLabel = outcome === "draw" ? "Termina en empate" : `Gana ${teamName}`
+                      const logo = outcome === "home" ? houseBetModal.event.home_logo
+                        : outcome === "away" ? houseBetModal.event.away_logo
+                        : null
                       return (
                         <button
                           key={outcome}
@@ -2004,9 +1995,16 @@ function HomeContent() {
                               : "border-border hover:border-yellow-400"
                           }`}
                         >
+                          <div className="flex justify-center mb-1.5">
+                            {logo
+                              ? <Image src={logo} alt={teamName} width={28} height={28} className="object-contain" />
+                              : outcome !== "draw"
+                                ? <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-xs font-bold">{teamName.slice(0, 1)}</div>
+                                : <span className="text-xl leading-7">🤝</span>
+                            }
+                          </div>
                           <div className="text-[11px] font-semibold truncate leading-tight">{teamName}</div>
-                          <div className="text-[10px] text-muted-foreground mb-1 leading-tight">{actionLabel}</div>
-                          <div className="font-bold text-yellow-500">{oddsValue.toFixed(2)}x</div>
+                          <div className="font-bold text-yellow-500 mt-1">{oddsValue.toFixed(2)}x</div>
                         </button>
                       )
                     })}
@@ -2070,80 +2068,84 @@ function HomeContent() {
               {houseBetType === "cards_over_under" && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
-                    🟨 Total de <strong>tarjetas amarillas</strong> en el partido (ambos equipos). Las rojas no cuentan.
+                    🟨 <strong>Tarjetas amarillas</strong> totales — ambos equipos (rojas no cuentan)
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
                     {[
-                      { value: "over_1.5",  label: "Más de 1.5",   odds: 1.60 },
-                      { value: "under_1.5", label: "Menos de 1.5", odds: 2.10 },
-                      { value: "over_2.5",  label: "Más de 2.5",   odds: 1.80 },
-                      { value: "under_2.5", label: "Menos de 2.5", odds: 1.85 },
-                      { value: "over_3.5",  label: "Más de 3.5",   odds: 2.20 },
-                      { value: "under_3.5", label: "Menos de 3.5", odds: 1.60 },
-                      { value: "over_4.5",  label: "Más de 4.5",   odds: 3.00 },
-                      { value: "under_4.5", label: "Menos de 4.5", odds: 1.30 },
-                      { value: "over_5.5",  label: "Más de 5.5",   odds: 4.50 },
-                      { value: "under_5.5", label: "Menos de 5.5", odds: 1.15 },
-                    ].map(opt => {
-                      const isSelected = houseBetSelection === opt.value
-                      return (
+                      { over: "over_1.5", under: "under_1.5", overLabel: "2+ tarjetas", underLabel: "Máx. 1",  overOdds: 1.60, underOdds: 2.10 },
+                      { over: "over_2.5", under: "under_2.5", overLabel: "3+ tarjetas", underLabel: "Máx. 2",  overOdds: 1.80, underOdds: 1.85 },
+                      { over: "over_3.5", under: "under_3.5", overLabel: "4+ tarjetas", underLabel: "Máx. 3",  overOdds: 2.20, underOdds: 1.60 },
+                      { over: "over_4.5", under: "under_4.5", overLabel: "5+ tarjetas", underLabel: "Máx. 4",  overOdds: 3.00, underOdds: 1.30 },
+                      { over: "over_5.5", under: "under_5.5", overLabel: "6+ tarjetas", underLabel: "Máx. 5",  overOdds: 4.50, underOdds: 1.15 },
+                    ].map(row => (
+                      <div key={row.over} className="grid grid-cols-2 gap-1.5">
                         <button
-                          key={opt.value}
-                          onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
-                          className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
-                            isSelected
-                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
-                              : "border-border bg-muted/10 hover:border-primary/40"
+                          onClick={() => { setHouseBetSelection(row.over); setHouseBetSelectionOdds(row.overOdds) }}
+                          className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                            houseBetSelection === row.over
+                              ? "border-emerald-500 bg-emerald-500/15"
+                              : "border-border bg-muted/10 hover:border-emerald-500/40"
                           }`}
                         >
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
-                            </div>
-                          )}
-                          <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
-                          <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
+                          <span className={`text-sm font-bold ${houseBetSelection === row.over ? "text-emerald-400" : ""}`}>↑ {row.overLabel}</span>
+                          <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{row.overOdds}x</span>
                         </button>
-                      )
-                    })}
+                        <button
+                          onClick={() => { setHouseBetSelection(row.under); setHouseBetSelectionOdds(row.underOdds) }}
+                          className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                            houseBetSelection === row.under
+                              ? "border-red-500 bg-red-500/15"
+                              : "border-border bg-muted/10 hover:border-red-500/40"
+                          }`}
+                        >
+                          <span className={`text-sm font-bold ${houseBetSelection === row.under ? "text-red-400" : ""}`}>↓ {row.underLabel}</span>
+                          <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{row.underOdds}x</span>
+                        </button>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
               {/* Goals over/under — odds computed per-event via Poisson model */}
               {houseBetType === "goals_over_under" && (() => {
                 const eventMeta = houseBetModal?.event?.metadata as Record<string, any> | null
-                const goalOpts = GOALS_OVER_UNDER_LABELS.map(o => ({
-                  ...o,
-                  odds: calcGoalsOverUnderOdds(o.value, eventMeta) ?? 0,
-                })).filter(o => o.odds > 0)
+                const rows = GOALS_OVER_UNDER_ROWS.map(r => ({
+                  ...r,
+                  overOdds: calcGoalsOverUnderOdds(r.over, eventMeta) ?? 0,
+                  underOdds: calcGoalsOverUnderOdds(r.under, eventMeta) ?? 0,
+                })).filter(r => r.overOdds > 0)
                 return (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
-                      ⚽ Total de <strong>goles del partido</strong> (ambos equipos). Ej: <em>Más de 2.5</em> = el partido termina con 3+ goles.
+                      ⚽ <strong>Total de goles</strong> del partido — ambos equipos
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {goalOpts.map(opt => {
-                        const isSelected = houseBetSelection === opt.value
-                        return (
+                    <div className="space-y-1.5">
+                      {rows.map(row => (
+                        <div key={row.over} className="grid grid-cols-2 gap-1.5">
                           <button
-                            key={opt.value}
-                            onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
-                            className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
-                                : "border-border bg-muted/10 hover:border-primary/40"
+                            onClick={() => { setHouseBetSelection(row.over); setHouseBetSelectionOdds(row.overOdds) }}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === row.over
+                                ? "border-emerald-500 bg-emerald-500/15"
+                                : "border-border bg-muted/10 hover:border-emerald-500/40"
                             }`}
                           >
-                            {isSelected && (
-                              <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                                <span className="text-[9px] text-primary-foreground font-bold">✓</span>
-                              </div>
-                            )}
-                            <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
-                            <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds.toFixed(2)}x</p>
+                            <span className={`text-sm font-bold ${houseBetSelection === row.over ? "text-emerald-400" : ""}`}>↑ {row.overLabel}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{row.overOdds.toFixed(2)}x</span>
                           </button>
-                        )
-                      })}
+                          <button
+                            onClick={() => { setHouseBetSelection(row.under); setHouseBetSelectionOdds(row.underOdds) }}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === row.under
+                                ? "border-red-500 bg-red-500/15"
+                                : "border-border bg-muted/10 hover:border-red-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === row.under ? "text-red-400" : ""}`}>↓ {row.underLabel}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{row.underOdds.toFixed(2)}x</span>
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )
@@ -2184,6 +2186,9 @@ function HomeContent() {
               {houseBetType === "score_margin" && (
                 <div className="grid grid-cols-2 gap-2">
                   {SCORE_MARGIN_OPTIONS.map(opt => {
+                    const isHome = opt.value.startsWith("home_")
+                    const logo = isHome ? houseBetModal.event.home_logo : houseBetModal.event.away_logo
+                    const initials = (isHome ? houseBetModal.event.home_team : houseBetModal.event.away_team).slice(0, 1)
                     const label = opt.labelFn(houseBetModal.event.home_team, houseBetModal.event.away_team)
                     const odds = SCORE_MARGIN_ODDS_MAP[opt.value]
                     return (
@@ -2196,6 +2201,12 @@ function HomeContent() {
                             : "border-border hover:border-yellow-400"
                         }`}
                       >
+                        <div className="flex justify-center mb-1">
+                          {logo
+                            ? <Image src={logo} alt={label} width={20} height={20} className="object-contain" />
+                            : <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold">{initials}</div>
+                          }
+                        </div>
                         <div className="text-xs truncate">{label}</div>
                         <div className="font-bold text-yellow-500 text-sm">{odds.toFixed(2)}x</div>
                       </button>
@@ -2208,8 +2219,8 @@ function HomeContent() {
                 houseBetModal.runLineOdds ? (
                   <div className="grid grid-cols-2 gap-2">
                     {[
-                      { value: "home_rl", label: houseBetModal.event.home_team, sub: "Gana por 2+ carreras", odds: houseBetModal.runLineOdds.home_rl },
-                      { value: "away_rl", label: houseBetModal.event.away_team, sub: "Gana o pierde por 1", odds: houseBetModal.runLineOdds.away_rl },
+                      { value: "home_rl", label: houseBetModal.event.home_team, logo: houseBetModal.event.home_logo, sub: "Gana por 2+ carreras", odds: houseBetModal.runLineOdds.home_rl },
+                      { value: "away_rl", label: houseBetModal.event.away_team, logo: houseBetModal.event.away_logo, sub: "Gana o pierde por 1",  odds: houseBetModal.runLineOdds.away_rl },
                     ].map(opt => (
                       <button
                         key={opt.value}
@@ -2220,6 +2231,12 @@ function HomeContent() {
                             : "border-border hover:border-yellow-400"
                         }`}
                       >
+                        <div className="flex justify-center mb-1.5">
+                          {opt.logo
+                            ? <Image src={opt.logo} alt={opt.label} width={28} height={28} className="object-contain" />
+                            : <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center text-xs font-bold">{opt.label.slice(0, 1)}</div>
+                          }
+                        </div>
                         <div className="text-[11px] font-semibold truncate">{opt.label}</div>
                         <div className="text-[10px] text-muted-foreground mb-1">{opt.sub}</div>
                         <div className="font-bold text-yellow-500">{opt.odds.toFixed(2)}x</div>
@@ -2231,24 +2248,49 @@ function HomeContent() {
                 )
               )}
               {/* Total runs */}
-              {houseBetType === "total_runs" && (
-                <div className="grid grid-cols-2 gap-2">
-                  {TOTAL_RUNS_OPTIONS.map(opt => (
-                    <button
-                      key={opt.value}
-                      onClick={() => setHouseBetSelection(opt.value)}
-                      className={`rounded-lg border p-2 text-center transition-colors ${
-                        houseBetSelection === opt.value
-                          ? "border-yellow-500 bg-yellow-500/10"
-                          : "border-border hover:border-yellow-400"
-                      }`}
-                    >
-                      <div className="text-xs">{opt.label}</div>
-                      <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
-                    </button>
-                  ))}
-                </div>
-              )}
+              {houseBetType === "total_runs" && (() => {
+                const pairs = [
+                  { over: TOTAL_RUNS_OPTIONS[0], under: TOTAL_RUNS_OPTIONS[1] },
+                  { over: TOTAL_RUNS_OPTIONS[2], under: TOTAL_RUNS_OPTIONS[3] },
+                  { over: TOTAL_RUNS_OPTIONS[4], under: TOTAL_RUNS_OPTIONS[5] },
+                  { over: TOTAL_RUNS_OPTIONS[6], under: TOTAL_RUNS_OPTIONS[7] },
+                ]
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                      ⚾ <strong>Carreras totales</strong> del partido — ambos equipos combinados
+                    </p>
+                    <div className="space-y-1.5">
+                      {pairs.map(({ over, under }) => (
+                        <div key={over.value} className="grid grid-cols-2 gap-1.5">
+                          <button
+                            onClick={() => setHouseBetSelection(over.value)}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === over.value
+                                ? "border-emerald-500 bg-emerald-500/15"
+                                : "border-border bg-muted/10 hover:border-emerald-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === over.value ? "text-emerald-400" : ""}`}>↑ {over.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{over.odds.toFixed(2)}x</span>
+                          </button>
+                          <button
+                            onClick={() => setHouseBetSelection(under.value)}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === under.value
+                                ? "border-red-500 bg-red-500/15"
+                                : "border-border bg-muted/10 hover:border-red-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === under.value ? "text-red-400" : ""}`}>↓ {under.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{under.odds.toFixed(2)}x</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
               {/* First inning score (NRFI/YRFI) */}
               {houseBetType === "first_inning_score" && (
                 <div className="space-y-2">
@@ -2282,29 +2324,44 @@ function HomeContent() {
                 </div>
               )}
               {/* Total hits over/under */}
-              {houseBetType === "total_hits_over_under" && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
-                    💥 Total de <strong>hits combinados</strong> de ambos equipos. MLB promedio: ~16-17 hits por partido.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {TOTAL_HITS_HOUSE_OPTIONS.map(opt => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setHouseBetSelection(opt.value)}
-                        className={`rounded-lg border p-2 text-center transition-colors ${
-                          houseBetSelection === opt.value
-                            ? "border-yellow-500 bg-yellow-500/10"
-                            : "border-border hover:border-yellow-400"
-                        }`}
-                      >
-                        <div className="text-xs">{opt.label}</div>
-                        <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
-                      </button>
-                    ))}
+              {houseBetType === "total_hits_over_under" && (() => {
+                const pairs = [0, 2, 4, 6, 8].map(i => ({ over: TOTAL_HITS_HOUSE_OPTIONS[i], under: TOTAL_HITS_HOUSE_OPTIONS[i + 1] }))
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                      💥 <strong>Hits combinados</strong> de ambos equipos — MLB promedio: ~17 hits por partido
+                    </p>
+                    <div className="space-y-1.5">
+                      {pairs.map(({ over, under }) => (
+                        <div key={over.value} className="grid grid-cols-2 gap-1.5">
+                          <button
+                            onClick={() => setHouseBetSelection(over.value)}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === over.value
+                                ? "border-emerald-500 bg-emerald-500/15"
+                                : "border-border bg-muted/10 hover:border-emerald-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === over.value ? "text-emerald-400" : ""}`}>↑ {over.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{over.odds.toFixed(2)}x</span>
+                          </button>
+                          <button
+                            onClick={() => setHouseBetSelection(under.value)}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === under.value
+                                ? "border-red-500 bg-red-500/15"
+                                : "border-border bg-muted/10 hover:border-red-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === under.value ? "text-red-400" : ""}`}>↓ {under.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{under.odds.toFixed(2)}x</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
               {/* First half winner (basketball) */}
               {houseBetType === "first_half_winner" && (
                 <div className="space-y-2">
@@ -2313,9 +2370,9 @@ function HomeContent() {
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { value: "home", label: houseBetModal?.event.home_team ?? "Local",     odds: 1.65 },
-                      { value: "draw", label: "Empate",                                       odds: 8.25 },
-                      { value: "away", label: houseBetModal?.event.away_team ?? "Visitante",  odds: 2.67 },
+                      { value: "home", label: houseBetModal?.event.home_team ?? "Local",    logo: houseBetModal?.event.home_logo, odds: 1.65 },
+                      { value: "draw", label: "Empate",                                      logo: null,                           odds: 8.25 },
+                      { value: "away", label: houseBetModal?.event.away_team ?? "Visitante", logo: houseBetModal?.event.away_logo, odds: 2.67 },
                     ].map(opt => {
                       const isSelected = houseBetSelection === opt.value
                       return (
@@ -2333,6 +2390,14 @@ function HomeContent() {
                               <span className="text-[9px] text-primary-foreground font-bold">✓</span>
                             </div>
                           )}
+                          <div className="flex justify-center mb-1.5">
+                            {opt.logo
+                              ? <Image src={opt.logo} alt={opt.label} width={24} height={24} className="object-contain" />
+                              : opt.value === "draw"
+                                ? <span className="text-lg leading-6">🤝</span>
+                                : <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center text-xs font-bold">{opt.label.slice(0, 1)}</div>
+                            }
+                          </div>
                           <p className={`text-xs font-bold truncate ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
                           <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
                         </button>
@@ -2346,30 +2411,40 @@ function HomeContent() {
                 const league = (houseBetModal?.event.league ?? "").toLowerCase()
                 const isNBA = league.includes("nba") || league.includes("national basketball")
                 const opts = isNBA ? TOTAL_POINTS_NBA_OPTIONS : TOTAL_POINTS_EURO_OPTIONS
+                const pairs = [0, 2, 4, 6, 8].map(i => ({ over: opts[i], under: opts[i + 1] }))
                 return (
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
-                      🔢 Total de <strong>puntos combinados</strong> de ambos equipos.{" "}
-                      {isNBA ? "NBA promedio: ~232 pts." : "EuroLeague promedio: ~155 pts."}
+                      🏀 <strong>Puntos combinados</strong> de ambos equipos —{" "}
+                      {isNBA ? "NBA promedio: ~232 pts" : "EuroLeague promedio: ~157 pts"}
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {opts.map(opt => {
-                        const isSelected = houseBetSelection === opt.value
-                        return (
+                    <div className="space-y-1.5">
+                      {pairs.map(({ over, under }) => (
+                        <div key={over.value} className="grid grid-cols-2 gap-1.5">
                           <button
-                            key={opt.value}
-                            onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
-                            className={`rounded-lg border p-2 text-center transition-colors ${
-                              isSelected
-                                ? "border-yellow-500 bg-yellow-500/10"
-                                : "border-border hover:border-yellow-400"
+                            onClick={() => { setHouseBetSelection(over.value); setHouseBetSelectionOdds(over.odds) }}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === over.value
+                                ? "border-emerald-500 bg-emerald-500/15"
+                                : "border-border bg-muted/10 hover:border-emerald-500/40"
                             }`}
                           >
-                            <div className="text-xs">{opt.label}</div>
-                            <div className="font-bold text-yellow-500 text-sm">{opt.odds.toFixed(2)}x</div>
+                            <span className={`text-sm font-bold ${houseBetSelection === over.value ? "text-emerald-400" : ""}`}>↑ {over.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{over.odds.toFixed(2)}x</span>
                           </button>
-                        )
-                      })}
+                          <button
+                            onClick={() => { setHouseBetSelection(under.value); setHouseBetSelectionOdds(under.odds) }}
+                            className={`flex items-center justify-between rounded-xl border-2 px-3 py-2.5 transition-all ${
+                              houseBetSelection === under.value
+                                ? "border-red-500 bg-red-500/15"
+                                : "border-border bg-muted/10 hover:border-red-500/40"
+                            }`}
+                          >
+                            <span className={`text-sm font-bold ${houseBetSelection === under.value ? "text-red-400" : ""}`}>↓ {under.label}</span>
+                            <span className="text-xs text-yellow-500 font-bold ml-1.5 shrink-0">{under.odds.toFixed(2)}x</span>
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )
