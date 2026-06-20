@@ -1943,8 +1943,8 @@ function HomeContent() {
                   </div>
                 )
               })()}
-              {/* Bet type tabs */}
-              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+              {/* Bet type tabs — inactive = icon square, active = expands with label */}
+              <div className="flex gap-1.5">
                 {houseBetTypes.map(bt => {
                   const isActive = houseBetType === bt.id
                   return (
@@ -1952,14 +1952,16 @@ function HomeContent() {
                       key={bt.id}
                       type="button"
                       onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetSelectionOdds(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
-                      className={`shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-all border select-none ${
+                      className={`flex items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 transition-all select-none overflow-hidden ${
                         isActive
-                          ? "border-primary bg-primary/15 text-primary shadow-sm shadow-primary/20"
-                          : "border-border bg-muted/10 text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                          ? "flex-1 px-3 border-primary bg-primary/15 shadow-sm shadow-primary/20"
+                          : "w-10 shrink-0 border-border bg-muted/10 hover:border-primary/30 hover:bg-muted/20"
                       }`}
                     >
-                      <span className="text-sm leading-none">{bt.icon}</span>
-                      <span>{bt.label}</span>
+                      <span className="text-base leading-none shrink-0">{bt.icon}</span>
+                      {isActive && (
+                        <span className="text-[11px] font-bold text-primary truncate leading-tight">{bt.label}</span>
+                      )}
                     </button>
                   )
                 })}
