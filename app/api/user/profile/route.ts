@@ -33,13 +33,37 @@ export async function GET(request: NextRequest) {
     const supabase = createAdminSupabaseClient()
 
     // Get profile
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("id, email, nickname, role, kyc_status, country, is_banned, betting_blocked_until, false_claim_count, created_at")
       .eq("id", userId)
       .single()
 
+    // Profile row missing (Supabase trigger may have failed) — auto-create it
     if (profileError || !profile) {
+      const { data: authData } = await supabase.auth.admin.getUserById(userId)
+      if (authData?.user) {
+        const email = authData.user.email || ""
+        const meta = authData.user.user_metadata || {}
+        await supabase.from("profiles").upsert(
+          { id: userId, email, nickname: meta.nickname || `user_${userId.slice(0, 8)}`, kyc_status: "none" },
+          { onConflict: "id" }
+        )
+        // Ensure wallet exists too
+        await supabase.from("wallets").upsert(
+          { user_id: userId, balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 },
+          { onConflict: "user_id" }
+        )
+        const { data: retried } = await supabase
+          .from("profiles")
+          .select("id, email, nickname, role, kyc_status, country, is_banned, betting_blocked_until, false_claim_count, created_at")
+          .eq("id", userId)
+          .single()
+        profile = retried
+      }
+    }
+
+    if (!profile) {
       return NextResponse.json(
         { error: "Profile not found" },
         { status: 404 }
