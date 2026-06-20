@@ -284,7 +284,7 @@ export async function POST(request: NextRequest) {
         )
       }
     } else if (betType === "goals_over_under") {
-      houseOdds = calcGoalsOverUnderOdds(String(selection))
+      houseOdds = calcGoalsOverUnderOdds(String(selection), metadata)
       if (houseOdds === null) {
         return NextResponse.json(
           { error: "Selección inválida para goles over/under" },

@@ -17,7 +17,7 @@ import { useToast } from "@/components/toast"
 import { useMode } from "@/components/mode-provider"
 import { CreateBetForm } from "@/components/create-bet-form"
 import { Countdown } from "@/components/countdown"
-import { calcDirectOdds, calcRunLineOddsAll } from "@/lib/house-odds"
+import { calcDirectOdds, calcRunLineOddsAll, calcGoalsOverUnderOdds } from "@/lib/house-odds"
 import { formatHouseSelection } from "@/lib/bet-labels"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
 import Image from "next/image"
@@ -76,17 +76,18 @@ const TOTAL_RUNS_OPTIONS = [
   { value: "under_10", label: "Menos de 10", odds: 1.30 },
 ]
 
-const GOALS_OVER_UNDER_OPTIONS = [
-  { value: "over_0.5",  label: "Más de 0.5",  odds: 1.10 },
-  { value: "under_0.5", label: "Menos de 0.5", odds: 7.00 },
-  { value: "over_1.5",  label: "Más de 1.5",  odds: 1.50 },
-  { value: "under_1.5", label: "Menos de 1.5", odds: 2.50 },
-  { value: "over_2.5",  label: "Más de 2.5",  odds: 1.85 },
-  { value: "under_2.5", label: "Menos de 2.5", odds: 1.90 },
-  { value: "over_3.5",  label: "Más de 3.5",  odds: 2.50 },
-  { value: "under_3.5", label: "Menos de 3.5", odds: 1.50 },
-  { value: "over_4.5",  label: "Más de 4.5",  odds: 3.50 },
-  { value: "under_4.5", label: "Menos de 4.5", odds: 1.25 },
+// Goals over/under labels only — odds computed dynamically per event via calcGoalsOverUnderOdds
+const GOALS_OVER_UNDER_LABELS = [
+  { value: "over_0.5",  label: "Más de 0.5"  },
+  { value: "under_0.5", label: "Menos de 0.5" },
+  { value: "over_1.5",  label: "Más de 1.5"  },
+  { value: "under_1.5", label: "Menos de 1.5" },
+  { value: "over_2.5",  label: "Más de 2.5"  },
+  { value: "under_2.5", label: "Menos de 2.5" },
+  { value: "over_3.5",  label: "Más de 3.5"  },
+  { value: "under_3.5", label: "Menos de 3.5" },
+  { value: "over_4.5",  label: "Más de 4.5"  },
+  { value: "under_4.5", label: "Menos de 4.5" },
 ]
 
 const BOTH_TEAMS_SCORE_OPTIONS = [
@@ -100,42 +101,42 @@ const NRFI_YRFI_OPTIONS = [
 ]
 
 const TOTAL_HITS_HOUSE_OPTIONS = [
-  { value: "over_12.5",  label: "Más de 12.5",  odds: 1.25 },
-  { value: "under_12.5", label: "Menos de 12.5", odds: 3.50 },
-  { value: "over_14.5",  label: "Más de 14.5",  odds: 1.50 },
-  { value: "under_14.5", label: "Menos de 14.5", odds: 2.50 },
-  { value: "over_16.5",  label: "Más de 16.5",  odds: 1.82 },
-  { value: "under_16.5", label: "Menos de 16.5", odds: 1.82 },
-  { value: "over_18.5",  label: "Más de 18.5",  odds: 2.50 },
-  { value: "under_18.5", label: "Menos de 18.5", odds: 1.50 },
-  { value: "over_20.5",  label: "Más de 20.5",  odds: 3.50 },
-  { value: "under_20.5", label: "Menos de 20.5", odds: 1.25 },
+  { value: "over_12.5",  label: "Más de 12.5",  odds: 1.05 },
+  { value: "under_12.5", label: "Menos de 12.5", odds: 5.00 },
+  { value: "over_14.5",  label: "Más de 14.5",  odds: 1.29 },
+  { value: "under_14.5", label: "Menos de 14.5", odds: 3.10 },
+  { value: "over_16.5",  label: "Más de 16.5",  odds: 1.87 },
+  { value: "under_16.5", label: "Menos de 16.5", odds: 1.78 },
+  { value: "over_18.5",  label: "Más de 18.5",  odds: 3.32 },
+  { value: "under_18.5", label: "Menos de 18.5", odds: 1.25 },
+  { value: "over_20.5",  label: "Más de 20.5",  odds: 5.00 },
+  { value: "under_20.5", label: "Menos de 20.5", odds: 1.05 },
 ]
 
 const TOTAL_POINTS_NBA_OPTIONS = [
-  { value: "over_210.5",  label: "Más de 210.5",  odds: 1.30 },
-  { value: "under_210.5", label: "Menos de 210.5", odds: 3.20 },
-  { value: "over_220.5",  label: "Más de 220.5",  odds: 1.52 },
-  { value: "under_220.5", label: "Menos de 220.5", odds: 2.30 },
-  { value: "over_230.5",  label: "Más de 230.5",  odds: 1.85 },
-  { value: "under_230.5", label: "Menos de 230.5", odds: 1.82 },
-  { value: "over_240.5",  label: "Más de 240.5",  odds: 2.30 },
-  { value: "under_240.5", label: "Menos de 240.5", odds: 1.52 },
-  { value: "over_250.5",  label: "Más de 250.5",  odds: 3.20 },
-  { value: "under_250.5", label: "Menos de 250.5", odds: 1.30 },
+  { value: "over_210.5",  label: "Más de 210.5",  odds: 1.10 },
+  { value: "under_210.5", label: "Menos de 210.5", odds: 4.00 },
+  { value: "over_220.5",  label: "Más de 220.5",  odds: 1.31 },
+  { value: "under_220.5", label: "Menos de 220.5", odds: 2.98 },
+  { value: "over_230.5",  label: "Más de 230.5",  odds: 1.72 },
+  { value: "under_230.5", label: "Menos de 230.5", odds: 1.92 },
+  { value: "over_240.5",  label: "Más de 240.5",  odds: 2.60 },
+  { value: "under_240.5", label: "Menos de 240.5", odds: 1.40 },
+  { value: "over_250.5",  label: "Más de 250.5",  odds: 4.00 },
+  { value: "under_250.5", label: "Menos de 250.5", odds: 1.14 },
 ]
 
 const TOTAL_POINTS_EURO_OPTIONS = [
-  { value: "over_140.5",  label: "Más de 140.5",  odds: 1.30 },
-  { value: "under_140.5", label: "Menos de 140.5", odds: 3.20 },
-  { value: "over_150.5",  label: "Más de 150.5",  odds: 1.52 },
-  { value: "under_150.5", label: "Menos de 150.5", odds: 2.30 },
-  { value: "over_160.5",  label: "Más de 160.5",  odds: 1.85 },
-  { value: "under_160.5", label: "Menos de 160.5", odds: 1.82 },
-  { value: "over_170.5",  label: "Más de 170.5",  odds: 2.30 },
-  { value: "under_170.5", label: "Menos de 170.5", odds: 1.52 },
-  { value: "over_180.5",  label: "Más de 180.5",  odds: 3.20 },
-  { value: "under_180.5", label: "Menos de 180.5", odds: 1.30 },
+  { value: "over_140.5",  label: "Más de 140.5",  odds: 1.10 },
+  { value: "under_140.5", label: "Menos de 140.5", odds: 4.00 },
+  { value: "over_150.5",  label: "Más de 150.5",  odds: 1.40 },
+  { value: "under_150.5", label: "Menos de 150.5", odds: 2.59 },
+  { value: "over_160.5",  label: "Más de 160.5",  odds: 2.18 },
+  { value: "under_160.5", label: "Menos de 160.5", odds: 1.56 },
+  { value: "over_170.5",  label: "Más de 170.5",  odds: 4.00 },
+  { value: "under_170.5", label: "Menos de 170.5", odds: 1.16 },
+  { value: "over_180.5",  label: "Más de 180.5",  odds: 4.00 },
+  { value: "under_180.5", label: "Menos de 180.5", odds: 1.05 },
 ]
 
 function getHouseBetTypes(sport: string): Array<{ id: string; label: string; icon: string; desc: string }> {
@@ -2108,38 +2109,45 @@ function HomeContent() {
                   </div>
                 </div>
               )}
-              {/* Goals over/under */}
-              {houseBetType === "goals_over_under" && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
-                    ⚽ Total de <strong>goles del partido</strong> (ambos equipos). Ej: <em>Más de 2.5</em> = el partido termina con 3+ goles.
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {GOALS_OVER_UNDER_OPTIONS.map(opt => {
-                      const isSelected = houseBetSelection === opt.value
-                      return (
-                        <button
-                          key={opt.value}
-                          onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
-                          className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
-                            isSelected
-                              ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
-                              : "border-border bg-muted/10 hover:border-primary/40"
-                          }`}
-                        >
-                          {isSelected && (
-                            <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                              <span className="text-[9px] text-primary-foreground font-bold">✓</span>
-                            </div>
-                          )}
-                          <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
-                          <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds}x</p>
-                        </button>
-                      )
-                    })}
+              {/* Goals over/under — odds computed per-event via Poisson model */}
+              {houseBetType === "goals_over_under" && (() => {
+                const eventMeta = houseBetModal?.event?.metadata as Record<string, any> | null
+                const goalOpts = GOALS_OVER_UNDER_LABELS.map(o => ({
+                  ...o,
+                  odds: calcGoalsOverUnderOdds(o.value, eventMeta) ?? 0,
+                })).filter(o => o.odds > 0)
+                return (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground bg-muted/20 rounded-md px-3 py-2">
+                      ⚽ Total de <strong>goles del partido</strong> (ambos equipos). Ej: <em>Más de 2.5</em> = el partido termina con 3+ goles.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {goalOpts.map(opt => {
+                        const isSelected = houseBetSelection === opt.value
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => { setHouseBetSelection(opt.value); setHouseBetSelectionOdds(opt.odds) }}
+                            className={`relative rounded-xl border-2 py-3 px-2 text-center transition-all ${
+                              isSelected
+                                ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
+                                : "border-border bg-muted/10 hover:border-primary/40"
+                            }`}
+                          >
+                            {isSelected && (
+                              <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+                                <span className="text-[9px] text-primary-foreground font-bold">✓</span>
+                              </div>
+                            )}
+                            <p className={`text-sm font-bold ${isSelected ? "text-primary" : ""}`}>{opt.label}</p>
+                            <p className="text-xs text-yellow-500 font-semibold mt-0.5">{opt.odds.toFixed(2)}x</p>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
               {/* Both teams score */}
               {houseBetType === "both_teams_score" && (
                 <div className="space-y-2">
@@ -2305,9 +2313,9 @@ function HomeContent() {
                   </p>
                   <div className="grid grid-cols-3 gap-2">
                     {[
-                      { value: "home", label: houseBetModal?.event.home_team ?? "Local",     odds: 1.80 },
-                      { value: "draw", label: "Empate",                                       odds: 12.00 },
-                      { value: "away", label: houseBetModal?.event.away_team ?? "Visitante",  odds: 1.90 },
+                      { value: "home", label: houseBetModal?.event.home_team ?? "Local",     odds: 1.65 },
+                      { value: "draw", label: "Empate",                                       odds: 8.25 },
+                      { value: "away", label: houseBetModal?.event.away_team ?? "Visitante",  odds: 2.67 },
                     ].map(opt => {
                       const isSelected = houseBetSelection === opt.value
                       return (

@@ -65,6 +65,13 @@ function poissonPmf(k: number, lambda: number): number {
   return Math.exp(logP)
 }
 
+// P(X ≤ k) for Poisson(lambda) — used for over/under goal lines
+function poissonCdf(k: number, lambda: number): number {
+  let cum = 0
+  for (let i = 0; i <= Math.floor(k); i++) cum += poissonPmf(i, lambda)
+  return Math.min(cum, 1)
+}
+
 function parseScore(selection: string): { home: number; away: number } | null {
   const m = selection.trim().match(/^(\d+)\s*[-:]\s*(\d+)$/)
   if (!m) return null
@@ -154,17 +161,37 @@ export function calcScoreMarginOdds(selection: string): number | null {
 }
 
 // ─── goals_over_under ────────────────────────────────────────────────────────
+// Dynamic Poisson model: same approach as exact_score.
+// Average European+LATAM leagues: λ ≈ 2.6 total goals/game.
+// Using game-specific λ from metadata.predictions.home/away_goals_avg when available.
+// The original fixed table had MULTIPLE lines with negative house EV:
+//   over_1.5 @ 1.50x: true P≈73% → house EV -10%;  under_3.5 @ 1.50x: true P≈74% → -10%
+//   under_4.5 @ 1.25x: true P≈87% → -8%;  over_0.5 @ 1.10x: true P≈93% → -2%
+const GOALS_OU_LAMBDA_DEFAULT = 2.6
+const MAX_GOALS_OU_ODDS = 7.0
 
-const GOALS_OVER_UNDER_ODDS: Record<string, number> = {
-  "over_0.5": 1.10,  "under_0.5": 7.00,
-  "over_1.5": 1.50,  "under_1.5": 2.50,
-  "over_2.5": 1.85,  "under_2.5": 1.90,
-  "over_3.5": 2.50,  "under_3.5": 1.50,
-  "over_4.5": 3.50,  "under_4.5": 1.25,
-}
+export function calcGoalsOverUnderOdds(
+  selection: string,
+  metadata?: Record<string, any> | null
+): number | null {
+  const m = selection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
+  if (!m) return null
+  const direction = m[1] as "over" | "under"
+  const threshold = parseFloat(m[2])
+  if (!Number.isFinite(threshold)) return null
 
-export function calcGoalsOverUnderOdds(selection: string): number | null {
-  return GOALS_OVER_UNDER_ODDS[selection] ?? null
+  const lh = parseFloat(metadata?.predictions?.home_goals_avg ?? "0")
+  const la = parseFloat(metadata?.predictions?.away_goals_avg ?? "0")
+  const lambda = lh > 0 && la > 0 ? lh + la : GOALS_OU_LAMBDA_DEFAULT
+
+  // e.g. "over_2.5": P(total > 2.5) = P(total ≥ 3) = 1 - Poisson CDF at k=2
+  const pUnder = poissonCdf(Math.floor(threshold), lambda)
+  const pOver = 1 - pUnder
+  const prob = direction === "over" ? pOver : pUnder
+  if (prob <= 0.005) return null
+
+  const raw = 1 / (prob * HOUSE_EDGE)
+  return parseFloat(Math.min(Math.max(raw, 1.02), MAX_GOALS_OU_ODDS).toFixed(2))
 }
 
 // ─── both_teams_score ────────────────────────────────────────────────────────
@@ -191,14 +218,33 @@ export function calcFirstInningScoreOdds(selection: string): number | null {
 }
 
 // ─── total_hits_over_under (baseball) ────────────────────────────────────────
-// MLB avg ~16-17 combined hits
+// MLB 5-season average (Baseball-Reference 2019-2024): ~16.4 combined hits/game, SD≈3.5
+// Original symmetric table (1.25/3.50 at extremes) was badly wrong:
+//   over_12.5 @ 1.25x: true P≈87% → house EV -8%
+//   over_14.5 @ 1.50x: true P≈71% → house EV -6%
+// Fixed with Normal(16.4, 3.5) distribution → 10% HOUSE_EDGE per selection.
 
 const TOTAL_HITS_OVER_UNDER_ODDS: Record<string, number> = {
-  "over_12.5": 1.25, "under_12.5": 3.50,
-  "over_14.5": 1.50, "under_14.5": 2.50,
-  "over_16.5": 1.82, "under_16.5": 1.82,
-  "over_18.5": 2.50, "under_18.5": 1.50,
-  "over_20.5": 3.50, "under_20.5": 1.25,
+  // P≈86.7% → raw=1.048, floored to 1.05
+  "over_12.5": 1.05,
+  // P≈13.3% → 1/(0.133×1.10)=6.83, capped at 5.0
+  "under_12.5": 5.00,
+  // P≈70.7% → 1/(0.707×1.10)=1.29
+  "over_14.5": 1.29,
+  // P≈29.3% → 1/(0.293×1.10)=3.10
+  "under_14.5": 3.10,
+  // P≈48.8% → 1/(0.488×1.10)=1.87
+  "over_16.5": 1.87,
+  // P≈51.2% → 1/(0.512×1.10)=1.78
+  "under_16.5": 1.78,
+  // P≈27.4% → 1/(0.274×1.10)=3.32
+  "over_18.5": 3.32,
+  // P≈72.6% → 1/(0.726×1.10)=1.25
+  "under_18.5": 1.25,
+  // P≈12.1% → raw=7.51, capped at 5.0
+  "over_20.5": 5.00,
+  // P≈87.9% → raw=1.03, floored to 1.05
+  "under_20.5": 1.05,
 }
 
 export function calcTotalHitsOverUnderOdds(selection: string): number | null {
@@ -206,11 +252,15 @@ export function calcTotalHitsOverUnderOdds(selection: string): number | null {
 }
 
 // ─── first_half_winner (basketball) ──────────────────────────────────────────
-
+// NBA halftime data (Basketball-Reference 2019-2024, 5-season average):
+//   Home leads at half: ~55% | Away leads: ~34% | Tied: ~11%
+// Previous table (1.80/1.90/12.00) implied 55.6%/52.6%/8.3% — away was GROSSLY
+// overpriced (52.6% implied vs 34% real → house lost ~18% on away halftime bets).
+// Corrected with 10% house edge: home=1/(0.55×1.10), away=1/(0.34×1.10), draw=1/(0.11×1.10)
 const FIRST_HALF_WINNER_ODDS: Record<string, number> = {
-  home:  1.80,
-  away:  1.90,
-  draw: 12.00,
+  home: 1.65,  // implied 60.6% vs true 55% → +10% edge
+  away: 2.67,  // implied 37.5% vs true 34% → +10% edge
+  draw: 8.25,  // implied 12.1% vs true 11% → +10% edge
 }
 
 export function calcFirstHalfWinnerOdds(selection: string): number | null {
@@ -218,22 +268,57 @@ export function calcFirstHalfWinnerOdds(selection: string): number | null {
 }
 
 // ─── total_points_over_under (basketball) ────────────────────────────────────
-// NBA avg ~232 total pts. EuroLeague avg ~155.
+// Calibrated from Normal distribution: NBA mean=232 pts, SD=22; EuroLeague mean=157, SD=17
+// (5-season averages from NBA.com and EuroLeague stats, 2019-2024)
+// Original table was symmetric (mirror image) — wrong. Over_210.5 is ~83% likely in NBA,
+// so offering 1.30x (77% implied) → house lost ~9% on those bets.
+// Fixed with Normal CDF → 10% HOUSE_EDGE applied per selection.
 
 const TOTAL_POINTS_NBA_ODDS: Record<string, number> = {
-  "over_210.5": 1.30, "under_210.5": 3.20,
-  "over_220.5": 1.52, "under_220.5": 2.30,
-  "over_230.5": 1.85, "under_230.5": 1.82,
-  "over_240.5": 2.30, "under_240.5": 1.52,
-  "over_250.5": 3.20, "under_250.5": 1.30,
+  // P≈83.5% → raw=1.09, floored to 1.10 (min offering)
+  "over_210.5": 1.10,
+  // P≈16.5% → raw=5.51, capped at MAX_TEAM_ODDS=4.0
+  "under_210.5": 4.00,
+  // P≈69.5% → 1/(0.695×1.10)=1.31
+  "over_220.5": 1.31,
+  // P≈30.5% → 1/(0.305×1.10)=2.98
+  "under_220.5": 2.98,
+  // P≈52.7% → 1/(0.527×1.10)=1.72
+  "over_230.5": 1.72,
+  // P≈47.3% → 1/(0.473×1.10)=1.92
+  "under_230.5": 1.92,
+  // P≈35.0% → 1/(0.350×1.10)=2.60
+  "over_240.5": 2.60,
+  // P≈65.0% → 1/(0.650×1.10)=1.40
+  "under_240.5": 1.40,
+  // P≈20.0% → raw=4.55, capped at 4.0
+  "over_250.5": 4.00,
+  // P≈80.0% → 1/(0.800×1.10)=1.14
+  "under_250.5": 1.14,
 }
 
 const TOTAL_POINTS_EURO_ODDS: Record<string, number> = {
-  "over_140.5": 1.30, "under_140.5": 3.20,
-  "over_150.5": 1.52, "under_150.5": 2.30,
-  "over_160.5": 1.85, "under_160.5": 1.82,
-  "over_170.5": 2.30, "under_170.5": 1.52,
-  "over_180.5": 3.20, "under_180.5": 1.30,
+  // EuroLeague mean=157, SD=17
+  // P≈83.4% → floored to 1.10
+  "over_140.5": 1.10,
+  // P≈16.6% → capped at 4.0
+  "under_140.5": 4.00,
+  // P≈64.9% → 1/(0.649×1.10)=1.40
+  "over_150.5": 1.40,
+  // P≈35.1% → 1/(0.351×1.10)=2.59
+  "under_150.5": 2.59,
+  // P≈41.8% → 1/(0.418×1.10)=2.18
+  "over_160.5": 2.18,
+  // P≈58.2% → 1/(0.582×1.10)=1.56
+  "under_160.5": 1.56,
+  // P≈21.4% → raw=4.25, capped at 4.0
+  "over_170.5": 4.00,
+  // P≈78.6% → 1/(0.786×1.10)=1.16
+  "under_170.5": 1.16,
+  // P≈8.3% → capped at 4.0 (remote outcome, controlled exposure)
+  "over_180.5": 4.00,
+  // P≈91.7% → floored to 1.05
+  "under_180.5": 1.05,
 }
 
 export function calcTotalPointsOverUnderOdds(selection: string, isNBA: boolean): number | null {
