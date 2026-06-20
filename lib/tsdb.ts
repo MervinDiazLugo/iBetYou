@@ -220,7 +220,9 @@ export async function tsdbEventTimeline(idEvent: string): Promise<any[]> {
   return data.lookup || []
 }
 
-/** Count yellow cards from timeline (soccer) */
+/** Count yellow cards from timeline (soccer).
+ * TSDB V2 timeline: strTimeline="Card", strTimelineDetail="Yellow Card", strHome="Yes"|"No"
+ */
 export function extractYellowCards(
   timeline: any[]
 ): { home: number; away: number; total: number } {
@@ -228,12 +230,11 @@ export function extractYellowCards(
   let away = 0
   for (const e of timeline || []) {
     const type = (e.strTimeline || "").toLowerCase()
-    if (type === "yellow card") {
-      // strSide: "home" | "away" is the reliable field in TSDB V2 timeline
-      const side = (e.strSide || e.strTeamSide || "").toLowerCase()
-      if (side === "home") home++
-      else if (side === "away") away++
-      else home++ // fallback: count as home to avoid losing data
+    const detail = (e.strTimelineDetail || "").toLowerCase()
+    if (type === "card" && detail === "yellow card") {
+      const isHome = (e.strHome || "").toLowerCase() === "yes"
+      if (isHome) home++
+      else away++
     }
   }
   return { home, away, total: home + away }
