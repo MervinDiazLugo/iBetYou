@@ -1943,28 +1943,33 @@ function HomeContent() {
                   </div>
                 )
               })()}
-              {/* Bet type tabs — inactive = icon square, active = expands with label */}
-              <div className="flex gap-1.5">
-                {houseBetTypes.map(bt => {
-                  const isActive = houseBetType === bt.id
-                  return (
-                    <button
-                      key={bt.id}
-                      type="button"
-                      onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetSelectionOdds(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
-                      className={`flex items-center justify-center gap-1.5 rounded-xl border-2 py-2.5 transition-all select-none overflow-hidden ${
-                        isActive
-                          ? "flex-1 px-3 border-primary bg-primary/15 shadow-sm shadow-primary/20"
-                          : "w-10 shrink-0 border-border bg-muted/10 hover:border-primary/30 hover:bg-muted/20"
-                      }`}
-                    >
-                      <span className="text-base leading-none shrink-0">{bt.icon}</span>
-                      {isActive && (
-                        <span className="text-[11px] font-bold text-primary truncate leading-tight">{bt.label}</span>
-                      )}
-                    </button>
-                  )
-                })}
+              {/* Bet type tabs */}
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipos de apuesta</p>
+                <div className={`grid gap-1.5 ${
+                  houseBetTypes.length <= 4 ? `grid-cols-${houseBetTypes.length}` : houseBetTypes.length === 5 ? "grid-cols-5" : "grid-cols-3"
+                }`}>
+                  {houseBetTypes.map(bt => {
+                    const isActive = houseBetType === bt.id
+                    return (
+                      <button
+                        key={bt.id}
+                        type="button"
+                        onClick={() => { setHouseBetType(bt.id); setHouseBetSelection(null); setHouseBetSelectionOdds(null); setHouseBetExactScore(""); setHouseBetHomeGoals(""); setHouseBetAwayGoals("") }}
+                        className={`flex flex-col items-center gap-1 rounded-xl border-2 py-2.5 px-1 transition-all select-none ${
+                          isActive
+                            ? "border-primary bg-primary/15 shadow-sm shadow-primary/20"
+                            : "border-border bg-muted/10 hover:border-primary/30 hover:bg-muted/20"
+                        }`}
+                      >
+                        <span className="text-base leading-none">{bt.icon}</span>
+                        <span className={`text-[9px] font-semibold leading-tight text-center ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                          {bt.label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
               {/* Direct — no predicciones */}
               {houseBetType === "direct" && !houseBetModal.odds && (
