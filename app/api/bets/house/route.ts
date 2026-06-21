@@ -98,8 +98,10 @@ export async function POST(request: NextRequest) {
 
     // Block house bets once the match has started (unless demo — demo events use synthetic time)
     if (!(eventRow as any).is_demo) {
+      const isLive = eventRow.status === "live"
       const startTime = (eventRow as any).start_time
-      if (startTime && new Date(startTime) <= new Date()) {
+      const startTimePassed = startTime && new Date(startTime) <= new Date()
+      if (isLive || startTimePassed) {
         return NextResponse.json(
           { error: "Este partido ya comenzó. No se pueden crear apuestas." },
           { status: 400 }

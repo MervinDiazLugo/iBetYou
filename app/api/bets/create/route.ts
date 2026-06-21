@@ -90,9 +90,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Block ALL new bets once the match has started — regardless of bet type.
-    // The sync-scores cron runs every 2h so status may still be 'scheduled';
-    // start_time is the authoritative cutoff.
-    if (eventRow.start_time && new Date(eventRow.start_time) <= new Date()) {
+    // Dual check: status covers the case where cron updated to 'live' but start_time is slightly off;
+    // start_time covers the gap when cron hasn't run yet (runs every 2h).
+    const matchStarted = eventRow.status === "live" ||
+      (eventRow.start_time && new Date(eventRow.start_time) <= new Date())
+    if (matchStarted) {
       return NextResponse.json(
         { error: "Este partido ya comenzó. No se pueden crear nuevas apuestas." },
         { status: 400 }
