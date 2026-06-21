@@ -26,13 +26,10 @@ export function useCountryAccess() {
           const d = await res.json()
           setCanUseRealMoney(d.canUseRealMoney === true)
           setCanUseGroups(d.canUseGroups === true)
-        } else {
-          setCanUseRealMoney(false)
-          setCanUseGroups(false)
         }
+        // Non-ok response: stay null — transient error shouldn't block access
       } catch {
-        setCanUseRealMoney(false)
-        setCanUseGroups(false)
+        // Network error: stay null — don't show "no disponible" on connection failure
       }
     }
     check()
