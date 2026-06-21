@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: `No se puede completar un retiro en estado: ${withdrawal.status}` }, { status: 409 })
   }
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("ibeyc_withdrawals")
     .update({
       status: "completed",
@@ -32,6 +32,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       admin_notes: admin_notes ?? null,
     })
     .eq("id", id)
+
+  if (updateError) return NextResponse.json({ error: "Error actualizando retiro" }, { status: 500 })
 
   await createNotification({
     userId: withdrawal.user_id,

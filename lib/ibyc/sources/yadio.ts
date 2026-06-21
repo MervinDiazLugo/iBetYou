@@ -2,7 +2,7 @@
 // Free, no key, updated ~every 15 min. Returns USD/VES exchange rate.
 
 const PRIMARY_URL = "https://yadio.io/api/exrate/USD/VES"
-const FALLBACK_URL = "https://pydolarve.org/api/v1/dollar?monitor=bcv"
+const FALLBACK_URL = "https://pydolarve.org/api/v1/dollar?monitor=enparalelovzla"
 
 export async function getVESRate(): Promise<number> {
   try {

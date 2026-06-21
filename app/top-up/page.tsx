@@ -272,7 +272,14 @@ export default function RecargasPage() {
       }
       if (historyRes.ok) {
         const d = await historyRes.json()
-        setHistory([...(d.deposits || []), ...(d.withdrawals || [])])
+        setHistory([
+          ...(d.deposits || []).map((x: any) => ({ ...x, type: "deposit" })),
+          ...(d.withdrawals || []).map((x: any) => ({
+            ...x,
+            type: "withdrawal",
+            amount_ibyc: x.amount_ibyc_requested,
+          })),
+        ])
       }
     } finally {
       setLoading(false)
@@ -370,7 +377,7 @@ export default function RecargasPage() {
             <Coins className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <div className="text-xs text-muted-foreground">Tu saldo iBYCC</div>
+            <div className="text-xs text-muted-foreground">Tu saldo iBYC</div>
             <div className="text-2xl font-bold text-amber-400 leading-tight">
               {ibyBalance.toFixed(2)} <span className="text-sm font-medium text-muted-foreground">iBYC</span>
             </div>

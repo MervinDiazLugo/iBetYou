@@ -100,7 +100,7 @@ export async function setRateOverride(currency: string, rate: number, adminId: s
   const now = new Date()
   // Override expires in 4 hours
   const expiresAt = new Date(now.getTime() + 4 * 3600 * 1000).toISOString()
-  await supabase.from("ibeyc_rate_cache").upsert({
+  const { error } = await supabase.from("ibeyc_rate_cache").upsert({
     currency,
     rate_to_usd: rate,
     source: `manual_override:${adminId}`,
@@ -108,4 +108,5 @@ export async function setRateOverride(currency: string, rate: number, adminId: s
     fetched_at: now.toISOString(),
     expires_at: expiresAt,
   })
+  if (error) throw new Error(`Error guardando override de tasa: ${error.message}`)
 }
