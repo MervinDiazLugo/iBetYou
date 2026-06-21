@@ -26,29 +26,29 @@
   --mode-tint: rgba(139, 92, 246, 0.06);
 }
 
-/* ─── Real mode — deep amber/gold ──────────────────────────────────────────── */
+/* ─── Real mode — dark navy + amber gold ───────────────────────────────────── */
 [data-mode="real"] {
-  --background: #0d0800;
+  --background: #06080e;
   --foreground: #f0f0f0;
-  --card: #1a0e00;
+  --card: #0c1020;
   --card-foreground: #f0f0f0;
-  --popover: #1a0e00;
+  --popover: #0c1020;
   --popover-foreground: #f0f0f0;
   --primary: #f59e0b;
   --primary-foreground: #000000;
-  --secondary: #231500;
+  --secondary: #121828;
   --secondary-foreground: #f0f0f0;
-  --muted: #231500;
-  --muted-foreground: #a09070;
+  --muted: #121828;
+  --muted-foreground: #8899aa;
   --accent: #f59e0b;
   --accent-foreground: #000000;
   --destructive: #ff4444;
   --destructive-foreground: #ffffff;
-  --border: #3a2600;
-  --input: #3a2600;
+  --border: #1c2840;
+  --input: #1c2840;
   --ring: #f59e0b;
   --mode-glow: 245 158 11;
-  --mode-tint: rgba(245, 158, 11, 0.06);
+  --mode-tint: rgba(245, 158, 11, 0.08);
 }
 
 @theme inline {
@@ -108,7 +108,7 @@ body {
 
 [data-mode="real"] body {
   background:
-    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(245, 158, 11, 0.10) 0%, transparent 70%),
+    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(245, 158, 11, 0.08) 0%, transparent 60%),
     var(--background);
 }
 
