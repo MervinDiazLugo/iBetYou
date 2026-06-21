@@ -520,8 +520,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
         }),
       })
 
+      const data = await res.json()
       if (!res.ok) {
-        const data = await res.json()
         if (data.banned) {
           showToast("Tu cuenta fue suspendida por seguridad. Comunícate con soporte.", "error")
           await supabase.auth.signOut()
@@ -534,6 +534,11 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
       }
 
       showToast("¡Predicción publicada! 🎯", "success", "Ya está en el marketplace esperando a alguien que la tome.")
+      if (data.milestoneBonus) {
+        setTimeout(() => {
+          showToast(`¡Logro! Predicción #${data.milestoneBonus.bets} → +${data.milestoneBonus.amount} fichas 🏆`, "success")
+        }, 800)
+      }
       localStorage.setItem("lastBetAmount", String(amount))
       window.dispatchEvent(new Event("wallet:updated"))
       setLoading(false)

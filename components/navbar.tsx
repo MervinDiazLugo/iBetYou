@@ -29,6 +29,7 @@ export function Navbar() {
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
   const [ibcBalance, setIbcBalance] = useState(0)
   const [lowBalance, setLowBalance] = useState(false)
+  const [betaJoined, setBetaJoined] = useState(false)
   const [ctaViewed, setCtaViewed] = useState(false)
   const [menuNickname, setMenuNickname] = useState("")
   const [sessionToken, setSessionToken] = useState<string | null>(null)
@@ -61,6 +62,7 @@ export function Navbar() {
       setMenuNickname(data.user?.nickname || "")
       if (data.wallet) setBalance({ fantasy: data.wallet.balance_fantasy, real: data.wallet.balance_real })
       setLowBalance(Boolean(data.low_balance))
+      setBetaJoined(Boolean(data.beta_joined))
     }
     if (ibcRes.ok) {
       const d = await ibcRes.json()
@@ -321,28 +323,50 @@ export function Navbar() {
         </div>
       </nav>
 
-      {/* Low-balance banner — only for non-admin users in fantasy mode */}
+      {/* Low-balance banner — only for non-admin users in fantasy mode.
+          Step 1 (not yet beta): push to waitlist (+2000 tokens).
+          Step 2 (already beta): push to referrals for more tokens. */}
       {lowBalance && mode !== "real" && user?.role !== "backoffice_admin" && (
         <div className="sticky top-14 z-30 border-b border-orange-500/30 bg-orange-950/40 backdrop-blur-sm">
           <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-orange-300 text-xs">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              <span>Tus fichas están bajas. Invita amigos a iBetYou y sigue apostando.</span>
+              {betaJoined
+                ? <span>¡Ya estás en el beta! Invita amigos y gana más fichas para seguir apostando.</span>
+                : <span>Tus fichas están bajas. Regístrate al beta y consigue +2,000 fichas gratis.</span>
+              }
             </div>
-            <Link
-              href="/my-referrals"
-              className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
-              onClick={() => {
-                if (!sessionToken) return
-                fetch("/api/funnel/event", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-                  body: JSON.stringify({ eventType: "clicked_referral_cta" }),
-                }).catch(() => null)
-              }}
-            >
-              Invitar amigos →
-            </Link>
+            {betaJoined ? (
+              <Link
+                href="/my-referrals"
+                className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
+                onClick={() => {
+                  if (!sessionToken) return
+                  fetch("/api/funnel/event", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+                    body: JSON.stringify({ eventType: "clicked_referral_cta" }),
+                  }).catch(() => null)
+                }}
+              >
+                Invitar amigos →
+              </Link>
+            ) : (
+              <Link
+                href="/waitlist"
+                className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
+                onClick={() => {
+                  if (!sessionToken) return
+                  fetch("/api/funnel/event", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+                    body: JSON.stringify({ eventType: "viewed_real_money_cta" }),
+                  }).catch(() => null)
+                }}
+              >
+                Quiero el beta →
+              </Link>
+            )}
           </div>
         </div>
       )}

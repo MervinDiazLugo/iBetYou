@@ -321,37 +321,67 @@ export async function POST(request: NextRequest) {
       betId: bet.id,
     }, supabase)
 
-    // Funnel tracking (fire-and-forget pattern — errors swallowed inside logUserEvent)
+    // Funnel tracking (fire-and-forget — errors swallowed inside logUserEvent)
     void (async () => {
-      const [{ count: totalBets }, { count: recentBets }] = await Promise.all([
+      const [{ count: totalBetsFunnel }, { count: recentBets }] = await Promise.all([
         supabase.from("bets").select("id", { count: "exact", head: true }).eq("creator_id", user.id),
         supabase.from("bets").select("id", { count: "exact", head: true })
           .eq("creator_id", user.id)
           .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
       ])
-
-      if (totalBets === 1) {
+      if (totalBetsFunnel === 1) {
         await logUserEvent(user.id, "first_bet", { bet_id: bet.id, mode: betMode }, supabase)
       }
-
       if ((recentBets ?? 0) >= 5) {
         const { count: priorStreakEvents } = await supabase
-          .from("user_funnel_events")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", user.id)
-          .eq("event_type", "bet_streak_5")
+          .from("user_funnel_events").select("id", { count: "exact", head: true })
+          .eq("user_id", user.id).eq("event_type", "bet_streak_5")
         if ((priorStreakEvents ?? 0) === 0) {
           await logUserEvent(user.id, "bet_streak_5", { recent_bet_count: recentBets }, supabase)
         }
       }
     })()
 
+    // Activity milestones — only for fantasy bets (not group, not real)
+    // Runs synchronously so the balance reflects the bonus before wallet:updated fires
+    let milestoneBonus: { bets: number; amount: number } | null = null
+    if (!isGroupBet && betMode === "fantasy") {
+      const MILESTONES = [
+        { count: 5, amount: 500 },
+        { count: 10, amount: 1000 },
+        { count: 25, amount: 2500 },
+        { count: 50, amount: 5000 },
+      ]
+      const { count: totalBets } = await supabase
+        .from("bets").select("id", { count: "exact", head: true }).eq("creator_id", user.id)
+      const milestone = MILESTONES.find(m => m.count === totalBets)
+      if (milestone) {
+        const { count: alreadyGiven } = await supabase
+          .from("transactions").select("id", { count: "exact", head: true })
+          .eq("user_id", user.id).eq("operation", `activity_bonus_${milestone.count}`)
+        if ((alreadyGiven ?? 0) === 0) {
+          const { data: currentWallet } = await supabase
+            .from("wallets").select("balance_fantasy").eq("user_id", user.id).single()
+          if (currentWallet) {
+            await supabase.from("wallets")
+              .update({ balance_fantasy: Number(currentWallet.balance_fantasy) + milestone.amount })
+              .eq("user_id", user.id)
+            await supabase.from("transactions").insert({
+              user_id: user.id,
+              token_type: "fantasy",
+              amount: milestone.amount,
+              operation: `activity_bonus_${milestone.count}`,
+            })
+            milestoneBonus = { bets: milestone.count, amount: milestone.amount }
+          }
+        }
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      bet: {
-        id: bet.id,
-        status: bet.status,
-      },
+      bet: { id: bet.id, status: bet.status },
+      milestoneBonus,
     })
   } catch (error) {
     console.error("Create bet error:", error)

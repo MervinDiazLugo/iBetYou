@@ -26,10 +26,12 @@ export async function GET(request: NextRequest) {
       { data: wallet, error },
       { data: profile, error: profileError },
       { data: thresholdSetting },
+      { count: betaJoinCount },
     ] = await Promise.all([
       supabase.from("wallets").select("balance_fantasy, balance_real").eq("user_id", user_id).single(),
       supabase.from("profiles").select("id, nickname, avatar_url, role").eq("id", user_id).single(),
       supabase.from("app_settings").select("value").eq("key", "fantasy_low_balance_threshold").maybeSingle(),
+      supabase.from("user_funnel_events").select("id", { count: "exact", head: true }).eq("user_id", user_id).eq("event_type", "beta_waitlist_join"),
     ])
 
     if (error) {
@@ -66,7 +68,7 @@ export async function GET(request: NextRequest) {
       })()
     }
 
-    return NextResponse.json({ wallet, user: profile, low_balance, low_balance_threshold: threshold })
+    return NextResponse.json({ wallet, user: profile, low_balance, low_balance_threshold: threshold, beta_joined: (betaJoinCount ?? 0) > 0 })
   } catch (error: any) {
     console.error('Fetch wallet error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
