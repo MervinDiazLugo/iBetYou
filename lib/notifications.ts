@@ -12,6 +12,9 @@ export type NotificationType =
   | "referral_bonus_unlocked"
   | "withdrawal_approved"
   | "withdrawal_rejected"
+  | "deposit_confirmed"
+  | "deposit_rejected"
+  | "withdrawal_completed"
 
 interface NotificationInput {
   userId: string

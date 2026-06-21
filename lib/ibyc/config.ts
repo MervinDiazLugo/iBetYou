@@ -1,0 +1,98 @@
+export type CurrencyTier = "official" | "parallel"
+export type RateSource = "frankfurter" | "yadio" | "bluelytics"
+
+export interface CurrencyConfig {
+  code: string
+  name: string
+  symbol: string
+  country: string
+  flag: string
+  tier: CurrencyTier
+  source: RateSource
+  ttlSeconds: number
+  minDepositLocal: number
+  minWithdrawLocal: number
+  legalNote?: string
+}
+
+export const SUPPORTED_CURRENCIES: CurrencyConfig[] = [
+  {
+    code: "USD", name: "Dólar estadounidense", symbol: "$", country: "Internacional", flag: "🌎",
+    tier: "official", source: "frankfurter", ttlSeconds: 0,
+    minDepositLocal: 1, minWithdrawLocal: 1,
+  },
+  {
+    code: "VES", name: "Bolívar venezolano", symbol: "Bs.", country: "Venezuela", flag: "🇻🇪",
+    tier: "parallel", source: "yadio", ttlSeconds: 1200,
+    minDepositLocal: 50, minWithdrawLocal: 50,
+    legalNote: "Tasa del mercado paralelo, no oficial BCV. Uso bajo responsabilidad del usuario.",
+  },
+  {
+    code: "ARS", name: "Peso argentino", symbol: "$", country: "Argentina", flag: "🇦🇷",
+    tier: "parallel", source: "bluelytics", ttlSeconds: 1200,
+    minDepositLocal: 1000, minWithdrawLocal: 1000,
+    legalNote: "Tasa del dólar blue (mercado informal). Uso bajo responsabilidad del usuario.",
+  },
+  {
+    code: "MXN", name: "Peso mexicano", symbol: "$", country: "México", flag: "🇲🇽",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 20, minWithdrawLocal: 20,
+  },
+  {
+    code: "COP", name: "Peso colombiano", symbol: "$", country: "Colombia", flag: "🇨🇴",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 4000, minWithdrawLocal: 4000,
+  },
+  {
+    code: "CLP", name: "Peso chileno", symbol: "$", country: "Chile", flag: "🇨🇱",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 1000, minWithdrawLocal: 1000,
+  },
+  {
+    code: "PEN", name: "Sol peruano", symbol: "S/.", country: "Perú", flag: "🇵🇪",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 4, minWithdrawLocal: 4,
+  },
+  {
+    code: "BRL", name: "Real brasileño", symbol: "R$", country: "Brasil", flag: "🇧🇷",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 5, minWithdrawLocal: 5,
+  },
+  {
+    code: "CRC", name: "Colón costarricense", symbol: "₡", country: "Costa Rica", flag: "🇨🇷",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 500, minWithdrawLocal: 500,
+  },
+  {
+    code: "DOP", name: "Peso dominicano", symbol: "RD$", country: "Rep. Dominicana", flag: "🇩🇴",
+    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    minDepositLocal: 60, minWithdrawLocal: 60,
+  },
+]
+
+export const CURRENCY_MAP = Object.fromEntries(SUPPORTED_CURRENCIES.map(c => [c.code, c]))
+
+export const WITHDRAWAL_FEE_RATE = 0.06
+
+export function getCurrency(code: string): CurrencyConfig | null {
+  return CURRENCY_MAP[code] ?? null
+}
+
+export const PAYMENT_METHODS = ["binance", "bank_transfer"] as const
+export type PaymentMethod = typeof PAYMENT_METHODS[number]
+
+export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  binance: "Binance P2P",
+  bank_transfer: "Transferencia bancaria",
+}
+
+// Payment details shown to the user after creating a deposit
+// Set these via environment variables
+export function getPaymentInstructions(currency: string, method: PaymentMethod): string {
+  if (method === "binance") {
+    const binanceId = process.env.IBYC_BINANCE_ID ?? "N/A"
+    return `Binance ID: ${binanceId}`
+  }
+  const key = `IBYC_BANK_${currency}`
+  return process.env[key] ?? process.env.IBYC_BANK_DEFAULT ?? "Contacta al soporte para obtener datos bancarios."
+}

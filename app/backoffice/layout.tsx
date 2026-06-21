@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   Trophy,
   Calendar,
-  Wallet,
   LogOut,
   Menu,
   X,
@@ -21,6 +20,7 @@ import {
   Building2,
   FlaskConical,
   Gamepad2,
+  Coins,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ToastProvider } from "@/components/toast"
@@ -29,7 +29,7 @@ const navigation = [
   { name: "Dashboard", href: "/backoffice", icon: LayoutDashboard },
   { name: "Moderación de Apuestas", href: "/backoffice/bets", icon: Trophy },
   { name: "Eventos", href: "/backoffice/events", icon: Calendar },
-  { name: "Recargas iBY", href: "/backoffice/top-up", icon: Wallet },
+  { name: "Recargas iBYC", href: "/backoffice/top-up", icon: Coins },
   { name: "Usuarios", href: "/backoffice/users", icon: Users },
   { name: "Financials", href: "/backoffice/financials", icon: BarChart2 },
   { name: "Auditoría", href: "/backoffice/audit", icon: ClipboardList },

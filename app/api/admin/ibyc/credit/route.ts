@@ -1,0 +1,42 @@
+import { NextRequest, NextResponse } from "next/server"
+import { createAdminSupabaseClient } from "@/lib/supabase"
+import { requireBackofficeAdmin } from "@/lib/server-auth"
+
+export async function POST(request: NextRequest) {
+  const auth = await requireBackofficeAdmin(request)
+  if (!auth.authorized) return auth.response
+
+  const { user_id, amount, notes } = await request.json()
+  if (!user_id || !amount || Number(amount) <= 0) {
+    return NextResponse.json({ error: "user_id y amount requeridos" }, { status: 400 })
+  }
+
+  const amountIbyc = Number(amount)
+  const supabase = createAdminSupabaseClient()
+
+  const { data: wallet } = await supabase
+    .from("wallets")
+    .select("balance_real")
+    .eq("user_id", user_id)
+    .single()
+
+  if (!wallet) return NextResponse.json({ error: "Wallet no encontrada" }, { status: 404 })
+
+  const { error } = await supabase
+    .from("wallets")
+    .update({ balance_real: wallet.balance_real + amountIbyc })
+    .eq("user_id", user_id)
+    .eq("balance_real", wallet.balance_real)
+
+  if (error) return NextResponse.json({ error: "Error acreditando iBYC" }, { status: 500 })
+
+  await supabase.from("transactions").insert({
+    user_id,
+    token_type: "real",
+    amount: amountIbyc,
+    operation: "admin_ibyc_credit",
+    reference_id: null,
+  })
+
+  return NextResponse.json({ success: true, credited: amountIbyc, notes: notes ?? null })
+}
