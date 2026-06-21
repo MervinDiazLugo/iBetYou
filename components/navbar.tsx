@@ -36,7 +36,7 @@ export function Navbar() {
   const supabase = useMemo(() => createBrowserSupabaseClient(), [])
   const { mode } = useMode()
   const { canUseRealMoney, canUseGroups } = useCountryAccess()
-  const navItems = canUseGroups !== false
+  const navItems = canUseGroups === true
     ? [BASE_NAV_ITEMS[0], BASE_NAV_ITEMS[1], { href: "/groups", label: "Grupos" }, BASE_NAV_ITEMS[2]]
     : BASE_NAV_ITEMS
 

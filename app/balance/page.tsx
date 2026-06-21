@@ -56,11 +56,12 @@ export default function BalancePage() {
           return
         }
 
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 15_000)
         const res = await fetch("/api/user/balance", {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        })
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: controller.signal,
+        }).finally(() => clearTimeout(timeout))
 
         if (res.status === 401) {
           router.push("/login")
