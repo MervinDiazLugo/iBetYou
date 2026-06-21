@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     const supabase = createAdminSupabaseClient()
 
-    // Admins never receive tokens
+    // Admins never receive tokens — silent, no message
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
         .from("wallets")
         .update({ balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 })
         .eq("user_id", effectiveUserId)
-      return NextResponse.json({ success: false, bonus: 0, message: "Admins no reciben tokens" })
+      return NextResponse.json({ success: false, bonus: 0 })
     }
     const today = new Date().toISOString().split('T')[0]
     const bonusPerLogin = 50

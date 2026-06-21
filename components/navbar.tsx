@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Wallet, User, LogOut, Menu, X, Coins, Plus, PauseCircle } from "lucide-react"
+import { Wallet, User, LogOut, Menu, X, Coins, Plus, PauseCircle, AlertCircle } from "lucide-react"
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useAuth } from "@/components/providers"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
@@ -28,6 +28,7 @@ export function Navbar() {
   const [selfExcludeLoading, setSelfExcludeLoading] = useState(false)
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
   const [ibcBalance, setIbcBalance] = useState(0)
+  const [lowBalance, setLowBalance] = useState(false)
   const [menuNickname, setMenuNickname] = useState("")
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
@@ -58,6 +59,7 @@ export function Navbar() {
       const data = await res.json()
       setMenuNickname(data.user?.nickname || "")
       if (data.wallet) setBalance({ fantasy: data.wallet.balance_fantasy, real: data.wallet.balance_real })
+      setLowBalance(Boolean(data.low_balance))
     }
     if (ibcRes.ok) {
       const d = await ibcRes.json()
@@ -66,7 +68,7 @@ export function Navbar() {
   }
 
   useEffect(() => {
-    if (!user) { setMenuNickname(""); setBalance({ fantasy: 0, real: 0 }); setIbcBalance(0); return }
+    if (!user) { setMenuNickname(""); setBalance({ fantasy: 0, real: 0 }); setIbcBalance(0); setLowBalance(false); return }
     setMenuNickname("")
     loadWalletData(user.id)
   }, [user?.id])
@@ -306,6 +308,24 @@ export function Navbar() {
           </div>
         </div>
       </nav>
+
+      {/* Low-balance banner — only for non-admin users in fantasy mode */}
+      {lowBalance && mode !== "real" && user?.role !== "backoffice_admin" && (
+        <div className="sticky top-14 z-30 border-b border-orange-500/30 bg-orange-950/40 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-orange-300 text-xs">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              <span>Tus fichas están bajas. Cuando se agoten no podrás seguir apostando.</span>
+            </div>
+            <Link
+              href="/top-up?from=low_balance"
+              className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
+            >
+              Pasar a dinero real →
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Mobile drawer overlay */}
       {mobileMenuOpen && (

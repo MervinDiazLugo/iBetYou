@@ -24,9 +24,11 @@ export async function GET(request: NextRequest) {
     const [
       { data: wallet, error },
       { data: profile, error: profileError },
+      { data: thresholdSetting },
     ] = await Promise.all([
       supabase.from("wallets").select("balance_fantasy, balance_real").eq("user_id", user_id).single(),
       supabase.from("profiles").select("id, nickname, avatar_url, role").eq("id", user_id).single(),
+      supabase.from("app_settings").select("value").eq("key", "fantasy_low_balance_threshold").maybeSingle(),
     ])
 
     if (error) {
@@ -41,7 +43,11 @@ export async function GET(request: NextRequest) {
       console.error('Fetch profile error:', profileError.message)
     }
 
-    return NextResponse.json({ wallet, user: profile })
+    const isAdmin = profile?.role === "backoffice_admin"
+    const threshold = isAdmin ? null : Number(thresholdSetting?.value ?? 500)
+    const low_balance = !isAdmin && threshold !== null && Number(wallet.balance_fantasy) < threshold
+
+    return NextResponse.json({ wallet, user: profile, low_balance, low_balance_threshold: threshold })
   } catch (error: any) {
     console.error('Fetch wallet error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
