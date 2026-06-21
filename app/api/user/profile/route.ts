@@ -48,10 +48,10 @@ export async function GET(request: NextRequest) {
           { id: userId, email, nickname: meta.nickname || `user_${userId.slice(0, 8)}`, kyc_status: "none" },
           { onConflict: "id" }
         )
-        // Ensure wallet exists too
+        // Ensure wallet exists — ignoreDuplicates so we NEVER overwrite an existing balance
         await supabase.from("wallets").upsert(
           { user_id: userId, balance_fantasy: 0, balance_real: 0, fantasy_total_accumulated: 0 },
-          { onConflict: "user_id" }
+          { onConflict: "user_id", ignoreDuplicates: true }
         )
         const { data: retried } = await supabase
           .from("profiles")
