@@ -50,95 +50,45 @@ export async function GET(request: NextRequest) {
         await logUserEvent(userId, "signup", {
           provider: sessionData.user.app_metadata?.provider,
         }, supabase)
+
+        // Apply referral code on new signup (independent of bonus logic)
+        const refCode = request.cookies.get("iby_ref")?.value
+        if (refCode) {
+          await applyReferral(userId, refCode, supabase)
+          response.cookies.delete("iby_ref")
+        }
       }
 
-      const today = new Date().toISOString().split("T")[0]
-      const bonusPerLogin = 50
-      const maxDailyBonus = 500
-      const maxAccumulated = 1000
-
+      // Phase 1: one-time top-up to 10,000 tokens for existing users.
+      // fantasy_total_accumulated >= 10000 means already initialized → no-op.
       const { data: wallet } = await supabase
         .from("wallets")
         .select("balance_fantasy, fantasy_total_accumulated")
         .eq("user_id", userId)
         .single()
 
-      if (wallet) {
-        const currentAccumulated = wallet?.fantasy_total_accumulated || 0
-        const currentBalance = wallet?.balance_fantasy || 0
+      if (wallet && Number(wallet.fantasy_total_accumulated) < 10000) {
+        const currentBalance = Number(wallet.balance_fantasy)
+        const tokensToAdd = Math.max(0, 10000 - currentBalance)
+        const newBalance = currentBalance + tokensToAdd
 
-        if (currentAccumulated === 0) {
-          // First time: welcome bonus — optimistic lock on fantasy_total_accumulated === 0
-          // prevents double-grant when two concurrent logins both see accumulated === 0
-          const { data: welcomeUpdated } = await supabase
-            .from("wallets")
-            .update({
-              balance_fantasy: currentBalance + bonusPerLogin,
-              fantasy_total_accumulated: bonusPerLogin,
-            })
-            .eq("user_id", userId)
-            .eq("fantasy_total_accumulated", 0)
-            .select("user_id")
+        const { data: updated } = await supabase
+          .from("wallets")
+          .update({
+            balance_fantasy: newBalance,
+            fantasy_total_accumulated: 10000,
+          })
+          .eq("user_id", userId)
+          .eq("fantasy_total_accumulated", Number(wallet.fantasy_total_accumulated))
+          .select("user_id")
 
-          if (welcomeUpdated && welcomeUpdated.length > 0) {
-            await supabase.from("transactions").insert({
-              user_id: userId,
-              token_type: "fantasy",
-              amount: bonusPerLogin,
-              operation: "welcome_bonus",
-            })
-
-            await supabase.from("daily_rewards").insert({
-              user_id: userId,
-              reward_amount: bonusPerLogin,
-            })
-
-            // Process referral code if present (only on first login = new registration)
-            const refCode = request.cookies.get("iby_ref")?.value
-            if (refCode) {
-              await applyReferral(userId, refCode, supabase)
-              response.cookies.delete("iby_ref")
-            }
-          }
-        } else {
-          // Subsequent logins: daily login bonus
-          const { data: todayBonuses } = await supabase
-            .from("daily_rewards")
-            .select("reward_amount")
-            .eq("user_id", userId)
-            .gte("rewarded_at", `${today}T00:00:00`)
-            .lte("rewarded_at", `${today}T23:59:59`)
-
-          const todayTotal = (todayBonuses || []).reduce(
-            (sum, b) => sum + (b.reward_amount || 0),
-            0
-          )
-          const remainingDaily = maxDailyBonus - todayTotal
-          const remainingGlobal = maxAccumulated - currentAccumulated
-
-          if (remainingDaily > 0 && remainingGlobal > 0) {
-            const actualBonus = Math.min(bonusPerLogin, remainingDaily, remainingGlobal)
-
-            await supabase
-              .from("wallets")
-              .update({
-                balance_fantasy: currentBalance + actualBonus,
-                fantasy_total_accumulated: currentAccumulated + actualBonus,
-              })
-              .eq("user_id", userId)
-
-            await supabase.from("transactions").insert({
-              user_id: userId,
-              token_type: "fantasy",
-              amount: actualBonus,
-              operation: "login_bonus",
-            })
-
-            await supabase.from("daily_rewards").insert({
-              user_id: userId,
-              reward_amount: actualBonus,
-            })
-          }
+        if (updated && updated.length > 0 && tokensToAdd > 0) {
+          await supabase.from("transactions").insert({
+            user_id: userId,
+            token_type: "fantasy",
+            amount: tokensToAdd,
+            operation: "phase1_initial_balance",
+          })
         }
       }
     }
