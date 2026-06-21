@@ -230,23 +230,38 @@ export function GroupBetModal({ groupId, groupBalance, initialEvent, groupSport,
             </div>
 
             {/* Bet type cards */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tipo de Predicción</label>
-              <div className="grid grid-cols-2 gap-2">
-                {getAvailableBetTypes(sport).map((type) => (
-                  <div
-                    key={type.id}
-                    className={`p-2 rounded-lg border cursor-pointer ${betType === type.id ? "border-primary bg-primary/10" : "hover:border-primary/50"}`}
-                    onClick={() => { setBetType(type.id); setBetSelection("") }}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span>{type.icon}</span>
-                      <span className="font-medium text-sm truncate">{type.label}</span>
-                    </div>
+            {(() => {
+              const types = getAvailableBetTypes(sport)
+              const n = types.length
+              const cols = n <= 4 ? n : n === 5 ? 5 : 4
+              return (
+                <div className="space-y-2">
+                  <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipo de Predicción</p>
+                  <div className={`grid gap-1.5 grid-cols-${cols}`}>
+                    {types.map((type) => {
+                      const isActive = betType === type.id
+                      return (
+                        <button
+                          key={type.id}
+                          type="button"
+                          onClick={() => { setBetType(type.id); setBetSelection("") }}
+                          className={`flex flex-col items-center gap-1 rounded-xl border-2 py-2.5 px-1 transition-all select-none ${
+                            isActive
+                              ? "border-primary bg-primary/15 shadow-sm shadow-primary/20"
+                              : "border-border bg-muted/10 hover:border-primary/30 hover:bg-muted/20"
+                          }`}
+                        >
+                          <span className="text-base leading-none">{type.icon}</span>
+                          <span className={`text-[9px] font-semibold leading-tight text-center ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                            {type.label}
+                          </span>
+                        </button>
+                      )
+                    })}
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+              )
+            })()}
 
             {/* Predictions */}
             {preds?.percent && (

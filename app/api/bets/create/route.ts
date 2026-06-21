@@ -316,7 +316,7 @@ export async function POST(request: NextRequest) {
       userId: user.id,
       type: "bet_created",
       title: "Apuesta creada",
-      body: `Tu apuesta de ${amount} Fantasy Tokens fue publicada exitosamente.`,
+      body: `Tu apuesta de ${amount} ${betMode === "real" ? "iBYC" : "Fantasy Tokens"} fue publicada exitosamente.`,
       betId: bet.id,
     }, supabase)
 

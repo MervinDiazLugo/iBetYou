@@ -582,32 +582,36 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Tipo de Predicción</label>
-            <div className="grid grid-cols-2 gap-2">
-              {getAvailableBetTypes(selectedSport).map((type) => {
-                const isActive = betType === type.id
-                return (
-                  <div
-                    key={type.id}
-                    onClick={() => setBetType(type.id)}
-                    className={`relative cursor-pointer rounded-xl border-2 py-3 px-2 text-center transition-all select-none ${
-                      isActive
-                        ? "border-primary bg-primary/15 shadow-md shadow-primary/20"
-                        : "border-border bg-muted/10 hover:border-primary/40 hover:bg-muted/20"
-                    }`}
-                  >
-                    {isActive && (
-                      <div className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
-                        <span className="text-[9px] text-primary-foreground font-bold">✓</span>
-                      </div>
-                    )}
-                    <div className="text-xl mb-1">{type.icon}</div>
-                    <div className={`text-xs font-bold leading-tight ${isActive ? "text-primary" : ""}`}>{type.label}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{type.desc}</div>
-                  </div>
-                )
-              })}
-            </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipo de Predicción</p>
+            {(() => {
+              const types = getAvailableBetTypes(selectedSport)
+              const n = types.length
+              const cols = n <= 4 ? n : n === 5 ? 5 : 4
+              return (
+                <div className={`grid gap-1.5 grid-cols-${cols}`}>
+                  {types.map((type) => {
+                    const isActive = betType === type.id
+                    return (
+                      <button
+                        key={type.id}
+                        type="button"
+                        onClick={() => setBetType(type.id)}
+                        className={`flex flex-col items-center gap-1 rounded-xl border-2 py-2.5 px-1 transition-all select-none ${
+                          isActive
+                            ? "border-primary bg-primary/15 shadow-sm shadow-primary/20"
+                            : "border-border bg-muted/10 hover:border-primary/30 hover:bg-muted/20"
+                        }`}
+                      >
+                        <span className="text-base leading-none">{type.icon}</span>
+                        <span className={`text-[9px] font-semibold leading-tight text-center ${isActive ? "text-primary" : "text-muted-foreground"}`}>
+                          {type.label}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
           </div>
 
           <div className="rounded-lg border border-border bg-muted/10 p-3 space-y-2">

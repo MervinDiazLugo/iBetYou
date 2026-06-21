@@ -1945,7 +1945,7 @@ function HomeContent() {
               })()}
               {/* Bet type tabs */}
               <div className="space-y-2">
-                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipos de apuesta</p>
+                <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Tipos de predicción</p>
                 <div className={`grid gap-1.5 ${
                   houseBetTypes.length <= 4 ? `grid-cols-${houseBetTypes.length}` : houseBetTypes.length === 5 ? "grid-cols-5" : "grid-cols-3"
                 }`}>
