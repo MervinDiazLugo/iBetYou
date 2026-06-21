@@ -3,10 +3,11 @@ import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { createNotification } from "@/lib/notifications"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireBackofficeAdmin(request)
   if (!auth.authorized) return auth.response
 
+  const { id } = await params
   const { reason } = await request.json()
   if (!reason?.trim()) return NextResponse.json({ error: "Motivo de rechazo requerido" }, { status: 400 })
 
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const { data: deposit } = await supabase
     .from("ibeyc_deposits")
     .select("id, user_id, status, currency, amount_ibyc")
-    .eq("id", params.id)
+    .eq("id", id)
     .single()
 
   if (!deposit) return NextResponse.json({ error: "Depósito no encontrado" }, { status: 404 })
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   await supabase
     .from("ibeyc_deposits")
     .update({ status: "failed", failed_reason: reason.trim(), confirmed_by: auth.userId })
-    .eq("id", params.id)
+    .eq("id", id)
 
   await createNotification({
     userId: deposit.user_id,
