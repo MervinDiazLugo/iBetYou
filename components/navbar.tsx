@@ -169,7 +169,7 @@ export function Navbar() {
                       {formatCurrency(currentBalance)}
                     </span>
                     <span className="text-[10px] text-muted-foreground">
-                      {mode === "real" ? "iBY" : "Fantasy"}
+                      {mode === "real" ? "iBYC" : "Fantasy"}
                     </span>
                     <span className="ml-0.5 text-[10px] font-bold bg-primary/20 text-primary px-1 py-0.5 rounded leading-none">+</span>
                   </Link>
@@ -223,7 +223,7 @@ export function Navbar() {
                             <div className={`rounded-lg p-2.5 border ${mode === "real" ? "bg-amber-500/10 border-amber-500/30" : "bg-secondary/40 border-border/50"}`}>
                               <div className="flex items-center gap-1.5 mb-1">
                                 <Coins className="h-3 w-3 text-amber-400" />
-                                <span className="text-[10px] text-muted-foreground">iBY</span>
+                                <span className="text-[10px] text-muted-foreground">iBYC</span>
                                 {mode === "real" && <span className="text-[9px] bg-amber-500/20 text-amber-400 px-1 rounded leading-none py-0.5">activo</span>}
                               </div>
                               <div className="font-bold text-sm text-amber-400">{formatCurrency(ibcBalance)}</div>

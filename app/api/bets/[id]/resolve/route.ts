@@ -316,7 +316,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const evR = Array.isArray(bet.event) ? bet.event[0] : bet.event
     const matchInfoR = evR ? `${evR.home_team} vs ${evR.away_team}` + (evR.home_score !== null && evR.away_score !== null ? ` (${evR.home_score}-${evR.away_score})` : '') : 'Apuesta resuelta'
     const resolveNotifs = [
-      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`, body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" },
+      { userId: winnerUserId, type: "bet_resolved_win" as const, title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBYC" : "Fantasy Tokens"}!`, body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" },
       ...(loserId ? [{ userId: loserId, type: "bet_resolved_loss" as const, title: "Perdiste esta apuesta", body: matchInfoR, betId, mode: (bet as any).mode ?? "fantasy" }] : []),
     ]
     await createNotifications(resolveNotifs, supabase)

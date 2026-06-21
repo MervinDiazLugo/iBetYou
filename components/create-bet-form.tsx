@@ -929,7 +929,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
               />
             </div>
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Máx. disponible: {formatPesos(maxAmountByBalance)} {mode === "real" ? "iBY" : "Fantasy"}</span>
+              <span>Máx. disponible: {formatPesos(maxAmountByBalance)} {mode === "real" ? "iBYC" : "Fantasy"}</span>
               {maxBetSetting !== null && (
                 <span className="text-yellow-600 dark:text-yellow-400 font-medium">Límite plataforma: {formatPesos(maxBetSetting)}</span>
               )}

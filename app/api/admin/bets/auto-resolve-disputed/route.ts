@@ -247,7 +247,7 @@ export async function POST(request: NextRequest) {
       const loserId = winnerId === bet.creator_id ? bet.acceptor_id : bet.creator_id
       const matchInfo = `${home_team} vs ${away_team}` + (home_score !== null && away_score !== null ? ` (${home_score}-${away_score})` : '')
       await createNotifications([
-        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBY" : "Fantasy Tokens"}!`, body: matchInfo, betId: bet.id, mode: betMode },
+        { userId: winnerId, type: "bet_resolved_win", title: `¡Ganaste ${totalPrize.toFixed(2)} ${betMode === "real" ? "iBYC" : "Fantasy Tokens"}!`, body: matchInfo, betId: bet.id, mode: betMode },
         { userId: loserId, type: "bet_resolved_loss", title: "Perdiste esta apuesta", body: matchInfo, betId: bet.id, mode: betMode },
       ], supabase)
 
