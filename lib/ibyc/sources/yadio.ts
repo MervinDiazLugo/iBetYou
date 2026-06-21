@@ -18,7 +18,13 @@ function fetchWithTimeout(url: string): Promise<Response> {
   return fetch(url, { cache: "no-store", signal: controller.signal }).finally(() => clearTimeout(timer))
 }
 
-export async function getVESRate(): Promise<number> {
+export interface VESRateResult {
+  rate: number
+  tier: "parallel" | "official"
+  source: string
+}
+
+export async function getVESRate(): Promise<VESRateResult> {
   // 1. Try parallel market rate (most accurate for Venezuela)
   try {
     const res = await fetchWithTimeout(PYDOLARVE_URL)
@@ -29,7 +35,9 @@ export async function getVESRate(): Promise<number> {
         json?.monitor?.price ??
         json?.monitors?.enparalelovzla?.price ??
         json?.price
-      if (rate && typeof rate === "number" && rate > 0) return rate
+      if (rate && typeof rate === "number" && rate > 0) {
+        return { rate, tier: "parallel", source: "pydolarve" }
+      }
     }
   } catch {
     // pydolarve unreachable — continue
@@ -41,7 +49,9 @@ export async function getVESRate(): Promise<number> {
     if (res.ok) {
       const json = await res.json()
       const rate = json?.rates?.VES
-      if (rate && typeof rate === "number" && rate > 0) return rate
+      if (rate && typeof rate === "number" && rate > 0) {
+        return { rate, tier: "official", source: "open_er" }
+      }
     }
   } catch {
     // continue
@@ -55,5 +65,5 @@ export async function getVESRate(): Promise<number> {
   if (!rate || typeof rate !== "number" || rate <= 0) {
     throw new Error(`exchangerate-api: VES not in response`)
   }
-  return rate
+  return { rate, tier: "official", source: "exchangerate_api" }
 }

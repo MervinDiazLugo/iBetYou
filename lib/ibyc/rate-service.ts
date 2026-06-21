@@ -48,10 +48,13 @@ export async function getRate(currency: string): Promise<RateResult> {
   // Fetch fresh rate
   let rate: number
   let source: string
+  let tier: "official" | "parallel" = cfg.tier
   try {
     if (cfg.source === "yadio") {
-      rate = await getVESRate()
-      source = "yadio"
+      const vesResult = await getVESRate()
+      rate = vesResult.rate
+      source = vesResult.source
+      tier = vesResult.tier  // actual tier from the source that responded
     } else if (cfg.source === "bluelytics") {
       rate = await getARSRate()
       source = "bluelytics"
@@ -85,12 +88,12 @@ export async function getRate(currency: string): Promise<RateResult> {
     currency,
     rate_to_usd: rate,
     source,
-    tier: cfg.tier,
+    tier,
     fetched_at: fetchedAt,
     expires_at: expiresAt,
   })
 
-  return { currency, rateToUsd: rate, source, tier: cfg.tier, fetchedAt, isCached: false, expiresAt }
+  return { currency, rateToUsd: rate, source, tier, fetchedAt, isCached: false, expiresAt }
 }
 
 // Admin can manually set a rate override (replaces cache with far-future expiry)
