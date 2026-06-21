@@ -118,7 +118,7 @@ export default function LoginPage() {
             </div>
             
             <p className="text-xs text-muted-foreground text-center">
-              Cada login te da $50 en Fantasy Tokens (hasta $1000 acumulado)
+              Al registrarte recibirás 10,000 Fantasy Tokens para comenzar a apostar
             </p>
           </CardContent>
 

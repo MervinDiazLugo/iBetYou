@@ -264,7 +264,7 @@ function RegisterForm() {
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Al iniciar sesión recibirás $50 en Fantasy Tokens. ¡Cada login te da $50 más hasta $1000!
+              Al registrarte recibirás 10,000 Fantasy Tokens para comenzar a apostar
             </p>
 
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 space-y-1">
