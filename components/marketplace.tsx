@@ -1215,7 +1215,9 @@ function HomeContent() {
               </Badge>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {visibleFeatured.map((event) => (
+              {visibleFeatured.map((event) => {
+                const eventHasStarted = new Date(event.start_time) <= new Date()
+                return (
                 <Card
                   key={`featured-${event.id}`}
                   className="overflow-hidden border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all"
@@ -1292,36 +1294,51 @@ function HomeContent() {
                         )}
                       </div>
                     )}
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="text-xs h-8"
-                        onClick={() => {
-                          if (!user) { router.push('/login'); return }
-                          setSelectedEventForBet(event)
-                          setShowCreateModal(true)
-                        }}
-                      >
-                        🤝 Predecir P2P
-                      </Button>
-                      {(event.metadata as any)?.predictions?.percent && (
+                    {eventHasStarted ? (
+                      <div className="mt-3 flex items-center justify-center gap-2.5 py-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                        <span className="flex items-center gap-1.5 text-red-400 text-xs font-semibold">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                          En curso
+                        </span>
+                        {event.home_score !== null && event.away_score !== null && (
+                          <span className="text-xs font-bold text-foreground">
+                            {event.home_score} - {event.away_score}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-3 grid grid-cols-2 gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
+                          className="text-xs h-8"
                           onClick={() => {
                             if (!user) { router.push('/login'); return }
-                            openHouseBetModal(event)
+                            setSelectedEventForBet(event)
+                            setShowCreateModal(true)
                           }}
                         >
-                          🏦 Vs. la casa
+                          🤝 Predecir P2P
                         </Button>
-                      )}
-                    </div>
+                        {(event.metadata as any)?.predictions?.percent && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
+                            onClick={() => {
+                              if (!user) { router.push('/login'); return }
+                              openHouseBetModal(event)
+                            }}
+                          >
+                            🏦 Vs. la casa
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              ))}
+                )
+              })}
             </div>
           </div>
           ) : null
@@ -1380,15 +1397,22 @@ function HomeContent() {
                       {sportLoading && visibleEvents.length === 0 && [...Array(6)].map((_, i) => (
                         <div key={`skel-${sportId}-${i}`} className="rounded-lg border border-border animate-pulse h-28 bg-muted/30" />
                       ))}
-                      {visibleEvents.map((event) => (
+                      {visibleEvents.map((event) => {
+                        const started = new Date(event.start_time) <= new Date()
+                        return (
                         <Card
                           key={event.id}
-                          className={`overflow-hidden hover:shadow-md transition-all cursor-pointer h-full flex flex-col group ${
+                          className={`overflow-hidden hover:shadow-md transition-all h-full flex flex-col group ${
+                            started
+                              ? "cursor-default opacity-60"
+                              : "cursor-pointer"
+                          } ${
                             event.featured
                               ? "border-amber-400/50 hover:border-amber-400/80"
-                              : "hover:border-blue-500/50"
+                              : started ? "" : "hover:border-blue-500/50"
                           }`}
                           onClick={() => {
+                            if (started) return
                             if (!user) {
                               router.push('/login')
                               return
@@ -1435,12 +1459,19 @@ function HomeContent() {
                               </div>
                             </div>
 
-                            <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                              Haz clic para crear predicción
-                            </div>
+                            {started ? (
+                              <div className="text-center text-[10px] text-red-400/70 font-medium">
+                                🔴 En curso
+                              </div>
+                            ) : (
+                              <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
+                                Haz clic para crear predicción
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
-                      ))}
+                        )
+                      })}
                     </div>}
 
                     {!collapsedSports[sportId] && (hasMore || sportLoading) && (
