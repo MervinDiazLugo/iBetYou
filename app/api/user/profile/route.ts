@@ -32,10 +32,9 @@ export async function GET(request: NextRequest) {
 
     const supabase = createAdminSupabaseClient()
 
-    // Get profile — only select columns that are guaranteed to exist
     let { data: profile, error: profileError } = await supabase
       .from("profiles")
-      .select("id, email, nickname, avatar_url, role, kyc_status, country, created_at")
+      .select("*")
       .eq("id", userId)
       .single()
 
@@ -56,7 +55,7 @@ export async function GET(request: NextRequest) {
         )
         const { data: retried } = await supabase
           .from("profiles")
-          .select("id, email, nickname, avatar_url, role, kyc_status, country, created_at")
+          .select("*")
           .eq("id", userId)
           .single()
         profile = retried

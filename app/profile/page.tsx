@@ -21,15 +21,16 @@ const COUNTRIES = [
 
 interface ProfilePayload {
   profile: {
-    nickname: string
-    avatar_url: string | null
-    kyc_status: string
-    created_at: string
-    country: string | null
+    nickname?: string
+    avatar_url?: string | null
+    kyc_status?: string
+    created_at?: string
+    country?: string | null
+    [key: string]: unknown
   }
   wallet: {
-    balance_fantasy: number
-    balance_real: number
+    balance_fantasy?: number
+    balance_real?: number
   } | null
   stats: {
     total_bets: number
@@ -145,9 +146,9 @@ export default function ProfilePage() {
 
   const { profile, wallet, stats } = data
   const level = getLevel(stats.total_bets, stats.win_rate)
-  const memberSince = new Date(profile.created_at).toLocaleDateString("es-ES", {
-    month: "long", year: "numeric", timeZone: "UTC",
-  })
+  const memberSince = profile.created_at
+    ? new Date(profile.created_at).toLocaleDateString("es-ES", { month: "long", year: "numeric", timeZone: "UTC" })
+    : null
 
   return (
     <div className="min-h-screen bg-background">
@@ -162,7 +163,7 @@ export default function ProfilePage() {
             <div>
               <p className="text-xl font-bold">{profile.nickname}</p>
               <p className="text-sm text-muted-foreground">{user?.email}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Miembro desde {memberSince}</p>
+              {memberSince && <p className="text-xs text-muted-foreground mt-0.5">Miembro desde {memberSince}</p>}
             </div>
             <div className="flex gap-2 flex-wrap justify-center">
               <Badge variant="secondary">{level.icon} {level.label}</Badge>
