@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
+import { logUserEvent } from "@/lib/funnel"
 
 export async function GET(request: NextRequest) {
   const authenticatedUserId = await getAuthenticatedUserId(request)
@@ -46,6 +47,24 @@ export async function GET(request: NextRequest) {
     const isAdmin = profile?.role === "backoffice_admin"
     const threshold = isAdmin ? null : Number(thresholdSetting?.value ?? 500)
     const low_balance = !isAdmin && threshold !== null && Number(wallet.balance_fantasy) < threshold
+
+    if (low_balance) {
+      void (async () => {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        const { count } = await supabase
+          .from("user_funnel_events")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user_id)
+          .eq("event_type", "low_balance_reached")
+          .gte("created_at", yesterday)
+        if ((count ?? 0) === 0) {
+          await logUserEvent(user_id, "low_balance_reached", {
+            balance: Number(wallet.balance_fantasy),
+            threshold,
+          }, supabase)
+        }
+      })()
+    }
 
     return NextResponse.json({ wallet, user: profile, low_balance, low_balance_threshold: threshold })
   } catch (error: any) {

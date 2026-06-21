@@ -1,5 +1,6 @@
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { applyReferral, getOrCreateReferralCode } from "@/lib/referrals"
+import { logUserEvent } from "@/lib/funnel"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(request: NextRequest) {
@@ -42,6 +43,14 @@ export async function GET(request: NextRequest) {
 
       // Non-critical: ensure user has a referral code. Swallow errors to never break login.
       try { await getOrCreateReferralCode(userId, supabase) } catch {}
+
+      // Funnel: log signup once per user (new signups have created_at within last 10 min)
+      const isNewSignup = (Date.now() - new Date(sessionData.user.created_at).getTime()) < 10 * 60 * 1000
+      if (isNewSignup) {
+        await logUserEvent(userId, "signup", {
+          provider: sessionData.user.app_metadata?.provider,
+        }, supabase)
+      }
 
       const today = new Date().toISOString().split("T")[0]
       const bonusPerLogin = 50

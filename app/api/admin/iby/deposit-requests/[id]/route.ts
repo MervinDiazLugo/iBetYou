@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { requireBackofficeAdmin } from "@/lib/server-auth"
 import { sendDepositApprovedEmail, sendDepositRejectedEmail } from "@/lib/email"
+import { logUserEvent } from "@/lib/funnel"
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   const auth = await requireBackofficeAdmin(request)
@@ -133,6 +134,18 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     operation: "deposit_approved",
     reference_id: id,
   })
+
+  // Funnel: log first real deposit once per user
+  void (async () => {
+    const { count } = await supabase
+      .from("user_funnel_events")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", req.user_id)
+      .eq("event_type", "first_real_deposit")
+    if ((count ?? 0) === 0) {
+      await logUserEvent(req.user_id, "first_real_deposit", { amount_ibyc: coinsToCredit }, supabase)
+    }
+  })()
 
   if (userEmail) {
     try {

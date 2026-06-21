@@ -29,6 +29,7 @@ export function Navbar() {
   const [balance, setBalance] = useState({ fantasy: 0, real: 0 })
   const [ibcBalance, setIbcBalance] = useState(0)
   const [lowBalance, setLowBalance] = useState(false)
+  const [ctaViewed, setCtaViewed] = useState(false)
   const [menuNickname, setMenuNickname] = useState("")
   const [sessionToken, setSessionToken] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement | null>(null)
@@ -81,6 +82,17 @@ export function Navbar() {
     window.addEventListener("wallet:updated", handler)
     return () => window.removeEventListener("wallet:updated", handler)
   }, [user?.id])
+
+  // Funnel: fire viewed_real_money_cta once per session when banner becomes visible
+  useEffect(() => {
+    if (!lowBalance || mode === "real" || !sessionToken || ctaViewed) return
+    setCtaViewed(true)
+    fetch("/api/funnel/event", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ eventType: "viewed_real_money_cta" }),
+    }).catch(() => null)
+  }, [lowBalance, mode, sessionToken, ctaViewed])
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -320,6 +332,14 @@ export function Navbar() {
             <Link
               href="/top-up?from=low_balance"
               className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
+              onClick={() => {
+                if (!sessionToken) return
+                fetch("/api/funnel/event", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+                  body: JSON.stringify({ eventType: "clicked_real_money_cta" }),
+                }).catch(() => null)
+              }}
             >
               Pasar a dinero real →
             </Link>

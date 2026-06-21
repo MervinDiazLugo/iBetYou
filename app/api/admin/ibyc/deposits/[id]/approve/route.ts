@@ -21,29 +21,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: `No se puede aprobar un depósito en estado: ${deposit.status}` }, { status: 409 })
   }
 
-  // Read wallet for optimistic lock
-  const { data: wallet } = await supabase
-    .from("wallets")
-    .select("balance_real")
-    .eq("user_id", deposit.user_id)
-    .single()
-
-  if (!wallet) return NextResponse.json({ error: "Wallet de usuario no encontrada" }, { status: 404 })
-
   const amountIbyc = Number(deposit.amount_ibyc)
-  const newBalance = wallet.balance_real + amountIbyc
 
-  // Credit wallet (optimistic lock — verifies balance unchanged since read)
-  const { data: credited, error: creditError } = await supabase
-    .from("wallets")
-    .update({ balance_real: newBalance })
+  // Read iby_wallets for optimistic lock
+  const { data: ibcWallet } = await supabase
+    .from("iby_wallets")
+    .select("balance, balance_blocked")
     .eq("user_id", deposit.user_id)
-    .eq("balance_real", wallet.balance_real)
-    .select("balance_real")
     .single()
 
-  if (creditError || !credited) {
-    return NextResponse.json({ error: "Conflicto de balance. Intente de nuevo." }, { status: 409 })
+  let newBalance: number
+
+  if (!ibcWallet) {
+    // Wallet doesn't exist yet — create it with the deposit amount
+    const { data: created, error: createError } = await supabase
+      .from("iby_wallets")
+      .insert({ user_id: deposit.user_id, balance: amountIbyc })
+      .select("balance")
+      .single()
+    if (createError || !created) {
+      return NextResponse.json({ error: "Error creando wallet. Intente de nuevo." }, { status: 500 })
+    }
+    newBalance = amountIbyc
+  } else {
+    newBalance = Number(ibcWallet.balance) + amountIbyc
+    // Credit wallet (optimistic lock — verifies balance unchanged since read)
+    const { data: credited, error: creditError } = await supabase
+      .from("iby_wallets")
+      .update({ balance: newBalance, updated_at: new Date().toISOString() })
+      .eq("user_id", deposit.user_id)
+      .eq("balance", ibcWallet.balance)
+      .select("balance")
+      .single()
+    if (creditError || !credited) {
+      return NextResponse.json({ error: "Conflicto de balance. Intente de nuevo." }, { status: 409 })
+    }
   }
 
   // Mark deposit confirmed

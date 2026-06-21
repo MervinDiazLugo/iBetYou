@@ -59,10 +59,11 @@ export async function getRate(currency: string): Promise<RateResult> {
       rate = await getOfficialRate(currency)
       source = "frankfurter"
     }
-  } catch (fetchErr) {
+  } catch (fetchErr: any) {
+    console.error(`Rate fetch failed for ${currency}:`, fetchErr?.message ?? fetchErr)
     // If DB cache exists (even expired), return stale with warning
     if (cached) {
-      console.warn(`Rate fetch failed for ${currency}, using stale cache:`, fetchErr)
+      console.warn(`Using stale cache for ${currency} (expired at ${cached.expires_at})`)
       return {
         currency,
         rateToUsd: Number(cached.rate_to_usd),

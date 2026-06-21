@@ -1,6 +1,7 @@
 import { createAdminSupabaseClient, createServerSupabaseClient } from "@/lib/supabase"
 import { NextRequest, NextResponse } from "next/server"
 import { createNotification } from "@/lib/notifications"
+import { logUserEvent } from "@/lib/funnel"
 import { canCountryUseRealMoney } from "@/lib/country-access"
 import { payoutToMode } from "@/lib/wallet-utils"
 import { PRE_MATCH_ONLY_BET_TYPES } from "@/lib/bet-constants"
@@ -319,6 +320,31 @@ export async function POST(request: NextRequest) {
       body: `Tu apuesta de ${amount} ${betMode === "real" ? "iBYC" : "Fantasy Tokens"} fue publicada exitosamente.`,
       betId: bet.id,
     }, supabase)
+
+    // Funnel tracking (fire-and-forget pattern — errors swallowed inside logUserEvent)
+    void (async () => {
+      const [{ count: totalBets }, { count: recentBets }] = await Promise.all([
+        supabase.from("bets").select("id", { count: "exact", head: true }).eq("creator_id", user.id),
+        supabase.from("bets").select("id", { count: "exact", head: true })
+          .eq("creator_id", user.id)
+          .gte("created_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()),
+      ])
+
+      if (totalBets === 1) {
+        await logUserEvent(user.id, "first_bet", { bet_id: bet.id, mode: betMode }, supabase)
+      }
+
+      if ((recentBets ?? 0) >= 5) {
+        const { count: priorStreakEvents } = await supabase
+          .from("user_funnel_events")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", user.id)
+          .eq("event_type", "bet_streak_5")
+        if ((priorStreakEvents ?? 0) === 0) {
+          await logUserEvent(user.id, "bet_streak_5", { recent_bet_count: recentBets }, supabase)
+        }
+      }
+    })()
 
     return NextResponse.json({
       success: true,
