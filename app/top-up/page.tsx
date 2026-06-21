@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import {
   Coins, Clock, CheckCircle, XCircle, AlertCircle,
   Copy, Check, ChevronDown, ChevronUp, ArrowUpCircle,
+  Plus, Trash2, RefreshCw,
 } from "lucide-react"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { useAuth } from "@/components/providers"
@@ -40,6 +41,13 @@ interface HistoryItem {
   // withdrawal-specific
   fee_ibyc?: number
   amount_local_out?: number
+}
+
+interface WithdrawalMethod {
+  id: string
+  type: "binance" | "bank" | "cbu_cvu"
+  label: string
+  details: Record<string, string>
 }
 
 interface MethodConfig {
@@ -213,14 +221,23 @@ export default function RecargasPage() {
   const [selectedId, setSelectedId] = useState<string>("")
   const [instructionsOpen, setInstructionsOpen] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<"deposit" | "history">("deposit")
+  const [activeTab, setActiveTab] = useState<"deposit" | "withdraw" | "history">("deposit")
 
   // Rate state
   const [currency, setCurrency] = useState("VES")
   const [rate, setRate] = useState<{ rateToUsd: number; source: string; tier: string } | null>(null)
   const [rateLoading, setRateLoading] = useState(false)
+  const [rateError, setRateError] = useState(false)
 
   const [form, setForm] = useState({ amount: "", proof_reference: "" })
+
+  // Withdrawal state
+  const [withdrawMethods, setWithdrawMethods] = useState<WithdrawalMethod[]>([])
+  const [withdrawForm, setWithdrawForm] = useState({ method_id: "", amount: "" })
+  const [withdrawSubmitting, setWithdrawSubmitting] = useState(false)
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false)
+  const [showAddMethod, setShowAddMethod] = useState(false)
+  const [newMethod, setNewMethod] = useState<{ type: "binance" | "bank" | "cbu_cvu"; label: string; details: Record<string, string> }>({ type: "binance", label: "", details: {} })
 
   const cfg = getCurrency(currency)
   const amountNum = parseFloat(form.amount) || 0
@@ -239,12 +256,14 @@ export default function RecargasPage() {
       return
     }
     setRateLoading(true)
+    setRateError(false)
     try {
       const res = await fetch(`/api/ibyc/rate?currency=${currency}`)
-      if (res.ok) setRate(await res.json())
-      else setRate(null)
+      if (res.ok) { setRate(await res.json()); setRateError(false) }
+      else { setRate(null); setRateError(true) }
     } catch {
       setRate(null)
+      setRateError(true)
     } finally {
       setRateLoading(false)
     }
@@ -255,10 +274,11 @@ export default function RecargasPage() {
   async function loadData() {
     setLoading(true)
     try {
-      const [balanceRes, accountsRes, historyRes] = await Promise.all([
+      const [balanceRes, accountsRes, historyRes, methodsRes] = await Promise.all([
         authFetch("/api/ibyc/balance"),
         authFetch("/api/ibyc/deposit-accounts"),
         authFetch("/api/ibyc/history"),
+        authFetch("/api/withdrawals/methods"),
       ])
       if (balanceRes.ok) {
         const d = await balanceRes.json()
@@ -281,6 +301,10 @@ export default function RecargasPage() {
           })),
         ])
       }
+      if (methodsRes.ok) {
+        const d = await methodsRes.json()
+        setWithdrawMethods(d.methods || [])
+      }
     } finally {
       setLoading(false)
     }
@@ -292,6 +316,57 @@ export default function RecargasPage() {
     navigator.clipboard.writeText(value).catch(() => null)
     setCopiedKey(key)
     setTimeout(() => setCopiedKey(null), 2000)
+  }
+
+  const withdrawAmount = Number(withdrawForm.amount) || 0
+  const withdrawFee = withdrawAmount * 0.06
+  const withdrawNet = withdrawAmount - withdrawFee
+
+  async function handleWithdraw(e: React.FormEvent) {
+    e.preventDefault()
+    if (!withdrawForm.method_id) { showToast("Seleccioná un método de retiro", "error"); return }
+    if (!withdrawAmount || withdrawAmount < 100) { showToast("Monto mínimo: 100 iBYC", "error"); return }
+    setConfirmWithdraw(true)
+  }
+
+  async function doWithdraw() {
+    setConfirmWithdraw(false)
+    setWithdrawSubmitting(true)
+    try {
+      const res = await authFetch("/api/withdrawals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method_id: withdrawForm.method_id, amount: withdrawAmount }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "Error al solicitar retiro", "error"); return }
+      showToast("Solicitud enviada. El equipo la procesará pronto.", "success")
+      setWithdrawForm({ method_id: "", amount: "" })
+      loadData()
+    } finally {
+      setWithdrawSubmitting(false)
+    }
+  }
+
+  async function handleAddWithdrawMethod(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newMethod.label.trim()) { showToast("Etiqueta requerida", "error"); return }
+    const res = await authFetch("/api/withdrawals/methods", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newMethod),
+    })
+    const data = await res.json()
+    if (!res.ok) { showToast(data.error || "Error", "error"); return }
+    showToast("Método agregado", "success")
+    setShowAddMethod(false)
+    setNewMethod({ type: "binance", label: "", details: {} })
+    loadData()
+  }
+
+  async function handleDeleteWithdrawMethod(id: string) {
+    const res = await authFetch(`/api/withdrawals/methods?id=${id}`, { method: "DELETE" })
+    if (res.ok) { showToast("Método eliminado", "success"); loadData() }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -393,6 +468,12 @@ export default function RecargasPage() {
             Depositar
           </button>
           <button
+            onClick={() => setActiveTab("withdraw")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "withdraw" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            Retirar
+          </button>
+          <button
             onClick={() => setActiveTab("history")}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === "history" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
           >
@@ -450,7 +531,22 @@ export default function RecargasPage() {
                     </div>
                   </div>
 
-                  {/* Rate preview */}
+                  {/* Rate preview / error */}
+                  {rateError && !rateLoading && (
+                    <div className="rounded-lg border border-red-500/30 bg-red-500/5 px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm text-red-400">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        No se pudo obtener la tasa de cambio. El botón estará desactivado hasta que se recupere.
+                      </div>
+                      <button
+                        type="button"
+                        onClick={fetchRate}
+                        className="shrink-0 flex items-center gap-1 text-xs text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1"
+                      >
+                        <RefreshCw className="h-3 w-3" /> Reintentar
+                      </button>
+                    </div>
+                  )}
                   {(rate || rateLoading) && (
                     <div className="rounded-lg border bg-muted/10 px-4 py-3 text-sm space-y-1.5">
                       {rateLoading ? (
@@ -616,6 +712,137 @@ export default function RecargasPage() {
           </div>
         )}
 
+        {/* ── Withdraw tab ── */}
+        {activeTab === "withdraw" && (
+          <div className="space-y-5">
+            {/* Withdraw form */}
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="px-5 py-4 border-b border-border">
+                <h2 className="text-lg font-bold">Solicitar retiro</h2>
+                <p className="text-sm text-muted-foreground mt-0.5">Mínimo 100 iBYC · Fee 6% · 1 iBYC = $1 USD</p>
+              </div>
+              <form onSubmit={handleWithdraw} className="px-5 py-4 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Método de retiro</label>
+                  {withdrawMethods.length === 0 ? (
+                    <div className="flex items-start gap-2 p-3 rounded-md bg-yellow-500/10 text-yellow-600 text-sm">
+                      <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+                      No tenés métodos guardados. Agregá uno abajo.
+                    </div>
+                  ) : (
+                    <select
+                      className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+                      value={withdrawForm.method_id}
+                      onChange={e => setWithdrawForm(f => ({ ...f, method_id: e.target.value }))}
+                    >
+                      <option value="">Seleccioná un método...</option>
+                      {withdrawMethods.map(m => (
+                        <option key={m.id} value={m.id}>{TYPE_LABEL[m.type] ?? m.type} — {m.label}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Monto (iBYC)</label>
+                  <Input
+                    type="number"
+                    min="100"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={withdrawForm.amount}
+                    onChange={e => setWithdrawForm(f => ({ ...f, amount: e.target.value }))}
+                  />
+                </div>
+                {withdrawAmount >= 100 && (
+                  <div className="rounded-lg bg-muted/20 border border-border p-3 text-sm space-y-1">
+                    <div className="flex justify-between"><span>Monto bruto</span><span>{withdrawAmount.toFixed(2)} iBYC</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Fee (6%)</span><span>− {withdrawFee.toFixed(2)} iBYC</span></div>
+                    <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>A recibir</span><span>{withdrawNet.toFixed(2)} iBYC</span></div>
+                  </div>
+                )}
+                <Button type="submit" className="w-full" disabled={withdrawSubmitting || withdrawMethods.length === 0}>
+                  {withdrawSubmitting ? "Enviando..." : "Solicitar retiro"}
+                </Button>
+              </form>
+            </div>
+
+            {/* Withdrawal methods */}
+            <div className="rounded-xl border border-border overflow-hidden">
+              <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                <span className="text-sm font-semibold">Mis métodos de retiro</span>
+                <Button size="sm" variant="outline" onClick={() => setShowAddMethod(v => !v)}>
+                  <Plus className="h-4 w-4 mr-1" /> Agregar
+                </Button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {showAddMethod && (
+                  <form onSubmit={handleAddWithdrawMethod} className="border border-border rounded-lg p-4 space-y-3 bg-muted/20">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Tipo</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-lg border bg-background text-sm"
+                        value={newMethod.type}
+                        onChange={e => setNewMethod(m => ({ ...m, type: e.target.value as "binance" | "bank" | "cbu_cvu", details: {} }))}
+                      >
+                        <option value="binance">Binance</option>
+                        <option value="bank">Cuenta Bancaria</option>
+                        <option value="cbu_cvu">CBU / CVU</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-medium">Etiqueta (ej: &quot;Mi Binance&quot;)</label>
+                      <Input
+                        placeholder="Nombre del método"
+                        value={newMethod.label}
+                        onChange={e => setNewMethod(m => ({ ...m, label: e.target.value }))}
+                      />
+                    </div>
+                    {newMethod.type === "binance" && (
+                      <div className="space-y-2">
+                        <Input placeholder="Binance ID / UID" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, binance_id: e.target.value } }))} />
+                        <Input placeholder="Email de Binance" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, email: e.target.value } }))} />
+                        <Input placeholder="Pay ID (opcional)" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, pay_id: e.target.value } }))} />
+                      </div>
+                    )}
+                    {newMethod.type === "bank" && (
+                      <div className="space-y-2">
+                        <Input placeholder="Banco" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, bank_name: e.target.value } }))} />
+                        <Input placeholder="Número de cuenta" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, account_number: e.target.value } }))} />
+                        <Input placeholder="Titular" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, holder: e.target.value } }))} />
+                      </div>
+                    )}
+                    {newMethod.type === "cbu_cvu" && (
+                      <div className="space-y-2">
+                        <Input placeholder="CBU / CVU" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, cbu_cvu: e.target.value } }))} />
+                        <Input placeholder="Alias (opcional)" onChange={e => setNewMethod(m => ({ ...m, details: { ...m.details, alias: e.target.value } }))} />
+                      </div>
+                    )}
+                    <div className="flex gap-2">
+                      <Button type="submit" size="sm">Guardar</Button>
+                      <Button type="button" size="sm" variant="outline" onClick={() => setShowAddMethod(false)}>Cancelar</Button>
+                    </div>
+                  </form>
+                )}
+                {withdrawMethods.length === 0 && !showAddMethod && (
+                  <p className="text-sm text-muted-foreground text-center py-4">Sin métodos guardados.</p>
+                )}
+                {withdrawMethods.map(m => (
+                  <div key={m.id} className="flex justify-between items-center py-2 border-b border-border last:border-0">
+                    <span className="text-sm font-medium">{TYPE_LABEL[m.type] ?? m.type} — {m.label}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteWithdrawMethod(m.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── History tab ── */}
         {activeTab === "history" && (
           <div className="space-y-3">
@@ -674,6 +901,24 @@ export default function RecargasPage() {
         )}
 
       </div>
+
+      {/* Withdrawal confirm modal */}
+      {confirmWithdraw && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4">
+            <h2 className="text-lg font-bold">Confirmar retiro</h2>
+            <div className="rounded-lg bg-muted/20 border border-border p-3 text-sm space-y-1">
+              <div className="flex justify-between"><span>Monto bruto</span><span>{withdrawAmount.toFixed(2)} iBYC</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Fee (6%)</span><span>− {withdrawFee.toFixed(2)} iBYC</span></div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1 mt-1"><span>A recibir</span><span>{withdrawNet.toFixed(2)} iBYC</span></div>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setConfirmWithdraw(false)}>Cancelar</Button>
+              <Button className="flex-1" onClick={doWithdraw}>Confirmar</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

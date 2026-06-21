@@ -237,8 +237,7 @@ export function Navbar() {
                             { href: "/profile", label: "Mi Perfil" },
                             { href: "/balance", label: "Balance de Jugadas" },
                             ...(canUseRealMoney ? [
-                              { href: "/top-up", label: "Recargas iBYC" },
-                              { href: "/withdrawals", label: "Retiros iBYC" },
+                              { href: "/top-up", label: "Recargas / Retiros iBYC" },
                             ] : []),
                             { href: "/my-referrals", label: "Mis Referidos", accent: true },
                             { href: "/como-jugar", label: "Cómo Jugar" },
@@ -379,8 +378,7 @@ export function Navbar() {
                       { href: "/profile", label: "Mi Perfil" },
                       { href: "/balance", label: "Balance de Jugadas" },
                       ...(canUseRealMoney ? [
-                        { href: "/top-up", label: "Recargas iBYC" },
-                        { href: "/withdrawals", label: "Retiros iBYC" },
+                        { href: "/top-up", label: "Recargas / Retiros iBYC" },
                       ] : []),
                       { href: "/my-referrals", label: "Mis Referidos", accent: true },
                       { href: "/como-jugar", label: "Cómo Jugar" },

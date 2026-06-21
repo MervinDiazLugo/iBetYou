@@ -352,8 +352,8 @@ export default function HouseWalletPage() {
             <>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Precio del token iBYC</CardTitle>
-                  <p className="text-xs text-muted-foreground">Pesos por 1 iBYC Coin. Afecta recargas desde este momento.</p>
+                  <CardTitle className="text-base">Precio interno iBY (apuestas)</CardTitle>
+                  <p className="text-xs text-muted-foreground">Precio de referencia usado en la lógica de apuestas P2P y vs. la casa. No afecta la tasa de cambio de recargas iBYC (esa se obtiene automáticamente de yadio.io).</p>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex gap-2 items-center">
