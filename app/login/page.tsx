@@ -7,12 +7,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
-import { useToast } from "@/components/toast"
 
 export default function LoginPage() {
   const router = useRouter()
   const supabase = createBrowserSupabaseClient()
-  const { showToast } = useToast()
+
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
@@ -38,28 +37,23 @@ export default function LoginPage() {
       return
     }
 
+    // Fire-and-forget — don't block redirect on bonus processing
     if (data.user) {
-      // Call API to handle login bonus
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        const res = await fetch("/api/auth/login-bonus", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-          },
-          body: JSON.stringify({ userId: data.user.id }),
-        })
-
-        const bonusData = await res.json()
-        
-        if (bonusData.success || bonusData.message) {
-          showToast(bonusData.message, bonusData.success ? "success" : "info")
-        }
-      } catch (error) {
-        console.error("Error processing login bonus:", error)
-        showToast("Error procesando bonus de login", "error")
-      }
+      void (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.access_token) {
+            await fetch("/api/auth/login-bonus", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${session.access_token}`,
+              },
+              body: JSON.stringify({ userId: data.user.id }),
+            })
+          }
+        } catch { /* ignore */ }
+      })()
     }
 
     router.push("/")
