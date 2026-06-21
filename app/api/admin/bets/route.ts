@@ -799,7 +799,7 @@ export async function POST(request: NextRequest) {
 
         const apiResponse = await fetch(apiUrl, {
           headers: { "x-apisports-key": API_FOOTBALL_KEY! },
-          next: { revalidate: 0 }
+          cache: "no-store",
         })
 
         if (!apiResponse.ok) {
@@ -846,7 +846,7 @@ export async function POST(request: NextRequest) {
       try {
         const scorerResponse = await fetch(`${API_FOOTBALL_URL}/fixtures/events?fixture=${externalNumericId}`, {
           headers: { 'x-apisports-key': API_FOOTBALL_KEY! },
-          next: { revalidate: 0 },
+          cache: "no-store",
         })
 
         if (scorerResponse.ok) {

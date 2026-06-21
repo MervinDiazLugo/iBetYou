@@ -1,7 +1,6 @@
 ﻿import { NextRequest, NextResponse } from "next/server"
 import { createAdminSupabaseClient } from "@/lib/supabase"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
-import { createNotification } from "@/lib/notifications"
 
 const MIN_WITHDRAWAL = 100
 const FEE_RATE = 0.06
