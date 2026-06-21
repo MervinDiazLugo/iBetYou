@@ -52,9 +52,11 @@ export function IbycDepositForm({ onSuccess }: { onSuccess?: () => void }) {
 
   useEffect(() => { fetchRate() }, [fetchRate])
 
-  async function authHeaders() {
+  async function authHeaders(): Promise<Record<string, string>> {
     const { data: { session } } = await supabase.auth.getSession()
-    return session?.access_token ? { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" } : { "Content-Type": "application/json" }
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`
+    return headers
   }
 
   async function handleCreateDeposit() {

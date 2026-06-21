@@ -33,18 +33,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const amountIbyc = Number(deposit.amount_ibyc)
   const newBalance = wallet.balance_real + amountIbyc
 
-  // Credit wallet (optimistic lock)
-  const { error: creditError } = await supabase
+  // Credit wallet (optimistic lock — verifies balance unchanged since read)
+  const { data: credited, error: creditError } = await supabase
     .from("wallets")
     .update({ balance_real: newBalance })
     .eq("user_id", deposit.user_id)
     .eq("balance_real", wallet.balance_real)
+    .select("balance_real")
+    .single()
 
-  if (creditError) {
-    if (creditError.code === "PGRST116") {
-      return NextResponse.json({ error: "Conflicto de balance. Intente de nuevo." }, { status: 409 })
-    }
-    return NextResponse.json({ error: "Error acreditando iBYC" }, { status: 500 })
+  if (creditError || !credited) {
+    return NextResponse.json({ error: "Conflicto de balance. Intente de nuevo." }, { status: 409 })
   }
 
   // Mark deposit confirmed

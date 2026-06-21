@@ -509,7 +509,7 @@ export default function BackofficeRecargas() {
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">iBYC a acreditar</p>
-                              <p className="font-bold text-yellow-400">{Number(d.amount_ibyc).toFixed(4)} iBY</p>
+                              <p className="font-bold text-yellow-400">{Number(d.amount_ibyc).toFixed(4)} iBYC</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Método</p>
@@ -594,11 +594,11 @@ export default function BackofficeRecargas() {
                           <div className="flex items-center gap-4 mt-2 flex-wrap">
                             <div>
                               <p className="text-xs text-muted-foreground">iBYC solicitado</p>
-                              <p className="font-bold">{Number(w.amount_ibyc_requested).toFixed(4)} iBY</p>
+                              <p className="font-bold">{Number(w.amount_ibyc_requested).toFixed(4)} iBYC</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">Fee (6%)</p>
-                              <p className="text-sm text-red-400">−{Number(w.fee_ibyc).toFixed(4)} iBY</p>
+                              <p className="text-sm text-red-400">−{Number(w.fee_ibyc).toFixed(4)} iBYC</p>
                             </div>
                             <div>
                               <p className="text-xs text-muted-foreground">A enviar</p>

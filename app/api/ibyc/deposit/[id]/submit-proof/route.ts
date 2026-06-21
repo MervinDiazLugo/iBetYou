@@ -11,6 +11,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!proof_reference || typeof proof_reference !== "string" || proof_reference.trim().length < 3) {
     return NextResponse.json({ error: "Referencia de transacción inválida" }, { status: 400 })
   }
+  if (proof_reference.trim().length > 500) {
+    return NextResponse.json({ error: "Referencia demasiado larga (máx. 500 caracteres)" }, { status: 400 })
+  }
 
   const supabase = createAdminSupabaseClient()
 

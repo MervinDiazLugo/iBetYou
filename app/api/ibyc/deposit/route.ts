@@ -39,6 +39,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err.message ?? "No se pudo obtener la tasa. Intente más tarde." }, { status: 503 })
   }
 
+  if (currency !== "USD" && rateResult.rateToUsd <= 0) {
+    return NextResponse.json({ error: "Tasa de cambio inválida. Intente más tarde." }, { status: 503 })
+  }
   const amountIbyc = currency === "USD" ? amountLocal : amountLocal / rateResult.rateToUsd
   if (amountIbyc < 0.01) {
     return NextResponse.json({ error: "Monto insuficiente para generar al menos 0.01 iBYC" }, { status: 400 })

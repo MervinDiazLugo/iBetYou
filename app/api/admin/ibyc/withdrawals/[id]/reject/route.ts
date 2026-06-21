@@ -26,28 +26,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const amountToReturn = Number(withdrawal.amount_ibyc_requested)
 
-  // Return funds to user wallet
+  // Return funds to user wallet — must succeed before marking as rejected
   const { data: wallet } = await supabase
     .from("wallets")
     .select("balance_real")
     .eq("user_id", withdrawal.user_id)
     .single()
 
-  if (wallet) {
-    await supabase
-      .from("wallets")
-      .update({ balance_real: wallet.balance_real + amountToReturn })
-      .eq("user_id", withdrawal.user_id)
-      .eq("balance_real", wallet.balance_real)
+  if (!wallet) return NextResponse.json({ error: "Wallet de usuario no encontrada — no se puede devolver fondos" }, { status: 500 })
 
-    await supabase.from("transactions").insert({
-      user_id: withdrawal.user_id,
-      token_type: "real",
-      amount: amountToReturn,
-      operation: "ibyc_withdrawal_reversal",
-      reference_id: withdrawal.id,
-    })
+  const { data: refunded, error: refundError } = await supabase
+    .from("wallets")
+    .update({ balance_real: wallet.balance_real + amountToReturn })
+    .eq("user_id", withdrawal.user_id)
+    .eq("balance_real", wallet.balance_real)
+    .select("balance_real")
+    .single()
+
+  if (refundError || !refunded) {
+    return NextResponse.json({ error: "Conflicto al devolver fondos. Intente de nuevo." }, { status: 409 })
   }
+
+  await supabase.from("transactions").insert({
+    user_id: withdrawal.user_id,
+    token_type: "real",
+    amount: amountToReturn,
+    operation: "ibyc_withdrawal_reversal",
+    reference_id: withdrawal.id,
+  })
 
   await supabase
     .from("ibeyc_withdrawals")

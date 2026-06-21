@@ -22,13 +22,17 @@ export async function POST(request: NextRequest) {
 
   if (!wallet) return NextResponse.json({ error: "Wallet no encontrada" }, { status: 404 })
 
-  const { error } = await supabase
+  const { data: credited, error } = await supabase
     .from("wallets")
     .update({ balance_real: wallet.balance_real + amountIbyc })
     .eq("user_id", user_id)
     .eq("balance_real", wallet.balance_real)
+    .select("balance_real")
+    .single()
 
-  if (error) return NextResponse.json({ error: "Error acreditando iBYC" }, { status: 500 })
+  if (error || !credited) {
+    return NextResponse.json({ error: "Conflicto de balance. Intente de nuevo." }, { status: 409 })
+  }
 
   await supabase.from("transactions").insert({
     user_id,

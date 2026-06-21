@@ -89,11 +89,12 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (wErr || !withdrawal) {
-    // Rollback: return funds
+    // Rollback: return funds using post-debit value as optimistic lock to avoid overwriting concurrent changes
     await supabase
       .from("wallets")
-      .update({ balance_real: wallet.balance_real })
+      .update({ balance_real: updatedWallet.balance_real + amountIbyc })
       .eq("user_id", userId)
+      .eq("balance_real", updatedWallet.balance_real)
     return NextResponse.json({ error: "Error creando retiro" }, { status: 500 })
   }
 

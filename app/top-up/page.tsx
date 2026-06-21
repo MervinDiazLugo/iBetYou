@@ -272,7 +272,7 @@ export default function RecargasPage() {
       }
       if (historyRes.ok) {
         const d = await historyRes.json()
-        setHistory(d.items || [])
+        setHistory([...(d.deposits || []), ...(d.withdrawals || [])])
       }
     } finally {
       setLoading(false)
