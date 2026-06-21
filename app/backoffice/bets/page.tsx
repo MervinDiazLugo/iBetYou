@@ -802,7 +802,7 @@ export default function BackofficeBets() {
             >
               <option value="all">Todos los modos</option>
               <option value="fantasy">Fantasy</option>
-              <option value="real">Real (iBY)</option>
+              <option value="real">Real (iBYC)</option>
             </select>
           </div>
         </CardContent>

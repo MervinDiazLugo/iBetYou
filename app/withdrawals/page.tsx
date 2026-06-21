@@ -175,7 +175,7 @@ export default function WithdrawalsPage() {
             <div>
               <div className="text-sm text-muted-foreground">Saldo iBYC disponible</div>
               <div className="text-3xl font-bold text-amber-400">
-                {ibcBalance.toFixed(2)} <span className="text-base font-medium">iBY</span>
+                {ibcBalance.toFixed(2)} <span className="text-base font-medium">iBYC</span>
               </div>
             </div>
           </CardContent>
@@ -212,7 +212,7 @@ export default function WithdrawalsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-sm font-medium">Monto (iBY)</label>
+                <label className="text-sm font-medium">Monto (iBYC)</label>
                 <Input
                   type="number"
                   min="100"

@@ -144,7 +144,7 @@ export default function LeaderboardPage() {
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${leaderboardMode === "real" ? "bg-amber-500 text-black" : "bg-gray-800 text-gray-400 hover:text-white"}`}
             onClick={() => setLeaderboardMode("real")}
           >
-            Real (iBY)
+            Real (iBYC)
           </button>
         </div>
 

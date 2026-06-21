@@ -143,7 +143,7 @@ export default function CountriesPage() {
           <Globe className="h-6 w-6" /> Acceso por País
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Controla el acceso por país: Modo Real (iBY) y apuestas contra la Casa (por modo). Cada feature se activa de forma independiente.
+          Controla el acceso por país: Modo Real (iBYC) y apuestas contra la Casa (por modo). Cada feature se activa de forma independiente.
         </p>
       </div>
 
@@ -151,7 +151,7 @@ export default function CountriesPage() {
       <div className="rounded-xl border border-border overflow-hidden">
         <div className="grid grid-cols-[1fr_auto_auto_auto_auto_auto] items-center px-4 py-2 border-b border-border bg-secondary/30 text-xs font-medium text-muted-foreground gap-4">
           <span>País</span>
-          <span className="text-center">Real (iBY)</span>
+          <span className="text-center">Real (iBYC)</span>
           <span className="text-center">Casa Fantasy</span>
           <span className="text-center">Casa Real</span>
           <span className="text-center">Grupos</span>

@@ -241,7 +241,7 @@ export default function HouseWalletPage() {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground font-medium uppercase tracking-wide">Real (iBY)</CardTitle>
+                  <CardTitle className="text-sm text-muted-foreground font-medium uppercase tracking-wide">Real (iBYC)</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{formatCurrency(data.balance_real)}</p>
@@ -316,7 +316,7 @@ export default function HouseWalletPage() {
               <label className="text-sm font-medium">Modo</label>
               <div className="flex gap-2">
                 <Button variant={mode === "fantasy" ? "default" : "outline"} size="sm" onClick={() => setMode("fantasy")}>Fantasy</Button>
-                <Button variant={mode === "real" ? "default" : "outline"} size="sm" onClick={() => setMode("real")}>Real (iBY)</Button>
+                <Button variant={mode === "real" ? "default" : "outline"} size="sm" onClick={() => setMode("real")}>Real (iBYC)</Button>
               </div>
             </div>
             <div className="space-y-1.5">
