@@ -25,8 +25,8 @@ export async function sendDepositApprovedEmail(params: {
             <td style="padding:8px 0;font-weight:bold">$${amount.toFixed(2)}</td>
           </tr>
           <tr>
-            <td style="padding:8px 0;color:#888">iBY Coins acreditados</td>
-            <td style="padding:8px 0;font-weight:bold;color:#7c3aed">${ibyCoins.toFixed(2)} iBY</td>
+            <td style="padding:8px 0;color:#888">iBYC acreditados</td>
+            <td style="padding:8px 0;font-weight:bold;color:#7c3aed">${ibyCoins.toFixed(2)} iBYC</td>
           </tr>
         </table>
         <p style="margin-top:24px">Ya podés ver tu saldo actualizado en <a href="https://i-bet-you.vercel.app/top-up">iBetYou</a>.</p>

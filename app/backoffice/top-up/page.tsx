@@ -729,7 +729,7 @@ export default function BackofficeRecargas() {
                         ) : req.iby_coins != null ? (
                           <div>
                             <div className="text-xs text-muted-foreground">iBYC acreditados</div>
-                            <div className="text-lg font-bold text-primary">{Number(req.iby_coins).toFixed(2)} iBY</div>
+                            <div className="text-lg font-bold text-primary">{Number(req.iby_coins).toFixed(2)} iBYC</div>
                           </div>
                         ) : null}
 

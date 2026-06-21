@@ -182,7 +182,7 @@ export function NotificationBell({ userId, sessionToken }: Props) {
                               ? "bg-amber-500/15 text-amber-400 border-amber-500/30"
                               : "bg-blue-500/15 text-blue-400 border-blue-500/30"
                           }`}>
-                            {n.mode === "real" ? "Real iBY" : "Fantasy"}
+                            {n.mode === "real" ? "Real iBYC" : "Fantasy"}
                           </span>
                         )}
                         {isInvite && n.group_id && (

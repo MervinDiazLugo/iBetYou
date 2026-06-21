@@ -74,7 +74,7 @@ export function ModeToggle() {
           <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl">
             <h2 className="text-lg font-bold mb-2">Cambiar a Modo Real</h2>
             <p className="text-sm text-muted-foreground mb-4">
-              En Modo Real apostas con <span className="text-amber-400 font-semibold">iBY Coins (iBY)</span> — moneda con valor real (1 iBY = $1 USD). Las predicciones se descuentan de tu saldo iBY.
+              En Modo Real apostas con <span className="text-amber-400 font-semibold">iBY Coins (iBY)</span> — moneda con valor real (1 iBYC = $1 USD). Las predicciones se descuentan de tu saldo iBYC.
             </p>
             <div className="flex gap-3">
               <button type="button" onClick={() => setShowConfirm(false)}

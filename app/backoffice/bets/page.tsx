@@ -1004,7 +1004,7 @@ export default function BackofficeBets() {
                       </Badge>
                       {(bet as any).mode === "real" ? (
                         <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">
-                          Real iBY
+                          Real iBYC
                         </Badge>
                       ) : (
                         <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">
@@ -1343,7 +1343,7 @@ export default function BackofficeBets() {
                               <Badge className={status.bg}><span className={status.color}>{status.label}</span></Badge>
                               <Badge variant="outline" className="text-xs">Tipo: {betTypeLabel}</Badge>
                               {(bet as any).mode === "real" ? (
-                                <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBY</Badge>
+                                <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBYC</Badge>
                               ) : (
                                 <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">Fantasy</Badge>
                               )}

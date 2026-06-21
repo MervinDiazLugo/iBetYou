@@ -73,7 +73,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
   // Approve
   const coinsToCredit = iby_coins != null ? Number(iby_coins) : Number(req.iby_coins)
   if (!coinsToCredit || coinsToCredit <= 0) {
-    return NextResponse.json({ error: "Cantidad de iBY coins inválida" }, { status: 400 })
+    return NextResponse.json({ error: "Cantidad de iBYC inválida" }, { status: 400 })
   }
 
   // Mark approved first — payment ordering invariant; prevents double-credit if later steps fail

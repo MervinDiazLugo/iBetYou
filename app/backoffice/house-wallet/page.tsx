@@ -140,7 +140,7 @@ export default function HouseWalletPage() {
       })
       const json = await res.json()
       if (!res.ok) { showToast(json.error || "Error", "error"); return }
-      showToast(`Precio actualizado: 1 iBY = $${price}`, "success")
+      showToast(`Precio actualizado: 1 iBYC = $${price}`, "success")
     } finally {
       setSavingPrice(false)
     }
@@ -352,8 +352,8 @@ export default function HouseWalletPage() {
             <>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Precio del token iBY</CardTitle>
-                  <p className="text-xs text-muted-foreground">Pesos por 1 iBY Coin. Afecta recargas desde este momento.</p>
+                  <CardTitle className="text-base">Precio del token iBYC</CardTitle>
+                  <p className="text-xs text-muted-foreground">Pesos por 1 iBYC Coin. Afecta recargas desde este momento.</p>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="flex gap-2 items-center">
@@ -371,7 +371,7 @@ export default function HouseWalletPage() {
                     </Button>
                   </div>
                   {ibcPrice && Number(ibcPrice) > 0 && (
-                    <p className="text-xs text-muted-foreground">$100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} iBY</p>
+                    <p className="text-xs text-muted-foreground">$100 pesos = {(100 / Number(ibcPrice)).toFixed(2)} iBYC</p>
                   )}
                 </CardContent>
               </Card>

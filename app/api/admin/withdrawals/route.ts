@@ -74,7 +74,7 @@ export async function PATCH(request: NextRequest) {
       userId: req.user_id,
       type: "withdrawal_approved",
       title: "Retiro aprobado",
-      body: `Tu retiro de ${Number(req.net_amount).toFixed(2)} iBY fue procesado exitosamente.`,
+      body: `Tu retiro de ${Number(req.net_amount).toFixed(2)} iBYC fue procesado exitosamente.`,
       betId: null,
     }, supabase)
 
@@ -122,7 +122,7 @@ export async function PATCH(request: NextRequest) {
       type: "withdrawal_rejected",
       title: "Retiro rechazado",
       body: rejection_type === "refund"
-        ? `Tu retiro fue rechazado: ${rejection_reason}. Los fondos fueron devueltos a tu saldo iBY.`
+        ? `Tu retiro fue rechazado: ${rejection_reason}. Los fondos fueron devueltos a tu saldo iBYC.`
         : `Tu retiro fue rechazado: ${rejection_reason}. Los fondos fueron retenidos.`,
       betId: null,
     }, supabase)

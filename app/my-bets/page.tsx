@@ -142,7 +142,7 @@ export default function MyBetsPage() {
             onClick={() => setModeTab("real")}
             className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${modeTab === "real" ? "bg-amber-500 text-black" : "text-muted-foreground hover:text-foreground"}`}
           >
-            Real iBY
+            Real iBYC
           </button>
         </div>
 
@@ -244,7 +244,7 @@ export default function MyBetsPage() {
                           </Badge>
                         )}
                         {((bet as any).mode ?? "fantasy") === "real" ? (
-                          <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBY</Badge>
+                          <Badge className="bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs">Real iBYC</Badge>
                         ) : (
                           <Badge className="bg-blue-500/15 text-blue-400 border border-blue-500/30 text-xs">Fantasy</Badge>
                         )}

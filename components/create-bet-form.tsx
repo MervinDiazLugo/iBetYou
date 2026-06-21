@@ -495,7 +495,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
     }
 
     if (activeBalance < totalNeeded) {
-      setError(mode === "real" ? "Saldo iBY insuficiente" : "Balance insuficiente")
+      setError(mode === "real" ? "Saldo iBYC insuficiente" : "Balance insuficiente")
       setLoading(false)
       return
     }
@@ -967,7 +967,7 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 px-4 sm:px-6 py-3 bg-card/95 backdrop-blur border-t border-border">
             {(mode === "real" ? (Number(balance.iBY) || 0) : (Number(balance.fantasy) || 0)) < totalNeeded && (
               <p className="text-xs text-center text-destructive mb-2">
-                {mode === "real" ? "Saldo iBY insuficiente" : "Balance insuficiente"}
+                {mode === "real" ? "Saldo iBYC insuficiente" : "Balance insuficiente"}
               </p>
             )}
             <div className="flex flex-row gap-2">

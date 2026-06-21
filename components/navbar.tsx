@@ -237,8 +237,8 @@ export function Navbar() {
                             { href: "/profile", label: "Mi Perfil" },
                             { href: "/balance", label: "Balance de Jugadas" },
                             ...(canUseRealMoney ? [
-                              { href: "/top-up", label: "Recargas iBY" },
-                              { href: "/withdrawals", label: "Retiros iBY" },
+                              { href: "/top-up", label: "Recargas iBYC" },
+                              { href: "/withdrawals", label: "Retiros iBYC" },
                             ] : []),
                             { href: "/my-referrals", label: "Mis Referidos", accent: true },
                             { href: "/como-jugar", label: "Cómo Jugar" },
@@ -345,7 +345,7 @@ export function Navbar() {
                   </div>
                   {canUseRealMoney && (
                     <div className="rounded-lg bg-secondary/60 px-2.5 py-2 border border-border/60">
-                      <div className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3 text-amber-400" /> iBY</div>
+                      <div className="text-[10px] text-muted-foreground flex items-center gap-1"><Coins className="h-3 w-3 text-amber-400" /> iBYC</div>
                       <div className="font-bold text-sm text-amber-400 mt-0.5">{formatCurrency(ibcBalance)}</div>
                     </div>
                   )}
@@ -379,8 +379,8 @@ export function Navbar() {
                       { href: "/profile", label: "Mi Perfil" },
                       { href: "/balance", label: "Balance de Jugadas" },
                       ...(canUseRealMoney ? [
-                        { href: "/top-up", label: "Recargas iBY" },
-                        { href: "/withdrawals", label: "Retiros iBY" },
+                        { href: "/top-up", label: "Recargas iBYC" },
+                        { href: "/withdrawals", label: "Retiros iBYC" },
                       ] : []),
                       { href: "/my-referrals", label: "Mis Referidos", accent: true },
                       { href: "/como-jugar", label: "Cómo Jugar" },

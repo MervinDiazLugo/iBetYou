@@ -106,7 +106,7 @@ export default function WithdrawalsPage() {
   async function handleWithdraw(e: React.FormEvent) {
     e.preventDefault()
     if (!form.method_id) { showToast("Seleccioná un método de retiro", "error"); return }
-    if (!amount || amount < 100) { showToast("Monto mínimo: 100 iBY", "error"); return }
+    if (!amount || amount < 100) { showToast("Monto mínimo: 100 iBYC", "error"); return }
     setConfirmWithdraw(true)
   }
 
@@ -173,7 +173,7 @@ export default function WithdrawalsPage() {
               <Coins className="h-6 w-6 text-amber-500" />
             </div>
             <div>
-              <div className="text-sm text-muted-foreground">Saldo iBY disponible</div>
+              <div className="text-sm text-muted-foreground">Saldo iBYC disponible</div>
               <div className="text-3xl font-bold text-amber-400">
                 {ibcBalance.toFixed(2)} <span className="text-base font-medium">iBY</span>
               </div>
@@ -184,7 +184,7 @@ export default function WithdrawalsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Solicitar retiro</CardTitle>
-            <p className="text-sm text-muted-foreground">Mínimo 100 iBY · Fee 6% · 1 iBY = $1 USD</p>
+            <p className="text-sm text-muted-foreground">Mínimo 100 iBYC · Fee 6% · 1 iBYC = $1 USD</p>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleWithdraw} className="space-y-4">
@@ -226,13 +226,13 @@ export default function WithdrawalsPage() {
               {amount >= 100 && (
                 <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
                   <div className="flex justify-between">
-                    <span>Monto bruto</span><span>{amount.toFixed(2)} iBY</span>
+                    <span>Monto bruto</span><span>{amount.toFixed(2)} iBYC</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">
-                    <span>Fee (6%)</span><span>- {fee.toFixed(2)} iBY</span>
+                    <span>Fee (6%)</span><span>- {fee.toFixed(2)} iBYC</span>
                   </div>
                   <div className="flex justify-between font-semibold border-t pt-1 mt-1">
-                    <span>A recibir</span><span>{net.toFixed(2)} iBY</span>
+                    <span>A recibir</span><span>{net.toFixed(2)} iBYC</span>
                   </div>
                 </div>
               )}
@@ -349,8 +349,8 @@ export default function WithdrawalsPage() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold">{Number(req.amount).toFixed(2)} iBY</p>
-                        <p className="text-xs text-muted-foreground">Neto: {Number(req.net_amount).toFixed(2)} iBY</p>
+                        <p className="font-bold">{Number(req.amount).toFixed(2)} iBYC</p>
+                        <p className="text-xs text-muted-foreground">Neto: {Number(req.net_amount).toFixed(2)} iBYC</p>
                         <Badge className="mt-1 text-[10px]">
                           <span className={cfg.color}>{cfg.label}</span>
                         </Badge>
@@ -374,9 +374,9 @@ export default function WithdrawalsPage() {
           <div className="bg-card border border-border rounded-xl p-6 max-w-sm w-full mx-4 shadow-2xl space-y-4">
             <h2 className="text-lg font-bold">Confirmar retiro</h2>
             <div className="rounded-lg bg-muted p-3 text-sm space-y-1">
-              <div className="flex justify-between"><span>Monto bruto</span><span>{amount.toFixed(2)} iBY</span></div>
-              <div className="flex justify-between text-muted-foreground"><span>Fee (6%)</span><span>- {fee.toFixed(2)} iBY</span></div>
-              <div className="flex justify-between font-semibold border-t pt-1 mt-1"><span>A recibir</span><span>{net.toFixed(2)} iBY</span></div>
+              <div className="flex justify-between"><span>Monto bruto</span><span>{amount.toFixed(2)} iBYC</span></div>
+              <div className="flex justify-between text-muted-foreground"><span>Fee (6%)</span><span>- {fee.toFixed(2)} iBYC</span></div>
+              <div className="flex justify-between font-semibold border-t pt-1 mt-1"><span>A recibir</span><span>{net.toFixed(2)} iBYC</span></div>
             </div>
             <div className="flex gap-3">
               <Button variant="outline" className="flex-1" onClick={() => setConfirmWithdraw(false)}>Cancelar</Button>
