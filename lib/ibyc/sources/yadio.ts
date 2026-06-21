@@ -1,9 +1,16 @@
-// yadio.io — VES parallel market rate (P2P aggregator including Binance Venezuela)
-// Free, no key, updated ~every 15 min. Returns USD/VES exchange rate.
+// VES exchange rate — sources tried in order:
+// 1. pydolarve.org (parallel market, enparalelovzla)
+// 2. open.er-api.com (official BCV rate — fallback)
+// 3. exchangerate-api.com v4 (official BCV rate — last resort)
+//
+// Sources 2 & 3 return the BCV official rate, not parallel market.
+// Parallel rate APIs (yadio.io, pydolarve.org) are unreliable — endpoint
+// changes and timeouts are common. Official rate prevents total failure.
 
-const PRIMARY_URL = "https://yadio.io/api/exrate/USD/VES"
-const FALLBACK_URL = "https://pydolarve.org/api/v1/dollar?monitor=enparalelovzla"
-const FETCH_TIMEOUT_MS = 10_000
+const PYDOLARVE_URL = "https://pydolarve.org/api/v1/dollar?monitor=enparalelovzla"
+const OPEN_ER_URL = "https://open.er-api.com/v6/latest/USD"
+const EXCHANGE_RATE_URL = "https://api.exchangerate-api.com/v4/latest/USD"
+const FETCH_TIMEOUT_MS = 8_000
 
 function fetchWithTimeout(url: string): Promise<Response> {
   const controller = new AbortController()
@@ -12,39 +19,41 @@ function fetchWithTimeout(url: string): Promise<Response> {
 }
 
 export async function getVESRate(): Promise<number> {
+  // 1. Try parallel market rate (most accurate for Venezuela)
   try {
-    return await fetchYadio()
-  } catch (err) {
-    console.warn("yadio.io failed, trying pydolarve fallback:", err)
-    return await fetchPydolarve()
+    const res = await fetchWithTimeout(PYDOLARVE_URL)
+    if (res.ok) {
+      const json = await res.json()
+      // pydolarve v1: { "monitor": { "price": 65.5, ... } }
+      const rate =
+        json?.monitor?.price ??
+        json?.monitors?.enparalelovzla?.price ??
+        json?.price
+      if (rate && typeof rate === "number" && rate > 0) return rate
+    }
+  } catch {
+    // pydolarve unreachable — continue
   }
-}
 
-async function fetchYadio(): Promise<number> {
-  const res = await fetchWithTimeout(PRIMARY_URL)
-  if (!res.ok) throw new Error(`yadio HTTP ${res.status}`)
-  const json = await res.json()
-  // Try multiple known response shapes
-  const rate =
-    json?.USD?.VES ??          // { "USD": { "VES": 65.5 } }
-    json?.VES ??               // { "VES": 65.5 }
-    json?.rate ??              // { "rate": 65.5 }
-    json?.price ??             // { "price": 65.5 }
-    json?.ask ??               // { "ask": 65.5 }
-    json?.promedio             // { "promedio": 65.5 }
-  if (!rate || typeof rate !== "number") throw new Error(`yadio: unexpected response shape: ${JSON.stringify(json).slice(0, 120)}`)
-  return rate
-}
+  // 2. Official BCV rate via open.er-api.com (no key, free, reliable)
+  try {
+    const res = await fetchWithTimeout(OPEN_ER_URL)
+    if (res.ok) {
+      const json = await res.json()
+      const rate = json?.rates?.VES
+      if (rate && typeof rate === "number" && rate > 0) return rate
+    }
+  } catch {
+    // continue
+  }
 
-async function fetchPydolarve(): Promise<number> {
-  const res = await fetchWithTimeout(FALLBACK_URL)
-  if (!res.ok) throw new Error(`pydolarve HTTP ${res.status}`)
+  // 3. Official BCV rate via exchangerate-api.com v4 (no key, free)
+  const res = await fetchWithTimeout(EXCHANGE_RATE_URL)
+  if (!res.ok) throw new Error(`exchangerate-api HTTP ${res.status}`)
   const json = await res.json()
-  const rate =
-    json?.price ??
-    json?.promedio ??
-    json?.monitors?.enparalelovzla?.price ??
-    json?.monitors?.bcv?.price
-  if (!rate || typeof rate !== "number") throw new Error(`pydolarve: unexpected response shape: ${JSON.stringify(json).slice(0, 120)}`)
+  const rate = json?.rates?.VES
+  if (!rate || typeof rate !== "number" || rate <= 0) {
+    throw new Error(`exchangerate-api: VES not in response`)
+  }
   return rate
 }
