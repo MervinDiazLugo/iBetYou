@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedUserId } from "@/lib/server-auth"
 import { logUserEvent } from "@/lib/funnel"
 
-const ALLOWED_EVENTS = ["viewed_real_money_cta", "clicked_real_money_cta"]
+const ALLOWED_EVENTS = ["viewed_real_money_cta", "clicked_real_money_cta", "clicked_referral_cta"]
 
 export async function POST(request: NextRequest) {
   const userId = await getAuthenticatedUserId(request)

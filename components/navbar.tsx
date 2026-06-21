@@ -327,21 +327,21 @@ export function Navbar() {
           <div className="container mx-auto px-4 py-2 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 text-orange-300 text-xs">
               <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-              <span>Tus fichas están bajas. Cuando se agoten no podrás seguir apostando.</span>
+              <span>Tus fichas están bajas. Invita amigos a iBetYou y sigue apostando.</span>
             </div>
             <Link
-              href="/top-up?from=low_balance"
+              href="/my-referrals"
               className="text-[11px] font-semibold text-orange-300 border border-orange-500/40 rounded-lg px-2.5 py-1 hover:bg-orange-500/10 transition-colors whitespace-nowrap"
               onClick={() => {
                 if (!sessionToken) return
                 fetch("/api/funnel/event", {
                   method: "POST",
                   headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-                  body: JSON.stringify({ eventType: "clicked_real_money_cta" }),
+                  body: JSON.stringify({ eventType: "clicked_referral_cta" }),
                 }).catch(() => null)
               }}
             >
-              Pasar a dinero real →
+              Invitar amigos →
             </Link>
           </div>
         </div>
