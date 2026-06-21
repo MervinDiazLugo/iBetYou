@@ -1,5 +1,5 @@
 export type CurrencyTier = "official" | "parallel"
-export type RateSource = "frankfurter" | "yadio" | "bluelytics"
+export type RateSource = "frankfurter" | "open_er" | "yadio" | "bluelytics"
 
 export interface CurrencyConfig {
   code: string
@@ -9,6 +9,7 @@ export interface CurrencyConfig {
   flag: string
   tier: CurrencyTier
   source: RateSource
+  markup: number       // multiplier on official rate (1.0 = no markup, 1.25 = +25%)
   ttlSeconds: number
   minDepositLocal: number
   minWithdrawLocal: number
@@ -18,55 +19,35 @@ export interface CurrencyConfig {
 export const SUPPORTED_CURRENCIES: CurrencyConfig[] = [
   {
     code: "USD", name: "Dólar estadounidense", symbol: "$", country: "Internacional", flag: "🌎",
-    tier: "official", source: "frankfurter", ttlSeconds: 0,
+    tier: "official", source: "frankfurter", markup: 1.0, ttlSeconds: 0,
     minDepositLocal: 1, minWithdrawLocal: 1,
   },
   {
     code: "VES", name: "Bolívar venezolano", symbol: "Bs.", country: "Venezuela", flag: "🇻🇪",
-    tier: "parallel", source: "yadio", ttlSeconds: 1200,
+    tier: "official", source: "open_er", markup: 1.25, ttlSeconds: 1200,
     minDepositLocal: 50, minWithdrawLocal: 50,
-    legalNote: "Tasa del mercado paralelo, no oficial BCV. Uso bajo responsabilidad del usuario.",
+    legalNote: "Tasa BCV oficial con margen del 25%.",
   },
   {
     code: "ARS", name: "Peso argentino", symbol: "$", country: "Argentina", flag: "🇦🇷",
-    tier: "parallel", source: "bluelytics", ttlSeconds: 1200,
+    tier: "parallel", source: "bluelytics", markup: 1.0, ttlSeconds: 1200,
     minDepositLocal: 1000, minWithdrawLocal: 1000,
     legalNote: "Tasa del dólar blue (mercado informal). Uso bajo responsabilidad del usuario.",
   },
   {
     code: "MXN", name: "Peso mexicano", symbol: "$", country: "México", flag: "🇲🇽",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    tier: "official", source: "frankfurter", markup: 1.0, ttlSeconds: 21600,
     minDepositLocal: 20, minWithdrawLocal: 20,
   },
   {
     code: "COP", name: "Peso colombiano", symbol: "$", country: "Colombia", flag: "🇨🇴",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    tier: "official", source: "open_er", markup: 1.0, ttlSeconds: 21600,
     minDepositLocal: 4000, minWithdrawLocal: 4000,
   },
   {
-    code: "CLP", name: "Peso chileno", symbol: "$", country: "Chile", flag: "🇨🇱",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
-    minDepositLocal: 1000, minWithdrawLocal: 1000,
-  },
-  {
-    code: "PEN", name: "Sol peruano", symbol: "S/.", country: "Perú", flag: "🇵🇪",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
-    minDepositLocal: 4, minWithdrawLocal: 4,
-  },
-  {
     code: "BRL", name: "Real brasileño", symbol: "R$", country: "Brasil", flag: "🇧🇷",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
+    tier: "official", source: "frankfurter", markup: 1.0, ttlSeconds: 21600,
     minDepositLocal: 5, minWithdrawLocal: 5,
-  },
-  {
-    code: "CRC", name: "Colón costarricense", symbol: "₡", country: "Costa Rica", flag: "🇨🇷",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
-    minDepositLocal: 500, minWithdrawLocal: 500,
-  },
-  {
-    code: "DOP", name: "Peso dominicano", symbol: "RD$", country: "Rep. Dominicana", flag: "🇩🇴",
-    tier: "official", source: "frankfurter", ttlSeconds: 21600,
-    minDepositLocal: 60, minWithdrawLocal: 60,
   },
 ]
 

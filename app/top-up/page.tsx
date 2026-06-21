@@ -225,7 +225,7 @@ export default function RecargasPage() {
 
   // Rate state
   const [currency, setCurrency] = useState("VES")
-  const [rate, setRate] = useState<{ rateToUsd: number; source: string; tier: string } | null>(null)
+  const [rate, setRate] = useState<{ rateToUsd: number; source: string; tier: string; markup: number } | null>(null)
   const [rateLoading, setRateLoading] = useState(false)
   const [rateError, setRateError] = useState(false)
 
@@ -252,7 +252,7 @@ export default function RecargasPage() {
 
   const fetchRate = useCallback(async () => {
     if (!currency || currency === "USD") {
-      setRate({ rateToUsd: 1, source: "direct", tier: "official" })
+      setRate({ rateToUsd: 1, source: "direct", tier: "official", markup: 1.0 })
       return
     }
     setRateLoading(true)
@@ -560,8 +560,8 @@ export default function RecargasPage() {
                               {rate.tier === "parallel" && (
                                 <span className="ml-1.5 text-[10px] font-bold text-yellow-500 bg-yellow-500/10 rounded px-1">[PARALELA]</span>
                               )}
-                              {rate.tier === "official" && cfg?.tier === "parallel" && (
-                                <span className="ml-1.5 text-[10px] font-bold text-blue-400 bg-blue-500/10 rounded px-1">[BCV]</span>
+                              {rate.markup > 1 && (
+                                <span className="ml-1.5 text-[10px] font-bold text-slate-400 bg-slate-500/10 rounded px-1">[+{Math.round((rate.markup - 1) * 100)}%]</span>
                               )}
                             </span>
                           </div>
@@ -571,14 +571,9 @@ export default function RecargasPage() {
                               <span className="font-bold text-amber-400">{amountIby > 0 ? amountIby.toFixed(4) : "—"} iBYC</span>
                             </div>
                           )}
-                          {cfg?.legalNote && rate.tier === "parallel" && (
+                          {cfg?.legalNote && (
                             <p className="text-[11px] text-yellow-600 bg-yellow-500/10 border border-yellow-500/20 rounded px-2 py-1 mt-1">
                               ⚠️ {cfg.legalNote}
-                            </p>
-                          )}
-                          {rate.tier === "official" && cfg?.tier === "parallel" && (
-                            <p className="text-[11px] text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded px-2 py-1 mt-1">
-                              ℹ️ Tasa BCV oficial. La tasa paralela no está disponible en este momento.
                             </p>
                           )}
                         </>

@@ -1,7 +1,7 @@
 // Frankfurter.app — ECB official rates, free, no key required
 // Covers all Tier 1 currencies. Updated once daily ~16:00 CET.
 
-const OFFICIAL_CODES = ["MXN", "COP", "CLP", "PEN", "BRL", "CRC", "DOP"]
+const OFFICIAL_CODES = ["MXN", "BRL"]
 
 const FETCH_TIMEOUT_MS = 10_000
 
