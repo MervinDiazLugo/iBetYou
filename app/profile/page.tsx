@@ -1,126 +1,92 @@
-﻿"use client"
+"use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Navbar } from "@/components/navbar"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { createBrowserSupabaseClient } from "@/lib/supabase"
 import { formatCurrency } from "@/lib/utils"
-import { Wallet, Trophy, TrendingUp, Shield, LogOut, Globe } from "lucide-react"
+import { useAuth } from "@/components/providers"
 import { useToast } from "@/components/toast"
+import { LogOut, Globe, TrendingUp, Coins, Shield } from "lucide-react"
 
-interface ProfileData {
-  nickname: string
-  avatar_url: string | null
-  kyc_status: string
-  created_at: string
-  country: string | null
-}
-
-const LATAM_COUNTRIES = [
+const COUNTRIES = [
   "Venezuela","Argentina","Colombia","Chile","México","Perú","Uruguay",
   "Bolivia","Ecuador","Paraguay","Brasil","Costa Rica","Panamá","Honduras",
   "El Salvador","Guatemala","Nicaragua","República Dominicana","Cuba",
   "España","Estados Unidos","Otro",
 ]
 
-interface Stats {
-  total_bets: number
-  won_bets: number
-  win_rate: number
-  current_streak: number
+interface ProfilePayload {
+  profile: {
+    nickname: string
+    avatar_url: string | null
+    kyc_status: string
+    created_at: string
+    country: string | null
+  }
+  wallet: {
+    balance_fantasy: number
+    balance_real: number
+  } | null
+  stats: {
+    total_bets: number
+    won_bets: number
+    win_rate: number
+    current_streak: number
+  }
 }
 
-const avatars = [
-  "🦁", "🐺", "🦊", "🐯", "🐻",
-  "⚽", "🏀", "🎾", "🏈", "⚾",
-  "⭐", "🔥", "💎", "🎯", "🚀",
-]
+function getLevel(total: number, winRate: number) {
+  if (total >= 500 && winRate >= 70) return { label: "Leyenda", icon: "👑" }
+  if (total >= 100 && winRate >= 60) return { label: "Experto", icon: "🏆" }
+  if (total >= 50) return { label: "Competidor", icon: "🥇" }
+  if (total >= 10) return { label: "Apostador", icon: "🥈" }
+  return { label: "Novato", icon: "🥉" }
+}
 
 export default function ProfilePage() {
   const router = useRouter()
+  const { user, loading: authLoading, signOut } = useAuth()
   const supabase = useMemo(() => createBrowserSupabaseClient(), [])
-  
-  const [user, setUser] = useState<{ email: string; nickname: string } | null>(null)
-  const [balance, setBalance] = useState<{ fantasy: number; real: number }>({ fantasy: 0, real: 0 })
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [stats, setStats] = useState<Stats>({
-    total_bets: 0,
-    won_bets: 0,
-    win_rate: 0,
-    current_streak: 0,
-  })
-  const [loading, setLoading] = useState(true)
-  const [editingCountry, setEditingCountry] = useState(false)
-  const [selectedCountry, setSelectedCountry] = useState("")
-  const [savingCountry, setSavingCountry] = useState(false)
   const { showToast } = useToast()
 
-  useEffect(() => {
-    async function loadData() {
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
+  const [data, setData] = useState<ProfilePayload | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [country, setCountry] = useState("")
+  const [editingCountry, setEditingCountry] = useState(false)
+  const [savingCountry, setSavingCountry] = useState(false)
 
-      if (!authUser) {
-        router.push("/login")
-        return
-      }
-
-      // Get profile and stats from API
-      try {
-        let { data: { session } } = await supabase.auth.getSession()
-
-        // Session may be stale — refresh once if no token
-        if (!session?.access_token) {
-          const { data: refreshed } = await supabase.auth.refreshSession()
-          session = refreshed.session
-        }
-
-        const token = session?.access_token
-
-        if (!token) {
-          // Can't get a valid token even after refresh → force re-login
-          router.push("/login")
-          return
-        }
-
-        const res = await fetch("/api/user/profile", {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-
-        if (res.ok) {
-          const data = await res.json()
-          setProfile(data.profile)
-          setSelectedCountry(data.profile.country || "")
-          setUser({
-            email: authUser.email!,
-            nickname: data.profile.nickname,
-          })
-          setBalance({
-            fantasy: data.wallet?.balance_fantasy || 0,
-            real: data.wallet?.balance_real || 0,
-          })
-          setStats(data.stats)
-        } else if (res.status === 401) {
-          router.push("/login")
-          return
-        }
-      } catch (err) {
-        console.error("Error loading profile:", err)
-      }
-
-      setLoading(false)
+  const fetchProfile = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) {
+      router.push("/login")
+      return
     }
+    try {
+      const res = await fetch("/api/user/profile", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      if (res.status === 401) { router.push("/login"); return }
+      if (!res.ok) { setLoadError(true); return }
+      const payload: ProfilePayload = await res.json()
+      setData(payload)
+      setCountry(payload.profile.country || "")
+    } catch {
+      setLoadError(true)
+    }
+  }, [supabase, router])
 
-    loadData()
-  }, [router, supabase]) // supabase is stable via useMemo — no re-run loop
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) { router.push("/login"); return }
+    fetchProfile()
+  }, [authLoading, user, fetchProfile, router])
 
   const handleSaveCountry = async () => {
-    if (!selectedCountry) return
+    if (!country) return
     setSavingCountry(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -130,10 +96,10 @@ export default function ProfilePage() {
           "Content-Type": "application/json",
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify({ country: selectedCountry }),
+        body: JSON.stringify({ country }),
       })
       if (res.ok) {
-        setProfile(prev => prev ? { ...prev, country: selectedCountry } : prev)
+        setData(prev => prev ? { ...prev, profile: { ...prev.profile, country } } : prev)
         setEditingCountry(false)
         showToast("País actualizado", "success")
       } else {
@@ -146,139 +112,140 @@ export default function ProfilePage() {
   }
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
+    await signOut()
     router.push("/login")
   }
 
-  const getLevel = () => {
-    const { total_bets, win_rate } = stats
-    if (total_bets >= 500 && win_rate >= 70) return { level: "Leyenda", badge: "👑" }
-    if (total_bets >= 100 && win_rate >= 60) return { level: "Experto", badge: "🏆" }
-    if (total_bets >= 50) return { level: "Competidor", badge: "🥇" }
-    if (total_bets >= 10) return { level: "Apostador", badge: "🥈" }
-    return { level: "Novato", badge: "🥉" }
-  }
-
-  const { level, badge } = getLevel()
-
-  if (loading) {
+  // Loading
+  if (authLoading || (!data && !loadError)) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="flex items-center justify-center py-20">
+        <div className="flex items-center justify-center py-32">
           <p className="text-muted-foreground">Cargando perfil...</p>
         </div>
       </div>
     )
   }
 
-  if (!user || !profile) {
+  // Error
+  if (loadError || !data) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
-        <div className="flex flex-col items-center justify-center py-20 gap-4">
+        <div className="flex flex-col items-center justify-center py-32 gap-4">
           <p className="text-muted-foreground">No se pudo cargar el perfil.</p>
-          <button
-            onClick={() => router.push("/login")}
-            className="text-sm text-primary underline"
-          >
-            Volver a iniciar sesión
+          <button onClick={fetchProfile} className="text-sm text-primary underline">
+            Reintentar
           </button>
         </div>
       </div>
     )
   }
 
+  const { profile, wallet, stats } = data
+  const level = getLevel(stats.total_bets, stats.win_rate)
+  const memberSince = new Date(profile.created_at).toLocaleDateString("es-ES", {
+    month: "long", year: "numeric", timeZone: "UTC",
+  })
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
 
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
-        {/* Profile Card */}
-        <Card className="mb-6">
-          <CardHeader className="text-center">
-            <div className="text-6xl mb-4">
-              {profile.avatar_url || "⭐"}
+      <main className="container mx-auto px-4 py-6 max-w-md space-y-4">
+
+        {/* Avatar + identity */}
+        <Card>
+          <CardContent className="pt-6 pb-5 flex flex-col items-center gap-3 text-center">
+            <div className="text-6xl leading-none">{profile.avatar_url || "⭐"}</div>
+            <div>
+              <p className="text-xl font-bold">{profile.nickname}</p>
+              <p className="text-sm text-muted-foreground">{user?.email}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Miembro desde {memberSince}</p>
             </div>
-            <CardTitle className="text-2xl">{profile.nickname}</CardTitle>
-            <CardDescription>{user.email}</CardDescription>
-            <div className="flex justify-center gap-2 mt-2">
-              <Badge variant="secondary">
-                {badge} {level}
-              </Badge>
+            <div className="flex gap-2 flex-wrap justify-center">
+              <Badge variant="secondary">{level.icon} {level.label}</Badge>
               <Badge variant={profile.kyc_status === "approved" ? "default" : "outline"}>
                 <Shield className="h-3 w-3 mr-1" />
-                {profile.kyc_status === "approved" ? "KYC Verificado" : "Sin verificar"}
+                {profile.kyc_status === "approved" ? "Verificado" : "Sin verificar"}
               </Badge>
-            </div>
-          </CardHeader>
-        </Card>
-
-        {/* Wallet Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Wallet className="h-5 w-5" />
-              Billetera
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex justify-between items-center p-3 bg-secondary rounded-lg">
-              <div>
-                <p className="text-sm text-muted-foreground">Fantasy Tokens</p>
-                <p className="text-xs text-muted-foreground">
-                  Acumulado: {formatCurrency(profile.kyc_status === "approved" ? balance.fantasy : Math.min(balance.fantasy, 1000))}
-                </p>
-              </div>
-              <p className="text-2xl font-bold text-primary">
-                {formatCurrency(balance.fantasy)}
-              </p>
-            </div>
-            <div className="flex justify-between items-center p-3 bg-secondary rounded-lg">
-              <div>
-                <p className="text-sm text-muted-foreground">Tokens Reales (USDT)</p>
-              </div>
-              <p className="text-2xl font-bold">
-                {formatCurrency(balance.real)}
-              </p>
             </div>
           </CardContent>
         </Card>
 
-        {/* Country Card */}
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Globe className="h-4 w-4" />
-              País
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        {/* Balance */}
+        <Card>
+          <CardContent className="pt-5 pb-5 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Coins className="h-3.5 w-3.5" /> Saldo
+            </p>
+            <div className="flex justify-between items-center">
+              <span className="text-sm text-muted-foreground">Fantasy Tokens</span>
+              <span className="text-2xl font-bold text-primary">
+                {formatCurrency(wallet?.balance_fantasy ?? 0)}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats */}
+        <Card>
+          <CardContent className="pt-5 pb-5 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5" /> Estadísticas
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-secondary rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold">{stats.total_bets}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Predicciones</p>
+              </div>
+              <div className="bg-secondary rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-green-500">{stats.win_rate}%</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Win rate</p>
+              </div>
+              <div className="bg-secondary rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold">{stats.won_bets}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Ganadas</p>
+              </div>
+              <div className="bg-secondary rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold">{stats.total_bets - stats.won_bets}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Perdidas</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Country */}
+        <Card>
+          <CardContent className="pt-5 pb-5 space-y-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+              <Globe className="h-3.5 w-3.5" /> País
+            </p>
             {editingCountry ? (
-              <div className="flex gap-2">
+              <div className="space-y-2">
                 <select
-                  className="flex-1 px-3 py-2 rounded-md border border-input bg-background text-sm"
-                  value={selectedCountry}
-                  onChange={e => setSelectedCountry(e.target.value)}
+                  className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm"
+                  value={country}
+                  onChange={e => setCountry(e.target.value)}
                 >
                   <option value="">Seleccioná tu país...</option>
-                  {LATAM_COUNTRIES.map(c => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
+                  {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <Button size="sm" onClick={handleSaveCountry} disabled={savingCountry || !selectedCountry}>
-                  {savingCountry ? "..." : "Guardar"}
-                </Button>
-                <Button size="sm" variant="outline" onClick={() => {
-                  setEditingCountry(false)
-                  setSelectedCountry(profile?.country || "")
-                }}>
-                  Cancelar
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1" onClick={handleSaveCountry}
+                    disabled={savingCountry || !country}>
+                    {savingCountry ? "Guardando..." : "Guardar"}
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1"
+                    onClick={() => { setEditingCountry(false); setCountry(profile.country || "") }}>
+                    Cancelar
+                  </Button>
+                </div>
               </div>
             ) : (
               <div className="flex items-center justify-between">
-                <span className="text-sm">{profile?.country || <span className="text-muted-foreground">No especificado</span>}</span>
+                <span className="text-sm">{profile.country || <span className="text-muted-foreground">No especificado</span>}</span>
                 <Button size="sm" variant="outline" onClick={() => setEditingCountry(true)}>
                   Cambiar
                 </Button>
@@ -287,43 +254,12 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Stats Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Estadísticas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-4 bg-secondary rounded-lg">
-                <p className="text-3xl font-bold">{stats.total_bets}</p>
-                <p className="text-sm text-muted-foreground">Predicciones jugadas</p>
-              </div>
-              <div className="text-center p-4 bg-secondary rounded-lg">
-                <p className="text-3xl font-bold text-green-500">{stats.win_rate}%</p>
-                <p className="text-sm text-muted-foreground">Win rate</p>
-              </div>
-              <div className="text-center p-4 bg-secondary rounded-lg">
-                <p className="text-3xl font-bold">{stats.won_bets}</p>
-                <p className="text-sm text-muted-foreground">Ganadas</p>
-              </div>
-              <div className="text-center p-4 bg-secondary rounded-lg">
-                <p className="text-3xl font-bold">{stats.current_streak}</p>
-                <p className="text-sm text-muted-foreground">Racha actual</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Sign out */}
+        <Button variant="outline" className="w-full" onClick={handleSignOut}>
+          <LogOut className="h-4 w-4 mr-2" />
+          Cerrar sesión
+        </Button>
 
-        {/* Actions */}
-        <div className="space-y-2">
-          <Button variant="outline" className="w-full" onClick={handleSignOut}>
-            <LogOut className="h-4 w-4 mr-2" />
-            Cerrar Sesión
-          </Button>
-        </div>
       </main>
     </div>
   )
