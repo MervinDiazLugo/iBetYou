@@ -930,7 +930,7 @@ export async function POST(request: NextRequest) {
         const houseOrAcceptor = isHouseBet ? null : bet.acceptor_id
 
         if (choseDraw) {
-          outcome = { kind: 'winner', winnerId: isDraw ? bet.creator_id : (houseOrAcceptor ?? bet.creator_id) }
+          outcome = { kind: 'winner', winnerId: isDraw ? bet.creator_id : (isHouseBet ? '__house__' : bet.acceptor_id) }
         } else if (choseHome) {
           if (homeWon) outcome = { kind: 'winner', winnerId: bet.creator_id }
           else if (awayWon) outcome = { kind: 'winner', winnerId: isHouseBet ? '__house__' : bet.acceptor_id }
