@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
     const numericEventId = Number(eventId)
     const { data: eventRow, error: eventError } = await supabase
       .from("events")
-      .select("id, sport, status, featured, is_demo, metadata, league")
+      .select("id, sport, status, start_time, featured, is_demo, metadata, league")
       .eq("id", numericEventId)
       .maybeSingle()
 
@@ -94,6 +94,17 @@ export async function POST(request: NextRequest) {
         { error: "Este evento no acepta nuevas apuestas" },
         { status: 400 }
       )
+    }
+
+    // Block house bets once the match has started (unless demo — demo events use synthetic time)
+    if (!(eventRow as any).is_demo) {
+      const startTime = (eventRow as any).start_time
+      if (startTime && new Date(startTime) <= new Date()) {
+        return NextResponse.json(
+          { error: "Este partido ya comenzó. No se pueden crear apuestas." },
+          { status: 400 }
+        )
+      }
     }
 
     // League keyword checks

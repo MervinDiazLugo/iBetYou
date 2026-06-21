@@ -4,7 +4,6 @@ import { createNotification } from "@/lib/notifications"
 import { logUserEvent } from "@/lib/funnel"
 import { canCountryUseRealMoney } from "@/lib/country-access"
 import { payoutToMode } from "@/lib/wallet-utils"
-import { PRE_MATCH_ONLY_BET_TYPES } from "@/lib/bet-constants"
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,13 +89,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (PRE_MATCH_ONLY_BET_TYPES.has(betType) && eventRow.start_time) {
-      if (new Date(eventRow.start_time) <= new Date()) {
-        return NextResponse.json(
-          { error: `Las apuestas de tipo "${betType === "first_scorer" ? "Primer Anotador" : "Medio Tiempo"}" solo se pueden crear antes de que empiece el partido` },
-          { status: 400 }
-        )
-      }
+    // Block ALL new bets once the match has started — regardless of bet type.
+    // The sync-scores cron runs every 2h so status may still be 'scheduled';
+    // start_time is the authoritative cutoff.
+    if (eventRow.start_time && new Date(eventRow.start_time) <= new Date()) {
+      return NextResponse.json(
+        { error: "Este partido ya comenzó. No se pueden crear nuevas apuestas." },
+        { status: 400 }
+      )
     }
 
     if (profileError) {
