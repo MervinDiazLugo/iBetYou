@@ -442,7 +442,7 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // ── 7. Cancel bets on postponed events ───────────────────────────────────
+  // ── 7. Cancel bets on postponed events & un-feature finished/postponed ──
   for (const eventId of justPostponed) {
     try {
       await cancelBetsForEvent(supabase, eventId)
@@ -450,8 +450,12 @@ export async function GET(request: NextRequest) {
       apiErrors.push(`cancel-postponed/event_${eventId}: ${e.message}`)
     }
   }
-  if (justPostponed.length > 0) {
-    await supabase.from("events").update({ featured: false }).in("id", justPostponed)
+  const unfeatureIds = [
+    ...justPostponed,
+    ...justFinished.map(e => e.id),
+  ]
+  if (unfeatureIds.length > 0) {
+    await supabase.from("events").update({ featured: false }).in("id", unfeatureIds)
   }
 
   // ── 8. Cleanup expired open bets ─────────────────────────────────────────
