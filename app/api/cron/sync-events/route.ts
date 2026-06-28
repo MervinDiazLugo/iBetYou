@@ -9,9 +9,9 @@ import {
 const CRON_SECRET = process.env.CRON_SECRET
 const BATCH_SIZE = 500
 
-// Only import events starting within the next 7 days (UTC)
-function isWithinNext7Days(timestamp: string): boolean {
-  const t = new Date(timestamp).getTime()
+function isWithinNext7Days(isoDate: string): boolean {
+  const t = new Date(isoDate).getTime()
+  if (!Number.isFinite(t)) return false
   const now = Date.now()
   return t >= now - 60 * 60 * 1000 && t <= now + 7 * 24 * 60 * 60 * 1000
 }
@@ -36,11 +36,10 @@ export async function GET(request: NextRequest) {
       const events = await tsdbScheduleNext(league.id)
 
       for (const raw of events) {
-        if (!raw.strTimestamp) continue
-        if (!isWithinNext7Days(`${raw.strTimestamp}Z`)) continue
-
         const normalized = normalizeTsdbEvent(raw, league.sport)
-        if (normalized) allEvents.push(normalized)
+        if (!normalized) continue
+        if (!isWithinNext7Days(normalized.start_time as string)) continue
+        allEvents.push(normalized)
       }
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : "unknown"
