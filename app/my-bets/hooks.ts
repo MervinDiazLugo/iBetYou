@@ -70,10 +70,10 @@ export function useMyBets() {
 
   useEffect(() => {
     let isMounted = true
+    const supabase = createBrowserSupabaseClient()
 
     async function loadData() {
       try {
-        // Check auth
         const {
           data: { user: authUser },
         } = await supabase.auth.getUser()
@@ -94,7 +94,6 @@ export function useMyBets() {
           sessionTokenRef.current = session.access_token
         }
 
-        // Parallelizar wallet + bets — no se bloquean mutuamente
         const [walletRes, betsRes] = await Promise.all([
           fetch(`/api/wallet?user_id=${authUser.id}`, { headers: authHeaders }),
           fetch(`/api/my-bets?user_id=${authUser.id}`, { headers: authHeaders }),
@@ -128,7 +127,6 @@ export function useMyBets() {
       }
     }
 
-    const supabase = createBrowserSupabaseClient()
     loadData()
 
     return () => {

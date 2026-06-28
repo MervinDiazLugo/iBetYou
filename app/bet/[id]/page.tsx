@@ -651,6 +651,7 @@ export default function BetDetailPage() {
                 month: "long",
                 hour: "2-digit",
                 minute: "2-digit",
+                timeZone: "UTC",
               })}
             </CardDescription>
             {bet.event.status === "postponed" && (

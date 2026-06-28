@@ -1431,7 +1431,7 @@ function HomeContent() {
                                 {event.featured ? "⭐ " : ""}{getSportIcon(event.sport)} {event.league}
                               </Badge>
                               <span className="text-[10px] text-muted-foreground whitespace-nowrap">
-                                {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })}
+                                {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })}
                               </span>
                             </div>
 

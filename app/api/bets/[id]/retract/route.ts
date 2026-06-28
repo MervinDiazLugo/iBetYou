@@ -196,6 +196,7 @@ export async function POST(
       }
     } catch (err) {
       console.error("REFUND_FAILED creator", { betId, userId: bet.creator_id, amount: refunds.creatorRefund, err })
+      await supabase.from("bets").update({ status: bet.status }).eq("id", betId)
       return NextResponse.json({ error: "Error procesando reembolso del creador" }, { status: 500 })
     }
   }
@@ -223,6 +224,7 @@ export async function POST(
       }
     } catch (err) {
       console.error("REFUND_FAILED acceptor", { betId, userId: bet.acceptor_id, amount: refunds.acceptorRefund, err })
+      await supabase.from("bets").update({ status: bet.status }).eq("id", betId)
       return NextResponse.json({ error: "Error procesando reembolso del aceptante" }, { status: 500 })
     }
   }
