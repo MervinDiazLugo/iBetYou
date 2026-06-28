@@ -346,7 +346,7 @@ export default function BackofficeUsersPage() {
                         )}
                         {isBlocked && (
                           <span
-                            title={`Bloqueado hasta ${new Date(user.betting_blocked_until!).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric" })}`}
+                            title={`Bloqueado hasta ${new Date(user.betting_blocked_until!).toLocaleDateString("es-ES", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}`}
                             className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 dark:bg-amber-950 dark:border-amber-800 dark:text-amber-400 cursor-help"
                           >
                             <Clock className="w-3 h-3" />
@@ -412,6 +412,7 @@ export default function BackofficeUsersPage() {
                           day: "2-digit",
                           month: "short",
                           year: "numeric",
+                          timeZone: "UTC",
                         })}
                       </span>
                     </td>
@@ -424,6 +425,7 @@ export default function BackofficeUsersPage() {
                               day: "2-digit",
                               month: "short",
                               year: "numeric",
+                              timeZone: "UTC",
                             })
                           : "—"}
                       </span>

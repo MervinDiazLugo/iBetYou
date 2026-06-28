@@ -668,8 +668,8 @@ export function CreateBetForm({ onClose, cloneBetId, initialEvent }: CreateBetFo
                           </>
                         )}
                       </div>
-                      <div className="mt-0.5 text-[10px] text-muted-foreground truncate" title={`${new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - ${new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}${(event.metadata?.venue?.name || event.metadata?.venue?.city) ? ` · ${[event.metadata?.venue?.name, event.metadata?.venue?.city].filter(Boolean).join(', ')}` : ''}`}>
-                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short" })} - {new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" })}
+                      <div className="mt-0.5 text-[10px] text-muted-foreground truncate" title={`${new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })} - ${new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}${(event.metadata?.venue?.name || event.metadata?.venue?.city) ? ` · ${[event.metadata?.venue?.name, event.metadata?.venue?.city].filter(Boolean).join(', ')}` : ''}`}>
+                        {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", timeZone: "UTC" })} - {new Date(event.start_time).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
                         {(event.metadata?.venue?.name || event.metadata?.venue?.city) && ` · ${[event.metadata?.venue?.name, event.metadata?.venue?.city].filter(Boolean).join(', ')}`}
                       </div>
                     </div>
