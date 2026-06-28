@@ -6,6 +6,7 @@ const V1 = () => `https://www.thesportsdb.com/api/v1/json/${KEY}`
 const V2_BASE = "https://www.thesportsdb.com/api/v2/json"
 
 export async function fetchTsdbV1(path: string): Promise<any> {
+  if (!KEY) throw new Error("THESPORTSDB_API_KEY not set")
   const res = await fetch(`${V1()}${path}`, { cache: "no-store" })
   if (!res.ok) throw new Error(`TSDB V1 ${res.status}: ${path}`)
   return res.json()
