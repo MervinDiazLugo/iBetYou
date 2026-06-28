@@ -73,7 +73,7 @@ export async function GET(request: NextRequest) {
     const batch = toInsert.slice(i, i + BATCH_SIZE)
     const { data: inserted, error } = await supabase
       .from("events")
-      .upsert(batch, { onConflict: "external_id", ignoreDuplicates: true })
+      .insert(batch)
       .select("id, external_id")
 
     if (error) {
