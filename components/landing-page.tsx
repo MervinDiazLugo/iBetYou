@@ -103,14 +103,14 @@ export function LandingPage({ refCode }: LandingPageProps) {
         <div className="grid md:grid-cols-2 gap-10 items-start mb-16">
           <div>
             <h1 className="text-4xl font-bold leading-tight mb-4">
-              La predicción es entre{" "}
-              <span className="text-blue-400">tú y otro fan</span>
+              Predice resultados.{" "}
+              <span className="text-blue-400">Gana fichas.</span>
             </h1>
             <p className="text-gray-300 text-lg mb-3">
-              Sin intermediario. El pozo va 100% al ganador.
+              Apuesta contra la casa o desafía a otro fan. Tú eliges.
             </p>
             <p className="text-gray-400 mb-8">
-              Elige un partido, crea tu predicción o toma la de otro usuario. Fútbol, béisbol y basketball.
+              Cuotas en vivo para cada partido. Fútbol, béisbol y basketball — incluido el Mundial 2026.
             </p>
             <div className="flex gap-4 flex-wrap">
               <Link href="/login">
