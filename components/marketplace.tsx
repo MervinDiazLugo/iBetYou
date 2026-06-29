@@ -20,6 +20,7 @@ import { Countdown } from "@/components/countdown"
 import { calcDirectOdds, calcRunLineOddsAll, calcGoalsOverUnderOdds } from "@/lib/house-odds"
 import { formatHouseSelection } from "@/lib/bet-labels"
 import { calculateTotalPrize } from "@/lib/bet-resolution"
+import { QuickBetRibbon } from "@/components/quick-bet-ribbon"
 import Image from "next/image"
 
 interface BetWithDetails extends Bet {
@@ -2633,6 +2634,15 @@ function HomeContent() {
           </div>
         )
       })()}
+
+      <QuickBetRibbon
+        events={featuredEvents}
+        onSelectOdds={(event, selection) => {
+          openHouseBetModal(event)
+          setTimeout(() => setHouseBetSelection(selection), 0)
+        }}
+      />
+      <div className="h-16" />
     </div>
   )
 }
