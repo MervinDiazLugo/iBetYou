@@ -1,23 +1,48 @@
-﻿"use client"
+"use client"
 
 import { useState, useEffect } from "react"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { formatCurrency } from "@/lib/utils"
 import Link from "next/link"
+import Image from "next/image"
 
-interface PreviewBet {
-  id: string
-  creator_selection: string
-  amount: number
-  event?: {
-    home_team: string
-    away_team: string
-    sport: string
+interface FeaturedEvent {
+  id: number
+  sport: string
+  league: string
+  home_team: string
+  away_team: string
+  home_logo?: string
+  away_logo?: string
+  start_time: string
+  status: string
+  metadata?: {
+    predictions?: {
+      percent?: { home?: string; draw?: string; away?: string }
+      advice?: string | null
+    }
   }
-  creator?: { nickname: string }
 }
+
+const HOUSE_EDGE = 1.10
+const MAX_TEAM_ODDS = 4.0
+
+function calcPreviewOdds(percent: { home?: string; draw?: string; away?: string }) {
+  const parse = (v?: string) => parseFloat((v || "0").replace("%", "")) / 100
+  const h = parse(percent.home)
+  const a = parse(percent.away)
+  if (h <= 0 || a <= 0) return null
+  const cap = (odds: number) => Math.min(odds, MAX_TEAM_ODDS)
+  const d = percent.draw ? parse(percent.draw) : undefined
+  return {
+    home: +(cap(1 / (h * HOUSE_EDGE))).toFixed(2),
+    away: +(cap(1 / (a * HOUSE_EDGE))).toFixed(2),
+    draw: d && d > 0 ? +(1 / (d * HOUSE_EDGE)).toFixed(2) : undefined,
+  }
+}
+
+const sportIcon: Record<string, string> = { football: "⚽", basketball: "🏀", baseball: "⚾" }
 
 interface LandingPageProps {
   refCode: string | null
@@ -25,7 +50,8 @@ interface LandingPageProps {
 
 export function LandingPage({ refCode }: LandingPageProps) {
   const [referrerNickname, setReferrerNickname] = useState<string | null>(null)
-  const [previewBets, setPreviewBets] = useState<PreviewBet[]>([])
+  const [events, setEvents] = useState<FeaturedEvent[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (refCode) {
@@ -35,10 +61,15 @@ export function LandingPage({ refCode }: LandingPageProps) {
         .catch(() => {})
     }
 
-    fetch("/api/bets?limit=3")
+    fetch("/api/events/list?featured=true&limit=6")
       .then((r) => r.json())
-      .then((d) => { if (Array.isArray(d.bets)) setPreviewBets(d.bets.slice(0, 3)) })
+      .then((data) => {
+        const arr: FeaturedEvent[] = Array.isArray(data) ? data : []
+        const withOdds = arr.filter((e) => e.metadata?.predictions?.percent)
+        setEvents(withOdds.slice(0, 6))
+      })
       .catch(() => {})
+      .finally(() => setLoading(false))
   }, [refCode])
 
   return (
@@ -46,7 +77,6 @@ export function LandingPage({ refCode }: LandingPageProps) {
       <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 py-12">
-        {/* VARIANT C: Referral landing */}
         {refCode && referrerNickname !== null && (
           <div className="mb-8 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5 text-center">
             <p className="text-amber-400 font-semibold text-lg mb-1">
@@ -70,8 +100,7 @@ export function LandingPage({ refCode }: LandingPageProps) {
           </div>
         )}
 
-        {/* VARIANT B: Default hero */}
-        <div className="grid md:grid-cols-2 gap-10 items-center mb-16">
+        <div className="grid md:grid-cols-2 gap-10 items-start mb-16">
           <div>
             <h1 className="text-4xl font-bold leading-tight mb-4">
               La predicción es entre{" "}
@@ -112,38 +141,78 @@ export function LandingPage({ refCode }: LandingPageProps) {
             </div>
           </div>
 
-          {/* Live bets preview */}
-          <div className="space-y-3">
+          {/* House bets preview */}
+          <div>
             <p className="text-gray-400 text-sm uppercase tracking-wide font-medium mb-4">
-              Predicciones activas ahora
+              ⚡ Cuotas disponibles ahora
             </p>
-            {previewBets.length === 0 && (
-              <div className="space-y-3">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="bg-gray-800 rounded-lg p-4 animate-pulse h-16" />
-                ))}
-              </div>
-            )}
-            {previewBets.map((bet) => (
-              <div
-                key={bet.id}
-                className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex justify-between items-center"
-              >
-                <div>
-                  <p className="text-white text-sm font-medium">
-                    {bet.event?.home_team} vs {bet.event?.away_team}
-                  </p>
-                  <p className="text-gray-400 text-xs mt-0.5">
-                    {bet.creator?.nickname} predice: {bet.creator_selection}
-                  </p>
+            <div className="space-y-3">
+              {loading && [1, 2, 3].map((i) => (
+                <div key={i} className="bg-gray-800 rounded-lg p-4 animate-pulse h-20" />
+              ))}
+              {!loading && events.length === 0 && (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-6 text-center">
+                  <p className="text-gray-500 text-sm">No hay eventos con cuotas en este momento</p>
                 </div>
-                <Badge className="bg-green-600 text-white text-sm font-bold">
-                  {formatCurrency(bet.amount)}
-                </Badge>
-              </div>
-            ))}
-            <p className="text-center text-gray-500 text-xs pt-2">
-              Regístrate gratis para ver todas las predicciones y crear las tuyas
+              )}
+              {!loading && events.map((event) => {
+                const odds = event.metadata?.predictions?.percent
+                  ? calcPreviewOdds(event.metadata.predictions.percent)
+                  : null
+                return (
+                  <Link key={event.id} href="/login" className="block">
+                    <div className="bg-gray-800 border border-gray-700 hover:border-blue-500/50 rounded-lg p-4 transition-all hover:bg-gray-750 cursor-pointer group">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm flex-shrink-0">{sportIcon[event.sport] || "🏆"}</span>
+                          <span className="text-[11px] text-gray-500 truncate">{event.league}</span>
+                        </div>
+                        <span className="text-[11px] text-gray-500 flex-shrink-0">
+                          {new Date(event.start_time).toLocaleDateString("es-ES", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          {event.home_logo && (
+                            <Image src={event.home_logo} alt="" width={20} height={20} className="object-contain flex-shrink-0" unoptimized />
+                          )}
+                          <span className="text-sm font-medium text-white truncate">{event.home_team}</span>
+                        </div>
+                        <span className="text-gray-600 text-xs flex-shrink-0">vs</span>
+                        <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+                          <span className="text-sm font-medium text-white truncate text-right">{event.away_team}</span>
+                          {event.away_logo && (
+                            <Image src={event.away_logo} alt="" width={20} height={20} className="object-contain flex-shrink-0" unoptimized />
+                          )}
+                        </div>
+                      </div>
+
+                      {odds && (
+                        <div className="flex gap-2 mt-3">
+                          <div className="flex-1 bg-gray-900 rounded px-2 py-1.5 text-center group-hover:bg-blue-900/30 transition-colors">
+                            <div className="text-[10px] text-gray-500 truncate">{event.home_team.split(" ").slice(-1)[0]}</div>
+                            <div className="text-sm font-bold text-blue-400">{odds.home.toFixed(2)}</div>
+                          </div>
+                          {odds.draw !== undefined && (
+                            <div className="flex-1 bg-gray-900 rounded px-2 py-1.5 text-center group-hover:bg-gray-700/50 transition-colors">
+                              <div className="text-[10px] text-gray-500">Empate</div>
+                              <div className="text-sm font-bold text-gray-300">{odds.draw.toFixed(2)}</div>
+                            </div>
+                          )}
+                          <div className="flex-1 bg-gray-900 rounded px-2 py-1.5 text-center group-hover:bg-orange-900/30 transition-colors">
+                            <div className="text-[10px] text-gray-500 truncate">{event.away_team.split(" ").slice(-1)[0]}</div>
+                            <div className="text-sm font-bold text-orange-400">{odds.away.toFixed(2)}</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+            <p className="text-center text-gray-500 text-xs pt-3">
+              Regístrate gratis para apostar en estos y más eventos
             </p>
           </div>
         </div>
