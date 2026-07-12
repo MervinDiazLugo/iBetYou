@@ -72,16 +72,16 @@ function getAvailableBetTypes(sport: string) {
 }
 
 const GOALS_OPTIONS = [
-  { id: "over_0.5",  label: "Más de 0.5",  value: "over_0.5" },
-  { id: "under_0.5", label: "Menos de 0.5", value: "under_0.5" },
-  { id: "over_1.5",  label: "Más de 1.5",  value: "over_1.5" },
-  { id: "under_1.5", label: "Menos de 1.5", value: "under_1.5" },
-  { id: "over_2.5",  label: "Más de 2.5",  value: "over_2.5" },
-  { id: "under_2.5", label: "Menos de 2.5", value: "under_2.5" },
-  { id: "over_3.5",  label: "Más de 3.5",  value: "over_3.5" },
-  { id: "under_3.5", label: "Menos de 3.5", value: "under_3.5" },
-  { id: "over_4.5",  label: "Más de 4.5",  value: "over_4.5" },
-  { id: "under_4.5", label: "Menos de 4.5", value: "under_4.5" },
+  { id: "over_1",  label: "Más de 1 gol",   value: "over_1" },
+  { id: "under_1", label: "Menos de 1 gol",  value: "under_1" },
+  { id: "over_2",  label: "Más de 2 goles",  value: "over_2" },
+  { id: "under_2", label: "Menos de 2 goles", value: "under_2" },
+  { id: "over_3",  label: "Más de 3 goles",  value: "over_3" },
+  { id: "under_3", label: "Menos de 3 goles", value: "under_3" },
+  { id: "over_4",  label: "Más de 4 goles",  value: "over_4" },
+  { id: "under_4", label: "Menos de 4 goles", value: "under_4" },
+  { id: "over_5",  label: "Más de 5 goles",  value: "over_5" },
+  { id: "under_5", label: "Menos de 5 goles", value: "under_5" },
 ]
 
 const BOTH_TEAMS_OPTIONS = [
@@ -95,16 +95,16 @@ const FIRST_INNING_OPTIONS = [
 ]
 
 const TOTAL_HITS_OPTIONS = [
-  { id: "over_12.5",  label: "Más de 12.5 hits",  value: "over_12.5" },
-  { id: "under_12.5", label: "Menos de 12.5 hits", value: "under_12.5" },
-  { id: "over_14.5",  label: "Más de 14.5 hits",  value: "over_14.5" },
-  { id: "under_14.5", label: "Menos de 14.5 hits", value: "under_14.5" },
-  { id: "over_16.5",  label: "Más de 16.5 hits",  value: "over_16.5" },
-  { id: "under_16.5", label: "Menos de 16.5 hits", value: "under_16.5" },
-  { id: "over_18.5",  label: "Más de 18.5 hits",  value: "over_18.5" },
-  { id: "under_18.5", label: "Menos de 18.5 hits", value: "under_18.5" },
-  { id: "over_20.5",  label: "Más de 20.5 hits",  value: "over_20.5" },
-  { id: "under_20.5", label: "Menos de 20.5 hits", value: "under_20.5" },
+  { id: "over_12",  label: "Más de 12 hits",  value: "over_12" },
+  { id: "under_12", label: "Menos de 12 hits", value: "under_12" },
+  { id: "over_14",  label: "Más de 14 hits",  value: "over_14" },
+  { id: "under_14", label: "Menos de 14 hits", value: "under_14" },
+  { id: "over_16",  label: "Más de 16 hits",  value: "over_16" },
+  { id: "under_16", label: "Menos de 16 hits", value: "under_16" },
+  { id: "over_18",  label: "Más de 18 hits",  value: "over_18" },
+  { id: "under_18", label: "Menos de 18 hits", value: "under_18" },
+  { id: "over_20",  label: "Más de 20 hits",  value: "over_20" },
+  { id: "under_20", label: "Menos de 20 hits", value: "under_20" },
 ]
 
 const FIRST_HALF_WINNER_OPTIONS = [
@@ -114,29 +114,29 @@ const FIRST_HALF_WINNER_OPTIONS = [
 ]
 
 const TOTAL_POINTS_OPTIONS = [
-  { id: "over_210.5",  label: "Más de 210.5 puntos",  value: "over_210.5" },
-  { id: "under_210.5", label: "Menos de 210.5 puntos", value: "under_210.5" },
-  { id: "over_220.5",  label: "Más de 220.5 puntos",  value: "over_220.5" },
-  { id: "under_220.5", label: "Menos de 220.5 puntos", value: "under_220.5" },
-  { id: "over_230.5",  label: "Más de 230.5 puntos",  value: "over_230.5" },
-  { id: "under_230.5", label: "Menos de 230.5 puntos", value: "under_230.5" },
-  { id: "over_240.5",  label: "Más de 240.5 puntos",  value: "over_240.5" },
-  { id: "under_240.5", label: "Menos de 240.5 puntos", value: "under_240.5" },
-  { id: "over_250.5",  label: "Más de 250.5 puntos",  value: "over_250.5" },
-  { id: "under_250.5", label: "Menos de 250.5 puntos", value: "under_250.5" },
+  { id: "over_210",  label: "Más de 210 puntos",  value: "over_210" },
+  { id: "under_210", label: "Menos de 210 puntos", value: "under_210" },
+  { id: "over_220",  label: "Más de 220 puntos",  value: "over_220" },
+  { id: "under_220", label: "Menos de 220 puntos", value: "under_220" },
+  { id: "over_230",  label: "Más de 230 puntos",  value: "over_230" },
+  { id: "under_230", label: "Menos de 230 puntos", value: "under_230" },
+  { id: "over_240",  label: "Más de 240 puntos",  value: "over_240" },
+  { id: "under_240", label: "Menos de 240 puntos", value: "under_240" },
+  { id: "over_250",  label: "Más de 250 puntos",  value: "over_250" },
+  { id: "under_250", label: "Menos de 250 puntos", value: "under_250" },
 ]
 
 const CARDS_OPTIONS = [
-  { id: "over_1.5",  label: "Más de 1.5",  value: "over_1.5" },
-  { id: "under_1.5", label: "Menos de 1.5", value: "under_1.5" },
-  { id: "over_2.5",  label: "Más de 2.5",  value: "over_2.5" },
-  { id: "under_2.5", label: "Menos de 2.5", value: "under_2.5" },
-  { id: "over_3.5",  label: "Más de 3.5",  value: "over_3.5" },
-  { id: "under_3.5", label: "Menos de 3.5", value: "under_3.5" },
-  { id: "over_4.5",  label: "Más de 4.5",  value: "over_4.5" },
-  { id: "under_4.5", label: "Menos de 4.5", value: "under_4.5" },
-  { id: "over_5.5",  label: "Más de 5.5",  value: "over_5.5" },
-  { id: "under_5.5", label: "Menos de 5.5", value: "under_5.5" },
+  { id: "over_1",  label: "Más de 1 tarjeta",   value: "over_1" },
+  { id: "under_1", label: "Menos de 1 tarjeta",  value: "under_1" },
+  { id: "over_2",  label: "Más de 2 tarjetas",  value: "over_2" },
+  { id: "under_2", label: "Menos de 2 tarjetas", value: "under_2" },
+  { id: "over_3",  label: "Más de 3 tarjetas",  value: "over_3" },
+  { id: "under_3", label: "Menos de 3 tarjetas", value: "under_3" },
+  { id: "over_4",  label: "Más de 4 tarjetas",  value: "over_4" },
+  { id: "under_4", label: "Menos de 4 tarjetas", value: "under_4" },
+  { id: "over_5",  label: "Más de 5 tarjetas",  value: "over_5" },
+  { id: "under_5", label: "Menos de 5 tarjetas", value: "under_5" },
 ]
 
 interface CreateBetFormProps {
