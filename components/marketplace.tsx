@@ -2637,10 +2637,13 @@ function HomeContent() {
 
       <QuickBetRibbon
         events={featuredEvents}
+        openBets={bets}
+        userId={user?.id}
         onSelectOdds={(event, selection) => {
           openHouseBetModal(event)
           setTimeout(() => setHouseBetSelection(selection), 0)
         }}
+        onTakeBet={(bet) => setSelectedBetForModal(bet)}
       />
       <div className="h-16" />
     </div>
