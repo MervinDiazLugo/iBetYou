@@ -36,8 +36,16 @@ Probado en vivo contra la API el 2026-07-26:
 | Timeline in-play (goles/tarjetas minuto a minuto) | ❌ **Vacío en vivo** | `event_timeline` → "No data found" durante el partido |
 | Estadísticas finales | ⚠️ Post-partido, **solo ligas grandes** | EPL sí (tiros, posesión); LATAM/menores escaso |
 | Timeline final (goleadores, tarjetas, fotos jugador) | ⚠️ Post-partido, ligas grandes | Incluye `strCutout` (foto jugador) |
-| Highlights (`strVideo`) | ⚠️ Post-partido, ligas grandes | Enlace YouTube |
-| **Transmisión en vivo / imágenes en vivo** | ❌ **No existe** | Solo escudos estáticos de equipo/liga |
+| Highlights (`strVideo` / `event_highlights`) | ⚠️ Post-partido, ligas grandes | Enlace YouTube |
+| Canales de TV (`event_tv`, "dónde ver") | ⚠️ Cerca/post-partido, ligas grandes | Vacío en vivo (lower-league). Devuelve canal + país |
+| Imágenes de evento (poster/thumb/banner) | ⚠️ Ligas grandes | Vienen en la respuesta `event_tv`: `strEventThumb/Poster/Banner/Square` |
+| Alineaciones (`event_lineup`) | ⚠️ Pre/post, ligas grandes | Vacío en vivo lower-league |
+| **Transmisión (stream) en vivo / imágenes en vivo** | ❌ **No existe** | Solo escudos estáticos + (post) poster/thumb de ligas grandes |
+
+**Verificado contra docs oficiales + pruebas 2026-07-26.** `event_stats`/`event_timeline`/
+`event_lineup`/`event_tv` **existen como endpoints** pero **no se pueblan en vivo**: durante el
+partido devuelven "No data found"; se llenan cerca del final / post-partido, y solo en ligas
+grandes. No hay endpoint de streaming: `event_tv` da listados de canales, no video embebible.
 
 **Consecuencia de diseño:** una apuesta in-play sólo es ofrecible si se puede **resolver**
 a partir de (a) marcador + estado + progreso en vivo, o (b) marcador/estadística final.
@@ -130,7 +138,8 @@ Ruta pública. Click en la tarjeta del marketplace (fuera de los botones existen
 5. **Tablero de cuotas casa-en-vivo** — mercados de §4.1, tap → crear apuesta casa.
 6. **Mercado P2P-en-vivo** — crear rápido + lista de P2P en vivo abiertas para tomar.
 7. **Mercados pre-partido** (vs-casa / P2P actuales) — visibles hasta el saque; durante el juego se muestra el set en vivo.
-8. **Post-partido** — tabla de estadísticas finales (ligas grandes, `event_stats`) + highlights YouTube (`strVideo`) + resultado de apuestas.
+8. **Post-partido** — tabla de estadísticas finales (ligas grandes, `event_stats`) + highlights YouTube (`strVideo`/`event_highlights`) + resultado de apuestas.
+9. **Enriquecimiento ligas grandes (degrada con elegancia si vacío):** hero con imagen de evento (`event_tv`: `strEventThumb/Poster`), "📺 dónde ver" (canales `event_tv`), y alineaciones (`event_lineup`) cuando existan. Se ocultan en ligas menores.
 
 ### 6.2 Endpoint de datos del panel — `app/api/events/[id]/live/route.ts` (GET público)
 Devuelve el evento + `metadata.live` + apuestas en vivo abiertas. El panel hace polling
@@ -138,7 +147,12 @@ client-side ~30–60s (lee de DB, barato) para sentirse vivo entre escrituras de
 
 ### 6.3 Poller en vivo — `app/api/cron/sync-live/route.ts` (nuevo, cron-job.org cada 2–3 min)
 Auth `Bearer CRON_SECRET`. Por ejecución:
-1. 3 llamadas `livescore/{soccer,basketball,baseball}`.
+1. Traer marcadores en vivo. **Estrategia de llamadas (importante):** `livescore/all` trae
+   los ~96 partidos vivos globales en **1 sola llamada**, pero está **capado a 100 resultados**
+   → en un sábado cargado podría truncar y perder eventos nuestros. Por eso el poller llama
+   `livescore/{idLeague}` **solo para las ligas que tienen apuestas en vivo activas** (normalmente
+   1–5 ligas → 1–5 llamadas, sin truncamiento), con fallback a `livescore/soccer|basketball|baseball`
+   (3 llamadas) si hiciera falta. Nunca dependemos de `all` para no arriesgar el cap de 100.
 2. Para eventos con apuestas en vivo activas **o** featured-y-en-vivo:
    - Actualiza `metadata.live` (marcador, progreso, estado, `updated_at`).
    - Detecta cambio de marcador → añade snapshot (capado a ~30).
@@ -178,10 +192,11 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
 - **Tokens de IA (Claude): $0 adicionales/mes.** Las cuotas in-play son matemática pura sobre
   las predicciones pre-partido ya persistidas. No hay IA por usuario ni por partido nuevo.
   El batch Haiku de predicciones existente no cambia.
-- **Llamadas a TheSportsDB (no es IA):** poller = 3 llamadas/ejecución. Cada 2.5 min ≈ 24
-  ejec/hora → tope teórico 24×3×24h ≈ 1.728 llamadas/día ≈ **~52k/mes**, muy por debajo del
-  límite Premium. Optimización: el poller sólo ejecuta la lógica completa si hay eventos en
-  vivo con apuestas. Enriquecimiento post-partido: 1–2 llamadas por evento finalizado.
+- **Llamadas a TheSportsDB (no es IA):** poller = 1–5 llamadas/ejecución (una por liga con
+  apuestas vivas; típico 1–3). Cada 2.5 min ≈ 24 ejec/hora → tope realista 24×3×24h ≈ 1.728
+  llamadas/día ≈ **~52k/mes**, muy por debajo del límite Premium (100 req/min = ~4.3M/mes).
+  Plan Premium: **$9/mes**. El poller sólo ejecuta la lógica completa si hay eventos en vivo
+  con apuestas. Enriquecimiento post-partido: 1–3 llamadas por evento finalizado.
 - **Cómputo Vercel:** `sync-live` es liviano; invocación cada 2.5 min sin problema.
 
 ---
@@ -199,7 +214,7 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
 
 ## 9. Fuera de alcance (YAGNI)
 
-- Stream / video en vivo (no lo ofrece el proveedor).
+- Stream / video en vivo (no lo ofrece el proveedor; `event_tv` solo lista canales, no video).
 - Estadísticas in-play (posesión, tiros) — no existen en vivo en este proveedor.
 - Comentario/narración generado por IA en vivo (violaría la restricción de tokens).
 - Cash-out de apuestas en vivo (fase futura, requiere modelo de valoración continua).
