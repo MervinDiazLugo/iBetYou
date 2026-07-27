@@ -511,7 +511,7 @@ function resolveTotalPointsOverUnder(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under", "goals_over_under", "both_teams_score", "first_inning_score", "total_hits_over_under", "first_half_winner", "total_points_over_under"]
+const RESOLVABLE_TYPES = ["direct", "exact_score", "run_line", "total_runs", "score_margin", "half_time", "first_scorer", "cards_over_under", "goals_over_under", "both_teams_score", "first_inning_score", "total_hits_over_under", "first_half_winner", "total_points_over_under", "live_match_winner", "live_total_ou"]
 
 export async function POST(request: NextRequest) {
   const authorizedBySecret = hasValidResolveSecret(request)
@@ -732,7 +732,7 @@ export async function POST(request: NextRequest) {
 
       // For score-based bets: try fetching scores on-demand if null
       if ((eventRow.home_score === null || eventRow.away_score === null) &&
-          (betType === "direct" || betType === "exact_score" || betType === "run_line" || betType === "total_runs")) {
+          (betType === "direct" || betType === "exact_score" || betType === "run_line" || betType === "total_runs" || betType === "live_match_winner" || betType === "live_total_ou")) {
         const scores = await fetchScoresOnDemand(eventRow.external_id || "")
         if (scores) {
           await supabase.from("events").update({
@@ -764,6 +764,10 @@ export async function POST(request: NextRequest) {
 
       if (betType === "direct") {
         resolution = resolveDirect(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "live_match_winner") {
+        resolution = resolveDirect(creatorSelection, eventRow, betForResolver)
+      } else if (betType === "live_total_ou") {
+        resolution = resolveGoalsOverUnder(creatorSelection, eventRow, betForResolver)
       } else if (betType === "exact_score") {
         resolution = resolveExactScore(creatorSelection, eventRow, betForResolver)
       } else if (betType === "run_line") {
