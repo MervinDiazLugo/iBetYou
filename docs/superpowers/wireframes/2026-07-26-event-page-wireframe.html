@@ -1,0 +1,372 @@
+<title>Wireframe · Pantalla de evento en vivo · iBetYou</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --ink:#1b2330; --muted:#5b6675; --line:#d9dee6; --card:#ffffff;
+    --note:#6d28d9; --note-bg:#f1ecfd; --note-line:#d9cdf7;
+    /* app (device) palette — fixed dark, it's the real product */
+    --app-bg:#0a0e16; --app-panel:#131a26; --app-panel2:#0f1520; --app-line:#1e2836;
+    --app-ink:#e8edf4; --app-mut:#8a97a8; --app-mut2:#5f6b7d;
+    --blue:#3b82f6; --blue-t:#1d3a6b; --orange:#f97316; --orange-t:#5a3115;
+    --amber:#fbbf24; --purple:#a855f7; --purple-t:#3d2861; --green:#34d399;
+    --red:#ef4444; --gray-btn:#26303f;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{ --bg:#0c0f14; --ink:#e7ebf1; --muted:#94a0b0; --line:#232a35; --card:#141922;
+      --note:#c4b5fd; --note-bg:#1c1730; --note-line:#3a2f5c; }
+  }
+  :root[data-theme="light"]{ --bg:#f4f5f7; --ink:#1b2330; --muted:#5b6675; --line:#d9dee6; --card:#fff; --note:#6d28d9; --note-bg:#f1ecfd; --note-line:#d9cdf7; }
+  :root[data-theme="dark"]{ --bg:#0c0f14; --ink:#e7ebf1; --muted:#94a0b0; --line:#232a35; --card:#141922; --note:#c4b5fd; --note-bg:#1c1730; --note-line:#3a2f5c; }
+
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;line-height:1.5;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 20px 80px}
+  h1{font-size:clamp(24px,3.5vw,34px);line-height:1.15;margin:0 0 6px;letter-spacing:-.02em;text-wrap:balance}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:.12em;color:var(--muted);
+    margin:48px 0 16px;font-weight:700;display:flex;align-items:center;gap:10px}
+  h2::after{content:"";flex:1;height:1px;background:var(--line)}
+  .lede{color:var(--muted);max-width:64ch;margin:0 0 8px}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+
+  /* annotation note pill */
+  .note{display:flex;gap:10px;background:var(--note-bg);border:1px solid var(--note-line);
+    border-radius:10px;padding:10px 12px;font-size:13px;color:var(--ink)}
+  .note b{color:var(--note)}
+  .num{flex:none;width:20px;height:20px;border-radius:6px;background:var(--note);color:#fff;
+    font-size:11px;font-weight:700;display:grid;place-items:center;font-family:ui-monospace,monospace}
+
+  /* flow row */
+  .flow{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .arrow{color:var(--note);font-weight:700;font-size:22px}
+  .flow-note{font-size:13px;color:var(--muted);max-width:220px}
+
+  /* ---- device (the app screen, always dark) ---- */
+  .device{background:var(--app-bg);border:1px solid var(--app-line);border-radius:20px;
+    overflow:hidden;color:var(--app-ink);max-width:420px;box-shadow:0 18px 50px rgba(0,0,0,.28)}
+  .layout{display:grid;grid-template-columns:minmax(0,420px) 1fr;gap:28px;align-items:start}
+  @media (max-width:860px){ .layout{grid-template-columns:1fr} }
+  .ann{display:flex;flex-direction:column;gap:10px;position:sticky;top:20px}
+
+  .scr{padding:0}
+  .sec{padding:14px 15px;border-bottom:1px solid var(--app-line);position:relative}
+  .tag{position:absolute;top:10px;right:10px;width:20px;height:20px;border-radius:6px;
+    background:var(--purple);color:#fff;font:700 11px ui-monospace,monospace;display:grid;place-items:center;opacity:.9}
+  .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--app-mut2);margin-bottom:8px;font-weight:700}
+
+  /* header */
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;font-size:11px;color:var(--app-mut)}
+  .chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:700}
+  .live{background:rgba(239,68,68,.14);color:#fca5a5}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 0 rgba(239,68,68,.6);animation:pulse 1.6s infinite}
+  @keyframes pulse{70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
+  @media (prefers-reduced-motion:reduce){ .dot{animation:none} }
+  .score{display:flex;align-items:center;justify-content:center;gap:16px;padding:6px 0 2px}
+  .team{display:flex;flex-direction:column;align-items:center;gap:6px;flex:1;min-width:0}
+  .badge{width:44px;height:44px;border-radius:50%;background:var(--app-panel);border:1px solid var(--app-line);
+    display:grid;place-items:center;font-size:20px}
+  .team span{font-size:12px;font-weight:600;text-align:center;line-height:1.15}
+  .nums{font:800 34px/1 system-ui;letter-spacing:2px;font-variant-numeric:tabular-nums}
+  .min{text-align:center;font-size:11px;color:var(--app-mut);margin-top:4px}
+
+  /* prob bar */
+  .pbar{height:14px;border-radius:8px;overflow:hidden;display:flex;margin:8px 0 6px;border:1px solid var(--app-line)}
+  .pbar i{display:block;height:100%}
+  .pl{display:flex;justify-content:space-between;font-size:11px;font-weight:700}
+  .pl .h{color:#7fb0ff}.pl .d{color:#c7cfda}.pl .a{color:#ffb27f}
+  .mom{font-size:10px;color:var(--green);margin-top:5px;display:flex;align-items:center;gap:4px}
+
+  /* timeline */
+  .tl{display:flex;flex-direction:column;gap:6px}
+  .tl div{display:flex;align-items:center;gap:8px;font-size:12px}
+  .tmin{font:700 11px ui-monospace,monospace;color:var(--amber);width:34px}
+
+  /* analysis 3-up */
+  .an3{display:flex;gap:6px}
+  .an3 div{flex:1;border-radius:8px;padding:7px 4px;text-align:center;border:1px solid transparent}
+  .an3 .h{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.25)}
+  .an3 .d{background:rgba(148,163,184,.1);border-color:rgba(148,163,184,.2)}
+  .an3 .a{background:rgba(249,115,22,.1);border-color:rgba(249,115,22,.25)}
+  .an3 small{display:block;font-size:9px;color:var(--app-mut2)}
+  .an3 b{font-size:15px}
+  .advice{font-size:11px;color:#fcd9a3;text-align:center;margin-top:7px}
+
+  /* odds buttons */
+  .odds{display:flex;gap:6px}
+  .obtn{flex:1;background:var(--app-panel2);border:1px solid var(--app-line);border-radius:8px;
+    padding:7px 4px;text-align:center;cursor:pointer;transition:border-color .15s}
+  .obtn:hover{border-color:var(--purple)}
+  .obtn small{display:block;font-size:9px;color:var(--app-mut2);margin-bottom:2px}
+  .obtn b{font-size:15px;color:var(--amber);font-variant-numeric:tabular-nums}
+  .susp{opacity:.5}
+  .susp b{color:var(--app-mut2)}
+  .suspchip{font-size:9px;color:#fca5a5;text-transform:uppercase;letter-spacing:.05em}
+  .tabs{display:flex;gap:6px;margin-bottom:9px}
+  .tabs span{font-size:11px;padding:3px 10px;border-radius:999px;border:1px solid var(--app-line);color:var(--app-mut)}
+  .tabs .on{background:rgba(168,85,247,.18);color:#d8b4fe;border-color:transparent}
+
+  .modepill{display:inline-flex;padding:2px;background:var(--app-panel2);border-radius:999px;gap:2px;margin-bottom:9px}
+  .modepill span{font-size:10px;font-weight:700;padding:3px 10px;border-radius:999px;color:var(--app-mut)}
+  .modepill .casa{background:var(--purple);color:#fff}
+  .modepill .p2p{background:var(--blue);color:#fff}
+
+  /* p2p create + list */
+  .p2pq{display:flex;gap:6px;margin-bottom:8px}
+  .p2pq .q{flex:1;font-size:11px;color:var(--app-mut)}
+  .pill2{display:flex;gap:6px}
+  .pill2 span{flex:1;text-align:center;font-size:11px;font-weight:600;padding:6px 2px;border-radius:7px;
+    background:var(--app-panel2);border:1px solid var(--app-line)}
+  .createbtn{margin-top:8px;width:100%;background:linear-gradient(90deg,var(--blue),#6366f1);color:#fff;
+    border:none;border-radius:8px;padding:8px;font-size:12px;font-weight:700;cursor:pointer}
+  .p2pcard{background:var(--app-panel2);border:1px solid var(--app-line);border-radius:8px;padding:8px;margin-top:8px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .p2pcard .info{font-size:11px}.p2pcard .info b{color:var(--green)}
+  .take{background:var(--blue);color:#fff;border:none;border-radius:7px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer;flex:none}
+
+  /* donde ver */
+  .tvgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .tvch{display:flex;align-items:center;gap:8px;background:var(--app-panel2);border:1px solid var(--app-line);
+    border-radius:8px;padding:7px 9px;font-size:11px;font-weight:600}
+  .tvch small{display:block;color:var(--app-mut2);font-weight:400;font-size:9px}
+  .tvlogo{width:24px;height:24px;border-radius:6px;background:var(--app-panel);display:grid;place-items:center;font-size:13px;flex:none}
+  .tvmore{margin-top:7px;font-size:10px;color:#93c5fd;text-align:center;cursor:pointer}
+
+  .post{opacity:.55}
+  .post .lbl{color:var(--app-mut)}
+  .statrow{display:flex;justify-content:space-between;font-size:11px;padding:3px 0;border-bottom:1px dashed var(--app-line)}
+  .yt{margin-top:8px;height:64px;border-radius:8px;background:var(--app-panel2);border:1px solid var(--app-line);
+    display:grid;place-items:center;color:var(--app-mut);font-size:11px;gap:4px}
+
+  /* per-sport grid */
+  .sports{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  @media (max-width:720px){ .sports{grid-template-columns:1fr} }
+  .sport{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .sport h3{margin:0 0 4px;font-size:16px}
+  .sport .k{font-size:11px;color:var(--muted);margin-bottom:10px}
+  .mkt{font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:baseline}
+  .mkt:last-child{border:0}
+  .who{flex:none;font:700 9px ui-monospace,monospace;padding:2px 6px;border-radius:5px;letter-spacing:.03em}
+  .w-casa{background:rgba(168,85,247,.15);color:var(--purple)}
+  .w-p2p{background:rgba(59,130,246,.15);color:var(--blue)}
+  :root[data-theme="light"] .w-casa{background:#f0e9fd}
+  .best{margin-top:10px;font-size:11px;color:var(--green);font-weight:600}
+  .caption{font-size:12px;color:var(--muted);margin-top:8px}
+  .legend{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:10px 0 0}
+  .legend b{padding:2px 7px;border-radius:5px;font:700 10px ui-monospace,monospace}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+
+  <h1>Pantalla de evento en vivo</h1>
+  <p class="lede">Wireframe de <span class="mono">/event/[id]</span> — cómo queda la pantalla y qué opciones de apuesta ve el usuario al entrar. Colores = los de la app actual (azul local · naranja visita · ámbar dinero · morado casa · verde selección · rojo en vivo).</p>
+
+  <!-- ── FLOW ─────────────────────────────── -->
+  <h2>1 · El flujo de entrada</h2>
+  <div class="flow">
+    <div class="device" style="max-width:250px">
+      <div class="sec" style="border:0">
+        <div class="top"><span>⚽ Ecuador Serie A</span><span>🔴 67'</span></div>
+        <div class="score" style="gap:10px">
+          <div class="team"><div class="badge" style="width:34px;height:34px;font-size:15px">🟡</div><span>Barcelona SC</span></div>
+          <div class="nums" style="font-size:24px">1–0</div>
+          <div class="team"><div class="badge" style="width:34px;height:34px;font-size:15px">⚪</div><span>LDU Quito</span></div>
+        </div>
+        <div class="odds" style="margin-top:12px">
+          <div class="obtn" style="background:rgba(59,130,246,.12);border-color:var(--blue)"><b style="color:#93c5fd;font-size:12px">🤝 Predecir P2P</b></div>
+          <div class="obtn" style="background:rgba(168,85,247,.12);border-color:var(--purple)"><b style="color:#d8b4fe;font-size:12px">🏛 Vs. la casa</b></div>
+        </div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="flow-note"><b style="color:var(--ink)">Click en los botones</b> = acción rápida de siempre (crea apuesta directa).</div>
+    <div class="arrow">↘</div>
+    <div class="flow-note"><b style="color:var(--ink)">Click en cualquier otro lugar de la tarjeta</b> = abre <span class="mono">/event/[id]</span> en <b style="color:var(--note)">pestaña nueva</b> (el panel completo de abajo).</div>
+  </div>
+
+  <!-- ── MAIN MOCKUP ──────────────────────── -->
+  <h2>2 · La pantalla completa (estado: en vivo)</h2>
+  <div class="layout">
+    <div class="device">
+      <div class="scr">
+
+        <!-- 1 header -->
+        <div class="sec">
+          <span class="tag" style="background:#334155">1</span>
+          <div class="top"><span>⚽ Ecuador Serie A · Estadio Monumental</span></div>
+          <div class="top" style="margin:2px 0 8px"><span class="chip live"><span class="dot"></span>EN VIVO</span><span>2ª parte · 67'</span></div>
+          <div class="score">
+            <div class="team"><div class="badge">🟡</div><span>Barcelona SC</span></div>
+            <div style="text-align:center"><div class="nums">1&nbsp;–&nbsp;0</div></div>
+            <div class="team"><div class="badge">⚪</div><span>LDU Quito</span></div>
+          </div>
+        </div>
+
+        <!-- 2 prob bar -->
+        <div class="sec">
+          <span class="tag" style="background:var(--green);color:#04231a">2</span>
+          <div class="lbl">Probabilidad en vivo · se mueve sola</div>
+          <div class="pbar">
+            <i class="h" style="width:64%;background:var(--blue)"></i>
+            <i class="d" style="width:22%;background:#64748b"></i>
+            <i class="a" style="width:14%;background:var(--orange)"></i>
+          </div>
+          <div class="pl"><span class="h">Local 64%</span><span class="d">Empate 22%</span><span class="a">Visita 14%</span></div>
+          <div class="mom">▲ Local subió +12% desde el gol del 24'</div>
+        </div>
+
+        <!-- 3 timeline -->
+        <div class="sec">
+          <span class="tag" style="background:#334155">3</span>
+          <div class="lbl">Línea de tiempo</div>
+          <div class="tl">
+            <div><span class="tmin">24'</span>⚽ Gol — Barcelona SC · 1–0</div>
+            <div><span class="tmin">HT</span>⏸ Medio tiempo · 1–0</div>
+          </div>
+        </div>
+
+        <!-- 4 analysis -->
+        <div class="sec">
+          <span class="tag" style="background:#334155">4</span>
+          <div class="lbl">🤖 Análisis pre-partido</div>
+          <div class="an3">
+            <div class="h"><small>Local</small><b style="color:#93c5fd">52%</b></div>
+            <div class="d"><small>Empate</small><b style="color:#cbd5e1">26%</b></div>
+            <div class="a"><small>Visita</small><b style="color:#fdba74">22%</b></div>
+          </div>
+          <div class="advice">💡 Barcelona SC ligeramente favorito en su estadio</div>
+        </div>
+
+        <!-- 5 house live -->
+        <div class="sec">
+          <span class="tag">5</span>
+          <div class="modepill"><span class="casa">🏛 CASA</span><span>P2P</span></div>
+          <div class="lbl">Apuestas en vivo · vs. la casa <span style="color:var(--app-mut2)">(liquidan al final)</span></div>
+          <div class="tabs"><span class="on">Ganador</span><span>Total goles</span></div>
+          <div class="odds">
+            <div class="obtn"><small>Barcelona</small><b>1.55</b></div>
+            <div class="obtn"><small>Empate</small><b>4.20</b></div>
+            <div class="obtn"><small>LDU Quito</small><b>6.50</b></div>
+          </div>
+          <div class="odds" style="margin-top:6px">
+            <div class="obtn susp"><small>Más de 2.5</small><b>—</b><span class="suspchip">suspendido · gol reciente</span></div>
+            <div class="obtn"><small>Menos de 2.5</small><b>1.72</b></div>
+          </div>
+        </div>
+
+        <!-- 6 p2p live -->
+        <div class="sec">
+          <span class="tag" style="background:var(--blue)">6</span>
+          <div class="modepill"><span>🏛 CASA</span><span class="p2p">P2P</span></div>
+          <div class="lbl">Apuestas en vivo · P2P <span style="color:var(--app-mut2)">(la casa solo cobra fee)</span></div>
+          <div class="p2pq"><span class="q">Próximo gol</span></div>
+          <div class="pill2"><span>Barcelona</span><span>Ninguno más</span><span>LDU Quito</span></div>
+          <div class="p2pq" style="margin-top:10px"><span class="q">¿Gol antes del min 80'?</span></div>
+          <div class="pill2"><span>Sí</span><span>No</span></div>
+          <button class="createbtn">+ Crear mi apuesta en vivo</button>
+          <div class="p2pcard">
+            <div class="info">🤝 "Habrá +1 gol" · <b>Bs 500</b><br><span style="color:var(--app-mut)">por @carlos_ve</span></div>
+            <button class="take">Tomar</button>
+          </div>
+        </div>
+
+        <!-- 7 donde ver -->
+        <div class="sec">
+          <span class="tag" style="background:#334155">7</span>
+          <div class="lbl">📺 Dónde ver <span style="color:var(--app-mut2)">(antes y durante)</span></div>
+          <div class="tvgrid">
+            <div class="tvch"><span class="tvlogo">🛰</span>DirecTV Sports<small>Argentina</small></div>
+            <div class="tvch"><span class="tvlogo">📡</span>ESPN<small>México</small></div>
+            <div class="tvch"><span class="tvlogo">🎯</span>GolTV<small>Venezuela</small></div>
+            <div class="tvch"><span class="tvlogo">📺</span>Sky Sports<small>Reino Unido</small></div>
+          </div>
+          <div class="tvmore">+ ver 14 canales más</div>
+        </div>
+
+        <!-- 8 post -->
+        <div class="sec post">
+          <span class="tag" style="background:#334155">8</span>
+          <div class="lbl">Al finalizar (solo ligas grandes)</div>
+          <div class="statrow"><span>Tiros a puerta</span><span>9 · 3</span></div>
+          <div class="statrow"><span>Posesión</span><span>58% · 42%</span></div>
+          <div class="yt">▶ Resumen en YouTube</div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- annotations -->
+    <div class="ann">
+      <div class="note"><span class="num">1</span><div><b>Marcador en vivo</b> — escudos, marcador grande, pill "EN VIVO" pulsante, minuto/inning/cuarto real (<span class="mono">strProgress</span>).</div></div>
+      <div class="note"><span class="num">2</span><div><b>Barra de probabilidad</b> — matemática pura (Poisson) sobre marcador+minuto. Se anima al moverse. Flecha de momentum. <b>$0 de IA.</b></div></div>
+      <div class="note"><span class="num">3</span><div><b>Línea de tiempo</b> — la construimos nosotros con los cambios de marcador que detecta el poller cada minuto.</div></div>
+      <div class="note"><span class="num">4</span><div><b>Análisis pre-partido</b> — las predicciones IA que ya tienes persistidas. Sin costo nuevo.</div></div>
+      <div class="note"><span class="num">5</span><div><b>Casa en vivo</b> — solo mercados que liquidan al final (ganador, total). Cuota recalculada + edge extra. Se <b>suspende</b> tras un gol o en tramo final.</div></div>
+      <div class="note"><span class="num">6</span><div><b>P2P en vivo</b> — mercados instantáneos (próximo gol, ¿gol antes del min X?). La casa es neutral: sin riesgo, solo fee. Crear + tomar.</div></div>
+      <div class="note"><span class="num">7</span><div><b>Dónde ver</b> — canales de TV con logo (<span class="mono">event_tv</span>), priorizados Venezuela → LATAM → resto. Ya disponible antes del saque. Se cachea (1 llamada por evento) y se oculta si no hay datos.</div></div>
+      <div class="note"><span class="num">8</span><div><b>Post-partido</b> — stats finales + resumen YouTube. Se oculta con elegancia en ligas menores que no traen esos datos.</div></div>
+    </div>
+  </div>
+
+  <!-- ── PER SPORT ────────────────────────── -->
+  <h2>3 · Opciones de apuesta en vivo por deporte</h2>
+  <p class="lede">Cada mercado va enrutado según quién asume el riesgo. La casa solo da cuota en lo que se decide al final; lo instantáneo es P2P (neutral).</p>
+  <div class="legend">
+    <span><b class="w-casa">CASA</b> da cuota, liquida al final</span>
+    <span><b class="w-p2p">P2P</b> instantáneo, casa neutral</span>
+  </div>
+  <div class="sports" style="margin-top:16px">
+
+    <div class="sport">
+      <h3>⚽ Fútbol</h3>
+      <div class="k">En vivo: marcador + minuto</div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Ganador del partido (cuota viva)</div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Total de goles Más/Menos</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> Próximo gol (Local / Ninguno / Visita)</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> ¿Gol antes del minuto X?</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> Goles en la 2ª parte Más/Menos</div>
+    </div>
+
+    <div class="sport">
+      <h3>🏀 Basket</h3>
+      <div class="k">En vivo: marcador + cuarto</div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Ganador del partido (cuota viva)</div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Total de puntos Más/Menos</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> Quién gana el cuarto en curso</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> Carrera a X puntos totales</div>
+      <div class="best">Nota: desglose por cuarto no llega en vivo → los mercados de cuarto liquidan al cerrar el cuarto.</div>
+    </div>
+
+    <div class="sport">
+      <h3>⚾ Béisbol <span style="font-size:11px;color:var(--green)">· el más rico</span></h3>
+      <div class="k">En vivo: inning + <b>desglose inning-por-inning + hits</b></div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Ganador del partido (cuota viva)</div>
+      <div class="mkt"><span class="who w-casa">CASA</span> Total de carreras Más/Menos</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> ¿Carreras en el inning en curso? (sí/no)</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> ¿Anota el equipo en el inning N?</div>
+      <div class="mkt"><span class="who w-p2p">P2P</span> Hits totales Más/Menos (se actualiza vivo)</div>
+      <div class="best">Único deporte que resuelve mercados de periodo <b>dentro</b> del partido.</div>
+    </div>
+  </div>
+
+  <!-- ── STATES ───────────────────────────── -->
+  <h2>4 · La misma pantalla en sus 3 estados</h2>
+  <div class="sports">
+    <div class="sport">
+      <h3 style="font-size:14px">Antes del partido</h3>
+      <p class="caption">Muestra: análisis IA + cuotas pre-partido (vs casa / P2P de siempre) + 📺 dónde ver. Sin sección en vivo. Cuenta regresiva al saque.</p>
+    </div>
+    <div class="sport" style="border-color:var(--red)">
+      <h3 style="font-size:14px">🔴 En vivo</h3>
+      <p class="caption">Todo lo del wireframe grande: marcador vivo, barra de probabilidad, timeline, mercados casa-en-vivo + P2P-en-vivo. Refresco cada 1 min.</p>
+    </div>
+    <div class="sport">
+      <h3 style="font-size:14px">Finalizado</h3>
+      <p class="caption">Marcador final, resultado de tus apuestas, stats finales + resumen YouTube (ligas grandes). Sin mercados abiertos.</p>
+    </div>
+  </div>
+
+  <footer>
+    Wireframe esquemático — proporciones y textos ilustrativos, no pixel-final. Datos verificados contra TheSportsDB Premium (2026-07-26). Consumo de IA: <b>$0 adicionales</b>. Poller: 1 min con gate de reposo.
+  </footer>
+</div>

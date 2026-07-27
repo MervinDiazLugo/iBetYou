@@ -156,8 +156,12 @@ Ruta pública. Click en la tarjeta del marketplace (fuera de los botones existen
 5. **Tablero de cuotas casa-en-vivo** — mercados de §4.1, tap → crear apuesta casa.
 6. **Mercado P2P-en-vivo** — crear rápido + lista de P2P en vivo abiertas para tomar.
 7. **Mercados pre-partido** (vs-casa / P2P actuales) — visibles hasta el saque; durante el juego se muestra el set en vivo.
+7b. **📺 Dónde ver (canales de TV)** — lista de canales que transmiten el evento (`event_tv`),
+   con logo del canal y país. **Disponible antes y durante el partido** (no solo post). Se
+   priorizan los canales relevantes para la audiencia (Venezuela → resto LATAM → España → US →
+   demás), mostrando ~4–6 y un desplegable "ver todos". Se oculta si no hay datos (ligas menores).
 8. **Post-partido** — tabla de estadísticas finales (ligas grandes, `event_stats`) + highlights YouTube (`strVideo`/`event_highlights`) + resultado de apuestas.
-9. **Enriquecimiento ligas grandes (degrada con elegancia si vacío):** hero con imagen de evento (`event_tv`: `strEventThumb/Poster`), "📺 dónde ver" (canales `event_tv`), y alineaciones (`event_lineup`) cuando existan. Se ocultan en ligas menores.
+9. **Enriquecimiento visual ligas grandes (degrada con elegancia si vacío):** hero con imagen de evento (`event_tv`: `strEventThumb/Poster`) y alineaciones (`event_lineup`) cuando existan. Se ocultan en ligas menores.
 
 ### 6.2 Endpoint de datos del panel — `app/api/events/[id]/live/route.ts` (GET público)
 Devuelve el evento + `metadata.live` + apuestas en vivo abiertas. El panel hace polling
@@ -204,9 +208,29 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
   "win_prob": { "home": 0.62, "draw": 0.23, "away": 0.15 },
   "suspended": false, "suspend_reason": null
 },
+"tv": {                                  // "Dónde ver" — cacheado, 1 sola llamada por evento
+  "fetched_at": "2026-07-26T12:00:00Z",
+  "channels": [                          // ordenado por relevancia LATAM al leer
+    { "name": "DirecTV Sports", "country": "Argentina", "logo": "https://..." },
+    { "name": "Sky Sports Premier League", "country": "United Kingdom", "logo": "https://..." }
+  ]
+},
+"images": { "poster": "https://...", "thumb": "https://..." }, // de la misma respuesta event_tv
 "match_stats": { /* post-partido, ligas grandes */ },
 "video": "https://youtube.com/..."
 ```
+
+### 6.6 "Dónde ver" — canales de TV (`event_tv`)
+- **Origen:** `GET /api/v2/json/lookup/event_tv/{id}`. Devuelve canales (`strChannel`, `strCountry`,
+  `strLogo`) + imágenes de evento (`strEventThumb/Poster`). Verificado: **poblado desde antes del
+  saque** en ligas grandes (p.ej. próximo EPL → 4 canales); vacío en ligas menores.
+- **Cuándo se trae (1 llamada por evento, cacheada, sin IA):** en el cron de enriquecimiento de
+  eventos próximos/featured (se reutiliza el paso que ya prepara predicciones) y una vez más al
+  pasar a `finished` si aún no se tenía. Nunca por request de usuario. Se guarda en `metadata.tv`.
+- **Priorización al mostrar (en el endpoint del panel):** ordenar canales por país según
+  `[Venezuela, Colombia, Argentina, Mexico, Chile, Peru, Spain, United States, …resto]`; el panel
+  muestra los primeros ~4–6 y colapsa el resto. Si `channels` está vacío → no se renderiza la sección.
+- **Costo:** 1 llamada extra por evento, cacheada de por vida del evento. Dentro del plan Premium.
 
 ---
 
