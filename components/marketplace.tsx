@@ -1221,7 +1221,8 @@ function HomeContent() {
                 return (
                 <Card
                   key={`featured-${event.id}`}
-                  className="overflow-hidden border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all"
+                  onClick={() => window.open(`/event/${event.id}`, "_blank")}
+                  className="overflow-hidden border-amber-400/50 bg-amber-950/10 hover:border-amber-400/90 hover:shadow-[0_0_24px_rgba(251,191,36,0.12)] transition-all cursor-pointer"
                 >
                   <div className="h-1 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500" />
                   <CardContent className="pt-4 pb-3 px-4">
@@ -1313,7 +1314,8 @@ function HomeContent() {
                           size="sm"
                           variant="outline"
                           className="text-xs h-8"
-                          onClick={() => {
+                          onClick={(e) => {
+                            e.stopPropagation()
                             if (!user) { router.push('/login'); return }
                             setSelectedEventForBet(event)
                             setShowCreateModal(true)
@@ -1326,7 +1328,8 @@ function HomeContent() {
                             size="sm"
                             variant="outline"
                             className="text-xs h-8 border-yellow-500/60 text-yellow-500 hover:bg-yellow-500/10"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation()
                               if (!user) { router.push('/login'); return }
                               openHouseBetModal(event)
                             }}
@@ -1403,24 +1406,12 @@ function HomeContent() {
                         return (
                         <Card
                           key={event.id}
-                          className={`overflow-hidden hover:shadow-md transition-all h-full flex flex-col group ${
-                            started
-                              ? "cursor-default opacity-60"
-                              : "cursor-pointer"
-                          } ${
+                          className={`overflow-hidden hover:shadow-md transition-all h-full flex flex-col group cursor-pointer ${
                             event.featured
                               ? "border-amber-400/50 hover:border-amber-400/80"
-                              : started ? "" : "hover:border-blue-500/50"
+                              : "hover:border-blue-500/50"
                           }`}
-                          onClick={() => {
-                            if (started) return
-                            if (!user) {
-                              router.push('/login')
-                              return
-                            }
-                            setSelectedEventForBet(event)
-                            setShowCreateModal(true)
-                          }}
+                          onClick={() => window.open(`/event/${event.id}`, "_blank")}
                         >
                           <div className={`h-0.5 bg-gradient-to-r ${event.featured ? "from-amber-400 to-yellow-300" : "from-blue-500 to-cyan-400"}`} />
                           <CardContent className="pt-3 pb-3 space-y-2 px-3 flex-1 flex flex-col justify-center">
@@ -1462,11 +1453,11 @@ function HomeContent() {
 
                             {started ? (
                               <div className="text-center text-[10px] text-red-400/70 font-medium">
-                                🔴 En curso
+                                🔴 En vivo · haz clic para ver detalle
                               </div>
                             ) : (
                               <div className="text-center text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity">
-                                Haz clic para crear predicción
+                                Haz clic para ver detalle y apostar
                               </div>
                             )}
                           </CardContent>
