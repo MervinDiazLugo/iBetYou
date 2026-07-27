@@ -4,6 +4,13 @@ import { useParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import Image from "next/image"
 import Link from "next/link"
+import { createBrowserSupabaseClient } from "@/lib/supabase"
+import { useToast } from "@/components/toast"
+import { formatCurrency } from "@/lib/utils"
+import { formatHouseSelection, formatHouseBetTypeLabel } from "@/lib/bet-labels"
+import { isLiveP2PBetType } from "@/lib/live-bet-types"
+
+interface OpenBet { id: string; bet_type: string; creator_selection: string; amount: number; status: string; creator_id: string }
 
 interface LiveMeta {
   status: string
@@ -35,8 +42,13 @@ const pct = (n: number) => `${Math.round(n * 100)}%`
 
 export default function EventPage() {
   const { id } = useParams<{ id: string }>()
+  const { showToast } = useToast()
   const [event, setEvent] = useState<EventData | null>(null)
+  const [openBets, setOpenBets] = useState<OpenBet[]>([])
+  const [userId, setUserId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [amount, setAmount] = useState("100")
+  const [submitting, setSubmitting] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -44,6 +56,7 @@ export default function EventPage() {
       if (res.ok) {
         const data = await res.json()
         setEvent(data.event)
+        setOpenBets(data.openBets || [])
       }
     } finally {
       setLoading(false)
@@ -55,6 +68,52 @@ export default function EventPage() {
     const t = setInterval(load, 30000)
     return () => clearInterval(t)
   }, [load])
+
+  useEffect(() => {
+    const supabase = createBrowserSupabaseClient()
+    supabase.auth.getSession().then(({ data }) => setUserId(data.session?.user?.id ?? null))
+  }, [])
+
+  async function authHeaders(): Promise<HeadersInit> {
+    const supabase = createBrowserSupabaseClient()
+    const { data: { session } } = await supabase.auth.getSession()
+    const headers: HeadersInit = { "Content-Type": "application/json" }
+    if (session?.access_token) (headers as Record<string, string>).Authorization = `Bearer ${session.access_token}`
+    return headers
+  }
+
+  async function createLiveBet(betType: string, selection: string) {
+    const amt = Number(amount)
+    if (!Number.isFinite(amt) || amt <= 0) { showToast("Monto inválido", "error"); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/bets/create", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({ eventId: Number(id), betType, selection: { selection }, amount: amt, mode: "fantasy" }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "No se pudo crear", "error"); return }
+      showToast("Apuesta en vivo creada", "success")
+      load()
+    } finally { setSubmitting(false) }
+  }
+
+  async function takeBet(betId: string) {
+    if (!userId) { showToast("Inicia sesión para tomar", "error"); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch(`/api/bets/${betId}`, {
+        method: "PATCH",
+        headers: await authHeaders(),
+        body: JSON.stringify({ user_id: userId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(data.error || "No se pudo tomar", "error"); return }
+      showToast("Apuesta tomada", "success")
+      load()
+    } finally { setSubmitting(false) }
+  }
 
   if (loading) return (<><Navbar /><div className="max-w-2xl mx-auto p-6 text-gray-400">Cargando…</div></>)
   if (!event) return (<><Navbar /><div className="max-w-2xl mx-auto p-6 text-gray-400">Evento no encontrado.</div></>)
@@ -129,6 +188,62 @@ export default function EventPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* P2P-live betting */}
+        {isLive && live && (
+          <div className="rounded-xl border border-blue-800/40 bg-blue-950/10 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[10px] uppercase tracking-wider text-blue-300">🤝 Apuestas en vivo · P2P</div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500">Monto</span>
+                <input
+                  type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)}
+                  className="w-20 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white"
+                />
+              </div>
+            </div>
+
+            {live.suspended ? (
+              <p className="text-xs text-amber-400/80">Mercado suspendido momentáneamente (anotación reciente). Vuelve en unos segundos.</p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] text-gray-400 mb-1">¿Habrá más anotaciones?</div>
+                  <div className="flex gap-2">
+                    <button disabled={submitting} onClick={() => createLiveBet("live_more_scoring", "yes")}
+                      className="flex-1 rounded-md bg-gray-800 hover:bg-green-900/40 border border-gray-700 hover:border-green-500/40 py-1.5 text-xs font-semibold disabled:opacity-50">Sí</button>
+                    <button disabled={submitting} onClick={() => createLiveBet("live_more_scoring", "no")}
+                      className="flex-1 rounded-md bg-gray-800 hover:bg-red-900/40 border border-gray-700 hover:border-red-500/40 py-1.5 text-xs font-semibold disabled:opacity-50">No</button>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-400 mb-1">¿Quién anota primero?</div>
+                  <div className="flex gap-2">
+                    <button disabled={submitting} onClick={() => createLiveBet("live_next_team_scores", "home")}
+                      className="flex-1 rounded-md bg-gray-800 hover:bg-blue-900/40 border border-gray-700 hover:border-blue-500/40 py-1.5 text-xs font-semibold disabled:opacity-50 truncate">{event.home_team}</button>
+                    <button disabled={submitting} onClick={() => createLiveBet("live_next_team_scores", "away")}
+                      className="flex-1 rounded-md bg-gray-800 hover:bg-orange-900/40 border border-gray-700 hover:border-orange-500/40 py-1.5 text-xs font-semibold disabled:opacity-50 truncate">{event.away_team}</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Open live P2P bets to take */}
+            {openBets.filter((b) => isLiveP2PBetType(b.bet_type) && b.creator_id !== userId).map((b) => (
+              <div key={b.id} className="mt-3 flex items-center justify-between gap-2 rounded-md bg-gray-900/60 border border-gray-800 p-2.5">
+                <div className="text-xs min-w-0">
+                  <div className="text-gray-400 text-[10px]">{formatHouseBetTypeLabel(b.bet_type)}</div>
+                  <div className="text-green-400 font-medium truncate">{formatHouseSelection(b.bet_type, b.creator_selection, event.home_team, event.away_team)}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  <span className="text-amber-400 font-bold text-xs">{formatCurrency(b.amount)}</span>
+                  <button disabled={submitting} onClick={() => takeBet(b.id)}
+                    className="bg-blue-600 hover:bg-blue-500 rounded px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">Tomar</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
