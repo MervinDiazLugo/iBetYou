@@ -4,6 +4,7 @@ import { createNotification } from "@/lib/notifications"
 import { logUserEvent } from "@/lib/funnel"
 import { canCountryUseRealMoney } from "@/lib/country-access"
 import { payoutToMode } from "@/lib/wallet-utils"
+import { isLiveP2PBetType } from "@/lib/live-bet-types"
 
 export async function POST(request: NextRequest) {
   try {
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
       { data: eventRow, error: eventError },
       { data: profile, error: profileError },
     ] = await Promise.all([
-      supabase.from("events").select("id, sport, status, start_time").eq("id", eventId).single(),
+      supabase.from("events").select("id, sport, status, start_time, metadata").eq("id", eventId).single(),
       supabase.from("profiles").select("id, is_banned, role, betting_blocked_until, country, real_betting_enabled").eq("id", user.id).single(),
     ])
 
@@ -89,14 +90,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Block ALL new bets once the match has started — regardless of bet type.
+    // P2P-live markets are the exception: they can be created DURING the match, but only
+    // when the event is live, has fresh live data, and is not currently suspended.
+    const isLiveMarket = isLiveP2PBetType(betType)
+    const liveMeta = (eventRow as any).metadata?.live
+    const canLiveBet = isLiveMarket && eventRow.status === "live" && !!liveMeta && !liveMeta.suspended
+
+    // Block ALL other new bets once the match has started — regardless of bet type.
     // Dual check: status covers the case where cron updated to 'live' but start_time is slightly off;
     // start_time covers the gap when cron hasn't run yet (runs every 2h).
     const matchStarted = eventRow.status === "live" ||
       (eventRow.start_time && new Date(eventRow.start_time) <= new Date())
-    if (matchStarted) {
+    if (matchStarted && !canLiveBet) {
       return NextResponse.json(
-        { error: "Este partido ya comenzó. No se pueden crear nuevas apuestas." },
+        { error: isLiveMarket
+            ? "Esta apuesta en vivo no está disponible en este momento (datos no frescos o suspendida)."
+            : "Este partido ya comenzó. No se pueden crear nuevas apuestas." },
         { status: 400 }
       )
     }
@@ -234,6 +243,20 @@ export async function POST(request: NextRequest) {
     // 1. Insert bet FIRST (payment ordering invariant: record exists before money moves)
     const isAsymmetric = betType === "exact_score"
 
+    // For P2P-live markets, capture the server-side baseline (score at bet creation) so the
+    // settlement engine can compute deltas independently of the client.
+    let selectionToStore = selection
+    if (canLiveBet) {
+      selectionToStore = {
+        ...selection,
+        live_baseline: {
+          home: liveMeta.home_score ?? 0,
+          away: liveMeta.away_score ?? 0,
+          minute: liveMeta.progress ?? null,
+        },
+      }
+    }
+
     const { data: bet, error: betError } = await supabase
       .from("bets")
       .insert({
@@ -241,7 +264,7 @@ export async function POST(request: NextRequest) {
         creator_id: user.id,
         type: isAsymmetric ? "asymmetric" : "symmetric",
         bet_type: betType,
-        selection: JSON.stringify(selection),
+        selection: JSON.stringify(selectionToStore),
         amount,
         multiplier: isAsymmetric ? (multiplier || 1) : 1,
         fee_amount: fee,
