@@ -359,6 +359,31 @@ export default function EventPage() {
           </div>
         )}
 
+        {/* Final stats (post-match, major leagues) */}
+        {event.status === "finished" && Array.isArray(event.metadata?.match_stats) && event.metadata.match_stats.length > 0 && (
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Estadísticas finales</div>
+            <div className="space-y-1">
+              {event.metadata.match_stats.map((s: { stat: string; home: number | null; away: number | null }, i: number) => (
+                <div key={i} className="flex items-center justify-between text-xs py-1 border-b border-dashed border-gray-800 last:border-0">
+                  <span className="text-blue-300 font-semibold w-8 text-left tabular-nums">{s.home ?? "—"}</span>
+                  <span className="text-gray-400 text-center flex-1">{s.stat}</span>
+                  <span className="text-orange-300 font-semibold w-8 text-right tabular-nums">{s.away ?? "—"}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Highlights */}
+        {event.status === "finished" && event.metadata?.video && (
+          <a href={event.metadata.video} target="_blank" rel="noopener noreferrer"
+            className="block rounded-xl border border-gray-800 bg-gray-900/60 p-4 hover:border-red-500/40 transition-colors">
+            <div className="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Resumen</div>
+            <div className="flex items-center gap-2 text-sm text-red-400 font-medium">▶ Ver highlights en YouTube</div>
+          </a>
+        )}
+
         {/* Dónde ver */}
         {channels.length > 0 && (
           <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4">
