@@ -42,10 +42,26 @@ Probado en vivo contra la API el 2026-07-26:
 | Alineaciones (`event_lineup`) | ⚠️ Pre/post, ligas grandes | Vacío en vivo lower-league |
 | **Transmisión (stream) en vivo / imágenes en vivo** | ❌ **No existe** | Solo escudos estáticos + (post) poster/thumb de ligas grandes |
 
-**Verificado contra docs oficiales + pruebas 2026-07-26.** `event_stats`/`event_timeline`/
-`event_lineup`/`event_tv` **existen como endpoints** pero **no se pueblan en vivo**: durante el
-partido devuelven "No data found"; se llenan cerca del final / post-partido, y solo en ligas
-grandes. No hay endpoint de streaming: `event_tv` da listados de canales, no video embebible.
+**Verificado contra docs oficiales + pruebas en partidos EN VIVO 2026-07-26/27** (MLB IN8-9,
+Ecuador 2H 90+, Chile 2H 89, basket OT, + finalizados Brasil Serie C / Perú). `event_stats`/
+`event_timeline`/`event_lineup`/`event_tv` **existen como endpoints** pero **no se pueblan en
+vivo**: durante el partido devuelven "No data found", incluso en el minuto 90+. Se llenan
+post-partido y **solo en ligas top-tier** (EPL sí; Brasil Serie C / Perú / Ecuador / Chile / MLB
+→ vacío aun a FT). No hay endpoint de streaming: `event_tv` da listados de canales, no video.
+
+### 2.1 Granularidad EN VIVO real por deporte (lo que sí se puede resolver al instante)
+
+| Deporte | Datos en vivo confiables | Fuente |
+|---|---|---|
+| **Fútbol** | Marcador + estado (1H/2H/HT) + **minuto** (`strProgress`) | `livescore`. `strResult` vacío en vivo → sin desglose |
+| **Béisbol** | Marcador + inning (IN1-9) **+ inning-por-inning + hits + errores EN VIVO** | `livescore` + `lookupevent.strResult` (¡se puebla live!) → `parseBaseballInnings` |
+| **Basket** | Marcador + **número de cuarto** (Q1-4/OT) | `livescore`. Desglose por cuarto NO live (`Quarters:` plantilla vacía) → solo post-partido |
+
+**Implicación:** el **béisbol** habilita los mercados live más precisos (carreras del inning en
+curso, NRFI/YRFI resuelto en vivo, hits totales actualizándose). Fútbol y basket dependen de
+marcador + minuto/cuarto; sus mercados de "periodo" (mitad, cuarto) se resuelven al cerrar el
+periodo, no dentro de él. Imágenes de evento (`strPoster/strThumb`) sí presentes incluso en MLB
+en vivo → hero visual del panel.
 
 **Consecuencia de diseño:** una apuesta in-play sólo es ofrecible si se puede **resolver**
 a partir de (a) marcador + estado + progreso en vivo, o (b) marcador/estadística final.
@@ -94,8 +110,10 @@ enfrentan la misma latencia → justo.
 - Fútbol: `live_next_goal` (qué equipo marca el próximo gol / no más goles),
   `live_goal_before_min` (¿gol antes del min X?), `live_2h_goals_ou`.
 - Basket: `live_next_quarter_winner`, `live_race_to_points` (primero en llegar a N puntos totales).
-- Béisbol: `live_next_inning_runs` (¿carreras en el próximo inning? sí/no),
-  `live_team_scores_inning_N`.
+- Béisbol (los más precisos, gracias a `strResult` live): `live_current_inning_runs`
+  (¿carreras en el inning en curso? sí/no), `live_next_inning_runs`, `live_team_scores_inning_N`,
+  `live_total_hits_ou` (hits totales actualizándose en vivo). Se resuelven leyendo el desglose
+  inning-por-inning en cada poll.
 
 **Liquidación:** el poller (§6) observa el cambio de marcador + progreso y resuelve.
 Caso borde: si **ambos** equipos marcan dentro de una misma ventana de poll y no se puede
@@ -155,6 +173,9 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
    (3 llamadas) si hiciera falta. Nunca dependemos de `all` para no arriesgar el cap de 100.
 2. Para eventos con apuestas en vivo activas **o** featured-y-en-vivo:
    - Actualiza `metadata.live` (marcador, progreso, estado, `updated_at`).
+   - **Béisbol con mercados de inning:** además `lookupevent.php` (1 llamada/evento) para leer
+     `strResult` inning-por-inning en vivo → `parseBaseballInnings` → resuelve mercados de inning.
+     (Basket NO: el desglose por cuarto no está live; sus mercados de cuarto se resuelven al cierre.)
    - Detecta cambio de marcador → añade snapshot (capado a ~30).
    - Recalcula `win_prob` (matemática §5).
    - Actualiza flags de suspensión (§4.1).
