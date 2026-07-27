@@ -22,6 +22,8 @@ import {
   DirectOutcome,
 } from "@/lib/house-odds"
 import { houseWalletDebit, houseWalletCredit } from "@/lib/house-wallet"
+import { getLiveProbability } from "@/lib/live-probability"
+import { matchWinnerOddsFromProb, calcLiveTotalOuOdds } from "@/lib/live-house-odds"
 
 const MAX_STAKE = 100_000
 
@@ -96,14 +98,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Block house bets once the match has started (unless demo — demo events use synthetic time)
-    if (!(eventRow as any).is_demo) {
+    // House-live markets: exception to the "match started" block. Allowed only while the event is
+    // live, the live data is fresh (<6 min), and the market is not currently suspended.
+    const LIVE_HOUSE_TYPES = ["live_match_winner", "live_total_ou"]
+    const isLiveHouse = LIVE_HOUSE_TYPES.includes(betType)
+    const liveMeta = (eventRow.metadata as any)?.live
+    const liveFresh = !!liveMeta && liveMeta.updated_at && (Date.now() - new Date(liveMeta.updated_at).getTime() < 6 * 60 * 1000)
+    const canLiveHouse = isLiveHouse && eventRow.status === "live" && liveFresh && !liveMeta.suspended
+
+    // Block house bets once the match has started (unless demo, or an allowed house-live market)
+    if (!(eventRow as any).is_demo && !canLiveHouse) {
       const isLive = eventRow.status === "live"
       const startTime = (eventRow as any).start_time
       const startTimePassed = startTime && new Date(startTime) <= new Date()
       if (isLive || startTimePassed) {
         return NextResponse.json(
-          { error: "Este partido ya comenzó. No se pueden crear apuestas." },
+          { error: isLiveHouse
+              ? "Esta apuesta en vivo no está disponible en este momento (datos no frescos o suspendida)."
+              : "Este partido ya comenzó. No se pueden crear apuestas." },
           { status: 400 }
         )
       }
@@ -135,6 +147,11 @@ export async function POST(request: NextRequest) {
         : ["direct", "exact_score", "total_runs", "first_inning_score", "total_hits_over_under"]
     } else {
       allowedBetTypes = ["direct"]
+    }
+
+    // House-live markets available during the match: match winner (all sports) + total O/U (football)
+    if (canLiveHouse) {
+      allowedBetTypes = [...allowedBetTypes, "live_match_winner", ...(sport === "football" ? ["live_total_ou"] : [])]
     }
 
     if (!allowedBetTypes.includes(betType)) {
@@ -343,6 +360,30 @@ export async function POST(request: NextRequest) {
           { error: "Selección inválida para total de puntos" },
           { status: 400 }
         )
+      }
+    } else if (betType === "live_match_winner") {
+      const prior = {
+        homeGoalsAvg: Number(metadata?.predictions?.home_goals_avg) || undefined,
+        awayGoalsAvg: Number(metadata?.predictions?.away_goals_avg) || undefined,
+      }
+      const wp = getLiveProbability(sport as any, {
+        home_score: liveMeta.home_score, away_score: liveMeta.away_score,
+        progress: String(liveMeta.progress ?? ""), status: String(liveMeta.status ?? ""),
+      }, prior)
+      houseOdds = matchWinnerOddsFromProb(wp, String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json({ error: "Cuota en vivo no disponible para esta selección" }, { status: 400 })
+      }
+    } else if (betType === "live_total_ou") {
+      const prior = {
+        homeGoalsAvg: Number(metadata?.predictions?.home_goals_avg) || undefined,
+        awayGoalsAvg: Number(metadata?.predictions?.away_goals_avg) || undefined,
+      }
+      houseOdds = calcLiveTotalOuOdds({
+        home_score: liveMeta.home_score, away_score: liveMeta.away_score, progress: String(liveMeta.progress ?? ""),
+      }, prior, String(selection))
+      if (houseOdds === null) {
+        return NextResponse.json({ error: "Cuota en vivo no disponible para esta línea" }, { status: 400 })
       }
     }
 
