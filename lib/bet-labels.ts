@@ -14,6 +14,8 @@ export function formatHouseBetTypeLabel(betType: string): string {
     total_hits_over_under: "Total Hits",
     first_half_winner: "1er Tiempo",
     total_points_over_under: "Total Puntos",
+    live_more_scoring: "¿Más anotaciones? (en vivo)",
+    live_next_team_scores: "Próximo en anotar (en vivo)",
   }
   return labels[betType] ?? betType
 }
@@ -131,6 +133,15 @@ export function formatHouseSelection(
     const m = selection.match(/^(over|under)_(\d+(?:\.\d+)?)$/)
     if (m) return `${m[1] === "over" ? "Más de" : "Menos de"} ${m[2]} puntos totales`
     return selection
+  }
+
+  if (betType === "live_more_scoring") {
+    if (selection === "yes") return "Habrá más anotaciones"
+    if (selection === "no") return "No habrá más anotaciones"
+  }
+  if (betType === "live_next_team_scores") {
+    if (selection === "home") return homeTeam ? `${homeTeam} anota primero` : "Local anota primero"
+    if (selection === "away") return awayTeam ? `${awayTeam} anota primero` : "Visita anota primero"
   }
 
   return selection
