@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
 
   const now = Date.now()
   let updated = 0
+  let settledTotal = 0
   await Promise.all(
     targets.map(async (ev) => {
       const item = liveMap.get(ev.external_id)
@@ -90,8 +91,12 @@ export async function GET(request: NextRequest) {
         metadata: { ...md, live },
       }).eq("id", ev.id)
       updated++
+
+      // Settle any P2P-live bets that can resolve mid-match from the new score
+      const { settleLiveBetsForEvent } = await import("@/lib/settle-live-bets")
+      settledTotal += await settleLiveBetsForEvent(supabase, ev.id, { home, away }, false)
     })
   )
 
-  return NextResponse.json({ success: true, targets: targets.length, updated })
+  return NextResponse.json({ success: true, targets: targets.length, updated, settled: settledTotal })
 }

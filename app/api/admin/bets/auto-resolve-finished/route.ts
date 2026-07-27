@@ -700,6 +700,21 @@ export async function POST(request: NextRequest) {
     const { data: bets, error } = await query
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+    // ── P2P-live settlement pass (separate from RESOLVABLE_TYPES loop) ──
+    // Resolves live bets that were pending until the match ended (e.g. "no more scoring", or
+    // "next team" void when nobody scored). Triggered per finished event by sync-scores.
+    let liveSettled = 0
+    if (hasEventFilter) {
+      const { data: fin } = await supabase
+        .from("events").select("status, home_score, away_score").eq("id", eventId).single()
+      if (fin && (fin.status || "").toLowerCase() === "finished") {
+        const { settleLiveBetsForEvent } = await import("@/lib/settle-live-bets")
+        liveSettled = await settleLiveBetsForEvent(
+          supabase, eventId, { home: fin.home_score ?? 0, away: fin.away_score ?? 0 }, true
+        )
+      }
+    }
+
     const results: Array<Record<string, unknown>> = []
     let scanned = 0, eligible = 0, resolved = 0, skipped = 0, failed = 0
 
@@ -1115,6 +1130,7 @@ export async function POST(request: NextRequest) {
       scanned,
       eligible,
       resolved,
+      live_settled: liveSettled,
       skipped,
       failed,
       results,
