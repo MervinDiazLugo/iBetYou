@@ -76,7 +76,7 @@ calculada, y (post-partido) estadísticas + highlights de YouTube en ligas grand
 | Tema | Decisión |
 |---|---|
 | Modelo de apuesta en vivo | **Ambos**: P2P en vivo + casa en vivo |
-| Frecuencia de refresco | **Cada 2–3 min** (cron externo) |
+| Frecuencia de refresco | **Cada 1 min** (cron externo, con gate: solo hace llamadas a la API si hay eventos en vivo con apuestas activas) |
 | Click en tarjeta (fuera de botones) | **Nueva pestaña → `/event/[id]`** |
 | Deportes v1 | **Los 3 a la vez** (fútbol, basket, béisbol) |
 
@@ -163,8 +163,10 @@ Ruta pública. Click en la tarjeta del marketplace (fuera de los botones existen
 Devuelve el evento + `metadata.live` + apuestas en vivo abiertas. El panel hace polling
 client-side ~30–60s (lee de DB, barato) para sentirse vivo entre escrituras del cron.
 
-### 6.3 Poller en vivo — `app/api/cron/sync-live/route.ts` (nuevo, cron-job.org cada 2–3 min)
+### 6.3 Poller en vivo — `app/api/cron/sync-live/route.ts` (nuevo, cron-job.org cada 1 min)
 Auth `Bearer CRON_SECRET`. Por ejecución:
+0. **Gate barato:** consulta en DB si hay eventos en vivo (status `live`) con apuestas en vivo
+   activas (o featured en vivo). Si no hay → retorna sin tocar la API (0 costo en horas muertas).
 1. Traer marcadores en vivo. **Estrategia de llamadas (importante):** `livescore/all` trae
    los ~96 partidos vivos globales en **1 sola llamada**, pero está **capado a 100 resultados**
    → en un sábado cargado podría truncar y perder eventos nuestros. Por eso el poller llama
@@ -213,11 +215,11 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
 - **Tokens de IA (Claude): $0 adicionales/mes.** Las cuotas in-play son matemática pura sobre
   las predicciones pre-partido ya persistidas. No hay IA por usuario ni por partido nuevo.
   El batch Haiku de predicciones existente no cambia.
-- **Llamadas a TheSportsDB (no es IA):** poller = 1–5 llamadas/ejecución (una por liga con
-  apuestas vivas; típico 1–3). Cada 2.5 min ≈ 24 ejec/hora → tope realista 24×3×24h ≈ 1.728
-  llamadas/día ≈ **~52k/mes**, muy por debajo del límite Premium (100 req/min = ~4.3M/mes).
-  Plan Premium: **$9/mes**. El poller sólo ejecuta la lógica completa si hay eventos en vivo
-  con apuestas. Enriquecimiento post-partido: 1–3 llamadas por evento finalizado.
+- **Llamadas a TheSportsDB (no es IA):** poller cada 1 min, pero **con gate**: si no hay
+  eventos en vivo con apuestas → 0 llamadas. Cuando hay, 1–5 llamadas/ejecución (una por liga
+  con apuestas vivas; típico 1–3). Peor caso realista (partidos vivos ~12h/día): 60 ejec/h ×
+  3 llamadas × 12h ≈ 2.160/día ≈ **~65k/mes**, muy por debajo del límite Premium (100 req/min
+  = ~4.3M/mes). Plan Premium: **$9/mes**. Enriquecimiento post-partido: 1–3 llamadas por evento.
 - **Cómputo Vercel:** `sync-live` es liviano; invocación cada 2.5 min sin problema.
 
 ---
@@ -244,8 +246,8 @@ Auth `Bearer CRON_SECRET`. Por ejecución:
 
 ## 10. Riesgos abiertos
 
-1. **Latencia 2–3 min en P2P `next_goal`:** mitigado con reembolso cuando ambos marcan en la
-   misma ventana. Aceptable; si molesta, se sube el cron a 1 min (sigue siendo 3 llamadas/min).
+1. **Latencia 1 min en P2P `next_goal`:** el caso "ambos marcan en la misma ventana de 60s" es
+   raro; cuando ocurre y no se puede determinar orden → reembolso (void). Aceptable.
 2. **Ligas menores sin stats/highlights post-partido:** el panel degrada con elegancia
    (oculta secciones vacías); marcador + prob + timeline propio siempre presentes.
 3. **Modelo béisbol:** varianza alta; se limita el set casa-en-vivo y se usan topes conservadores.
