@@ -353,3 +353,17 @@ export function parseBasketballQuarters(strResult: string | null | undefined): {
 
   return { homeQuarters: home, awayQuarters: away }
 }
+
+// ─── V2 enrichment: TV channels + final stats ────────────────────────────────
+
+/** TV channels + event images (V2). Populated pre-match for major leagues. */
+export async function tsdbEventTv(idEvent: string): Promise<any[]> {
+  const data = await fetchTsdbV2(`/lookup/event_tv/${idEvent}`)
+  return data.lookup || []
+}
+
+/** Final match statistics (V2). Post-match, major leagues only. */
+export async function tsdbEventStats(idEvent: string): Promise<any[]> {
+  const data = await fetchTsdbV2(`/lookup/event_stats/${idEvent}`)
+  return data.lookup || []
+}
