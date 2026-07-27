@@ -286,6 +286,32 @@ export async function GET(request: NextRequest) {
     }
   }
 
+  // ── 4c. Enrichment: final stats (event_stats) + highlights (strVideo) ──────
+  for (const ev of justFinished) {
+    if (!ev.external_id?.startsWith("tsdb_")) continue
+    try {
+      const { tsdbEventStats } = await import("@/lib/tsdb")
+      const { normalizeEventStats } = await import("@/lib/tsdb-normalize")
+      const idEvent = ev.external_id.replace("tsdb_", "")
+      const [rawStats, raw] = await Promise.all([
+        tsdbEventStats(idEvent).catch(() => []),
+        tsdbLookupEvent(idEvent).catch(() => null),
+      ])
+      apiCalls += 2
+      const stats = normalizeEventStats(rawStats)
+      const video = raw?.strVideo || null
+      if (stats.length || video) {
+        const { data: row } = await supabase.from("events").select("metadata").eq("id", ev.id).single()
+        const md = row?.metadata || {}
+        await supabase.from("events").update({
+          metadata: { ...md, ...(stats.length ? { match_stats: stats } : {}), ...(video ? { video } : {}) },
+        }).eq("id", ev.id)
+      }
+    } catch (e: any) {
+      apiErrors.push(`enrichment/${ev.external_id}: ${e.message}`)
+    }
+  }
+
   // ── 5. Trigger auto-resolve for each just-finished event ─────────────────
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL
     || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")

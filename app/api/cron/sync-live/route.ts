@@ -85,10 +85,27 @@ export async function GET(request: NextRequest) {
         suspend_reason: scoreChanged ? "score_changed" : null,
       }
 
+      // M4 enrichment: cache TV channels + event images once (best-effort)
+      let tvPatch: Record<string, unknown> = {}
+      if (!md.tv) {
+        try {
+          const { tsdbEventTv } = await import("@/lib/tsdb")
+          const { normalizeTvChannels } = await import("@/lib/tsdb-normalize")
+          const idEvent = ev.external_id.replace("tsdb_", "")
+          const rawTv = await tsdbEventTv(idEvent)
+          const { channels, images } = normalizeTvChannels(rawTv)
+          if (channels.length || images.thumb) {
+            tvPatch = { tv: { fetched_at: new Date(now).toISOString(), channels }, images }
+          }
+        } catch {
+          // enrichment is best-effort
+        }
+      }
+
       await supabase.from("events").update({
         home_score: home,
         away_score: away,
-        metadata: { ...md, live },
+        metadata: { ...md, live, ...tvPatch },
       }).eq("id", ev.id)
       updated++
 
