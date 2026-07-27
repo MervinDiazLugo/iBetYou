@@ -9,6 +9,8 @@ import { useToast } from "@/components/toast"
 import { formatCurrency } from "@/lib/utils"
 import { formatHouseSelection, formatHouseBetTypeLabel } from "@/lib/bet-labels"
 import { isLiveP2PBetType } from "@/lib/live-bet-types"
+import { getLiveProbability } from "@/lib/live-probability"
+import { matchWinnerOddsFromProb, calcLiveTotalOuOdds } from "@/lib/live-house-odds"
 
 interface OpenBet { id: string; bet_type: string; creator_selection: string; amount: number; status: string; creator_id: string }
 
@@ -32,6 +34,7 @@ interface EventData {
   league: string
   status: string
   start_time: string
+  featured?: boolean
   home_score?: number
   away_score?: number
   metadata?: any
@@ -99,6 +102,23 @@ export default function EventPage() {
     } finally { setSubmitting(false) }
   }
 
+  async function createHouseBet(betType: string, selection: string) {
+    const amt = Number(amount)
+    if (!Number.isFinite(amt) || amt <= 0) { showToast("Monto inválido", "error"); return }
+    setSubmitting(true)
+    try {
+      const res = await fetch("/api/bets/house", {
+        method: "POST",
+        headers: await authHeaders(),
+        body: JSON.stringify({ eventId: Number(id), betType, selection, amount: amt, mode: "fantasy" }),
+      })
+      const data = await res.json()
+      if (!res.ok) { showToast(data.error || "No se pudo crear", "error"); return }
+      showToast("Apuesta vs. la casa creada", "success")
+      load()
+    } finally { setSubmitting(false) }
+  }
+
   async function takeBet(betId: string) {
     if (!userId) { showToast("Inicia sesión para tomar", "error"); return }
     setSubmitting(true)
@@ -125,6 +145,22 @@ export default function EventPage() {
   const wp = live?.win_prob
   const homeScore = live?.home_score ?? event.home_score ?? 0
   const awayScore = live?.away_score ?? event.away_score ?? 0
+
+  // House-live odds (computed client-side from live state + pre-match prior)
+  const isFootball = event.sport === "football"
+  const houseLiveOpen = isLive && !!live && !live.suspended && !!event.featured
+  const prior = { homeGoalsAvg: Number(preds?.home_goals_avg) || undefined, awayGoalsAvg: Number(preds?.away_goals_avg) || undefined }
+  const houseWp = houseLiveOpen && live
+    ? getLiveProbability(event.sport as "football" | "basketball" | "baseball", { home_score: homeScore, away_score: awayScore, progress: live.progress, status: live.status }, prior)
+    : null
+  const oddHome = houseWp ? matchWinnerOddsFromProb(houseWp, "home") : null
+  const oddDraw = houseWp ? matchWinnerOddsFromProb(houseWp, "draw") : null
+  const oddAway = houseWp ? matchWinnerOddsFromProb(houseWp, "away") : null
+  const totalLines = houseLiveOpen && isFootball && live
+    ? [homeScore + awayScore + 0.5, homeScore + awayScore + 1.5, homeScore + awayScore + 2.5]
+        .map((line) => ({ line, odds: calcLiveTotalOuOdds({ home_score: homeScore, away_score: awayScore, progress: live.progress }, prior, `over_${line}`) }))
+        .filter((x) => x.odds !== null)
+    : []
 
   return (
     <>
@@ -188,6 +224,58 @@ export default function EventPage() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* House-live betting */}
+        {isLive && live && event.featured && (
+          <div className="rounded-xl border border-purple-800/40 bg-purple-950/10 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[10px] uppercase tracking-wider text-purple-300">🏛 En vivo · vs. la casa</div>
+              <span className="text-[10px] text-gray-500">Liquida al final</span>
+            </div>
+            {live.suspended ? (
+              <p className="text-xs text-amber-400/80">Cuotas suspendidas momentáneamente (anotación reciente).</p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] text-gray-400 mb-1">Ganador del partido</div>
+                  <div className="flex gap-2">
+                    <button disabled={submitting || oddHome === null} onClick={() => createHouseBet("live_match_winner", "home")}
+                      className="flex-1 rounded-md bg-gray-900 hover:bg-blue-900/40 border border-gray-700 hover:border-blue-500/40 py-1.5 disabled:opacity-40">
+                      <div className="text-[9px] text-gray-500 truncate px-1">{event.home_team}</div>
+                      <div className="text-sm font-bold text-amber-400">{oddHome?.toFixed(2) ?? "—"}</div>
+                    </button>
+                    {isFootball && (
+                      <button disabled={submitting || oddDraw === null} onClick={() => createHouseBet("live_match_winner", "draw")}
+                        className="flex-1 rounded-md bg-gray-900 hover:bg-gray-700/60 border border-gray-700 py-1.5 disabled:opacity-40">
+                        <div className="text-[9px] text-gray-500">Empate</div>
+                        <div className="text-sm font-bold text-amber-400">{oddDraw?.toFixed(2) ?? "—"}</div>
+                      </button>
+                    )}
+                    <button disabled={submitting || oddAway === null} onClick={() => createHouseBet("live_match_winner", "away")}
+                      className="flex-1 rounded-md bg-gray-900 hover:bg-orange-900/40 border border-gray-700 hover:border-orange-500/40 py-1.5 disabled:opacity-40">
+                      <div className="text-[9px] text-gray-500 truncate px-1">{event.away_team}</div>
+                      <div className="text-sm font-bold text-amber-400">{oddAway?.toFixed(2) ?? "—"}</div>
+                    </button>
+                  </div>
+                </div>
+                {totalLines.length > 0 && (
+                  <div>
+                    <div className="text-[11px] text-gray-400 mb-1">Total de goles (Más de)</div>
+                    <div className="flex gap-2">
+                      {totalLines.map(({ line, odds }) => (
+                        <button key={line} disabled={submitting} onClick={() => createHouseBet("live_total_ou", `over_${line}`)}
+                          className="flex-1 rounded-md bg-gray-900 hover:bg-purple-900/40 border border-gray-700 hover:border-purple-500/40 py-1.5 disabled:opacity-40">
+                          <div className="text-[9px] text-gray-500">+{line}</div>
+                          <div className="text-sm font-bold text-amber-400">{odds!.toFixed(2)}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
