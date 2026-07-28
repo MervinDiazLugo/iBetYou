@@ -11,6 +11,7 @@ import { formatHouseSelection, formatHouseBetTypeLabel } from "@/lib/bet-labels"
 import { isLiveP2PBetType } from "@/lib/live-bet-types"
 import { getLiveProbability } from "@/lib/live-probability"
 import { matchWinnerOddsFromProb, calcLiveTotalOuOdds } from "@/lib/live-house-odds"
+import { calcDirectOdds } from "@/lib/house-odds"
 
 interface OpenBet { id: string; bet_type: string; creator_selection: string; amount: number; status: string; creator_id: string }
 
@@ -161,6 +162,10 @@ export default function EventPage() {
         .map((line) => ({ line, odds: calcLiveTotalOuOdds({ home_score: homeScore, away_score: awayScore, progress: live.progress }, prior, `over_${line}`) }))
         .filter((x) => x.odds !== null)
     : []
+
+  // Pre-match markets (before kickoff)
+  const isScheduled = event.status === "scheduled"
+  const preMatchOdds = isScheduled && preds?.percent ? calcDirectOdds(preds.percent) : null
 
   return (
     <>
@@ -356,6 +361,77 @@ export default function EventPage() {
               </div>
             </div>
             {preds.advice && <p className="text-xs text-center text-amber-300/80 mt-2">💡 {preds.advice}</p>}
+          </div>
+        )}
+
+        {/* Pre-match betting (before kickoff) */}
+        {isScheduled && (
+          <div className="rounded-xl border border-gray-800 bg-gray-900/60 p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] uppercase tracking-wider text-gray-500">Apostar · antes del partido</div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-500">Monto</span>
+                <input type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)}
+                  className="w-20 bg-gray-900 border border-gray-700 rounded px-2 py-1 text-xs text-white" />
+              </div>
+            </div>
+
+            {/* vs la casa (1X2) — needs featured event + predictions */}
+            {event.featured && preMatchOdds && (
+              <div>
+                <div className="text-[11px] text-purple-300 mb-1">🏛 Vs. la casa</div>
+                <div className="flex gap-2">
+                  <button disabled={submitting} onClick={() => createHouseBet("direct", "home")}
+                    className="flex-1 rounded-md bg-gray-900 hover:bg-blue-900/40 border border-gray-700 hover:border-blue-500/40 py-1.5 disabled:opacity-40">
+                    <div className="text-[9px] text-gray-500 truncate px-1">{event.home_team}</div>
+                    <div className="text-sm font-bold text-amber-400">{preMatchOdds.home.toFixed(2)}</div>
+                  </button>
+                  {isFootball && preMatchOdds.draw !== undefined && (
+                    <button disabled={submitting} onClick={() => createHouseBet("direct", "draw")}
+                      className="flex-1 rounded-md bg-gray-900 hover:bg-gray-700/60 border border-gray-700 py-1.5 disabled:opacity-40">
+                      <div className="text-[9px] text-gray-500">Empate</div>
+                      <div className="text-sm font-bold text-amber-400">{preMatchOdds.draw.toFixed(2)}</div>
+                    </button>
+                  )}
+                  <button disabled={submitting} onClick={() => createHouseBet("direct", "away")}
+                    className="flex-1 rounded-md bg-gray-900 hover:bg-orange-900/40 border border-gray-700 hover:border-orange-500/40 py-1.5 disabled:opacity-40">
+                    <div className="text-[9px] text-gray-500 truncate px-1">{event.away_team}</div>
+                    <div className="text-sm font-bold text-amber-400">{preMatchOdds.away.toFixed(2)}</div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Predecir P2P (1X2) — creates an open bet others can take */}
+            <div>
+              <div className="text-[11px] text-blue-300 mb-1">🤝 Predecir P2P <span className="text-gray-500">(otros la toman)</span></div>
+              <div className="flex gap-2">
+                <button disabled={submitting} onClick={() => createLiveBet("direct", "home")}
+                  className="flex-1 rounded-md bg-gray-800 hover:bg-blue-900/40 border border-gray-700 hover:border-blue-500/40 py-1.5 text-xs font-semibold disabled:opacity-40 truncate">{event.home_team}</button>
+                {isFootball && (
+                  <button disabled={submitting} onClick={() => createLiveBet("direct", "draw")}
+                    className="flex-1 rounded-md bg-gray-800 hover:bg-gray-700/60 border border-gray-700 py-1.5 text-xs font-semibold disabled:opacity-40">Empate</button>
+                )}
+                <button disabled={submitting} onClick={() => createLiveBet("direct", "away")}
+                  className="flex-1 rounded-md bg-gray-800 hover:bg-orange-900/40 border border-gray-700 hover:border-orange-500/40 py-1.5 text-xs font-semibold disabled:opacity-40 truncate">{event.away_team}</button>
+              </div>
+              <Link href="/create" className="block text-center text-[10px] text-blue-400 hover:text-blue-300 mt-2">Más tipos de apuesta (marcador exacto, etc.) →</Link>
+            </div>
+
+            {/* Open P2P bets on this event to take */}
+            {openBets.filter((b) => !isLiveP2PBetType(b.bet_type) && b.creator_id !== userId).map((b) => (
+              <div key={b.id} className="flex items-center justify-between gap-2 rounded-md bg-gray-900/60 border border-gray-800 p-2.5">
+                <div className="text-xs min-w-0">
+                  <div className="text-gray-400 text-[10px]">{formatHouseBetTypeLabel(b.bet_type)}</div>
+                  <div className="text-green-400 font-medium truncate">{formatHouseSelection(b.bet_type, b.creator_selection, event.home_team, event.away_team)}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  <span className="text-amber-400 font-bold text-xs">{formatCurrency(b.amount)}</span>
+                  <button disabled={submitting} onClick={() => takeBet(b.id)}
+                    className="bg-blue-600 hover:bg-blue-500 rounded px-3 py-1 text-xs font-semibold text-white disabled:opacity-50">Tomar</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
